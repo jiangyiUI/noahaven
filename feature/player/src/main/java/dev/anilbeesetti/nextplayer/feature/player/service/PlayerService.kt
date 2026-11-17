@@ -3,6 +3,7 @@ package dev.anilbeesetti.nextplayer.feature.player.service
 import android.app.PendingIntent
 import android.content.ContentResolver
 import android.content.Intent
+import android.graphics.Bitmap
 import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import android.os.Bundle
@@ -38,6 +39,8 @@ import androidx.media3.session.SessionResult
 import androidx.media3.session.SizeLimitedBitmapLoader
 import coil3.ImageLoader
 import coil3.request.ImageRequest
+import coil3.request.SuccessResult
+import coil3.toBitmap
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
@@ -50,6 +53,7 @@ import dev.anilbeesetti.nextplayer.core.data.repository.MediaRepository
 import dev.anilbeesetti.nextplayer.core.data.repository.PreferencesRepository
 import dev.anilbeesetti.nextplayer.core.media.network.NetworkUri
 import dev.anilbeesetti.nextplayer.core.media.network.datasource.NextDataSourceFactory
+import dev.anilbeesetti.nextplayer.core.media.services.AudioArtwork
 import dev.anilbeesetti.nextplayer.core.model.LoopMode
 import dev.anilbeesetti.nextplayer.core.model.PlayerPreferences
 import dev.anilbeesetti.nextplayer.core.model.Resume
@@ -83,6 +87,7 @@ import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory
 import io.github.anilbeesetti.nextlib.media3ext.renderer.subtitleDelayMilliseconds
 import io.github.anilbeesetti.nextlib.media3ext.renderer.subtitleSpeed
 import io.github.anilbeesetti.nextlib.mediainfo.MediaInfoBuilder
+import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -1322,8 +1327,8 @@ class PlayerService : MediaSessionService() {
             val currentMediaItem = player.currentMediaItem ?: return@launch
             if (currentMediaItem.mediaMetadata.artworkData != null) return@launch
 
-            val artworkUri = loadArtworkForMediaItem(mediaItem = currentMediaItem)
-                ?: getDefaultArtworkUri()
+            val artworkData = loadArtworkForMediaItem(mediaItem = currentMediaItem)
+                ?: return@launch
 
             val updatedPlayer = mediaSession?.player ?: return@launch
             val updatedMediaItem = updatedPlayer.currentMediaItem ?: return@launch
@@ -1331,11 +1336,12 @@ class PlayerService : MediaSessionService() {
 
             updatedPlayer.replaceMediaItem(
                 updatedPlayer.currentMediaItemIndex,
-                updatedMediaItem.withArtwork(uri = artworkUri),
+                updatedMediaItem.withArtwork(data = artworkData),
             )
         }
     }
-    private suspend fun loadArtworkForMediaItem(mediaItem: MediaItem): Uri? =
+
+    private suspend fun loadArtworkForMediaItem(mediaItem: MediaItem): ByteArray? =
         withContext(Dispatchers.IO) {
             val defaultArtwork = getDefaultArtworkUri()
             val uri = mediaItem.mediaMetadata.artworkUri
@@ -1349,15 +1355,24 @@ class PlayerService : MediaSessionService() {
                 val request = ImageRequest.Builder(context = this@PlayerService)
                     .data(data = uri)
                     .size(
-                        width = 512,
-                        height = 512,
+                        width = MAX_SESSION_ARTWORK_SIZE,
+                        height = MAX_SESSION_ARTWORK_SIZE,
                     )
                     .build()
-                imageLoader.execute(request = request)
-                val diskCache = imageLoader.diskCache ?: return@withContext null
-                return@withContext diskCache.openSnapshot(uri.toString())?.use { snapshot ->
-                    snapshot.data.toFile().toUri()
+                val result = imageLoader.execute(request = request)
+                val bitmap = (result as? SuccessResult)?.image?.toBitmap()
+                if (bitmap != null) {
+                    // 系统媒体控制（通知栏/控制中心）只显示 artworkData 里的位图，
+                    // 应用私有目录的 file:// URI 它无权读取，所以这里直接给字节。
+                    return@withContext bitmap.toSessionArtworkData()
                 }
+                // Coil 的缩略图解码器只接 video/*，音频的内嵌封面走 AudioArtwork。
+                if (mediaItem.isNetworkMediaItem()) return@withContext null
+                AudioArtwork.load(
+                    context = this@PlayerService,
+                    pathOrUri = uri.toString(),
+                    maxSizePx = MAX_SESSION_ARTWORK_SIZE,
+                )?.toSessionArtworkData()
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (_: Exception) {
@@ -1365,15 +1380,36 @@ class PlayerService : MediaSessionService() {
             }
         }
 
+    private fun Bitmap.toSessionArtworkData(): ByteArray {
+        // 部分 Android 15 ROM 发布大于 500px 的封面时会回收原位图导致崩溃，先压到 500px 内。
+        val largestDimension = maxOf(width, height)
+        val source = if (largestDimension > MAX_SESSION_ARTWORK_SIZE) {
+            val scale = MAX_SESSION_ARTWORK_SIZE.toFloat() / largestDimension
+            Bitmap.createScaledBitmap(
+                this,
+                (width * scale).toInt().coerceAtLeast(1),
+                (height * scale).toInt().coerceAtLeast(1),
+                true,
+            )
+        } else {
+            this
+        }
+        return ByteArrayOutputStream().use { output ->
+            source.compress(Bitmap.CompressFormat.JPEG, 90, output)
+            output.toByteArray()
+        }
+    }
+
     private fun MediaItem.isNetworkMediaItem(): Boolean {
         val uri = localConfiguration?.uri ?: return false
         return uri.scheme?.lowercase() in REMOTE_SCHEMES || NetworkUri.isNetworkUri(uri = uri)
     }
 
-    private fun MediaItem.withArtwork(uri: Uri): MediaItem = buildUpon()
+    private fun MediaItem.withArtwork(data: ByteArray): MediaItem = buildUpon()
         .setMediaMetadata(
             mediaMetadata.buildUpon()
-                .setArtworkUri(uri)
+                .setArtworkUri(null)
+                .setArtworkData(data, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
                 .build(),
         )
         .build()
