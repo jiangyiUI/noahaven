@@ -225,6 +225,7 @@ class KoinGraphTest {
                         navigateUp = {},
                         openFolders = {},
                         openAudioFolders = {},
+                        openImageFolders = {},
                         openThumbnails = {},
                     ),
                 )
