@@ -154,6 +154,7 @@ class MoreViewModelTest {
                     navigateUp = {},
                     openFolders = {},
                     openAudioFolders = {},
+                    openImageFolders = {},
                     openThumbnails = {},
                 ),
             )

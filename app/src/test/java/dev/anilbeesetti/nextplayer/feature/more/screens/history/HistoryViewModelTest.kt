@@ -178,6 +178,7 @@ class HistoryViewModelTest {
                     navigateUp = {},
                     openFolders = {},
                     openAudioFolders = {},
+                    openImageFolders = {},
                     openThumbnails = {},
                 ),
             )
