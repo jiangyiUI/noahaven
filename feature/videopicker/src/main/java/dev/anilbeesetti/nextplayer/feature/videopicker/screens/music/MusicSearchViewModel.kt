@@ -78,7 +78,12 @@ class MusicSearchViewModel(
             ) { entries, preferences ->
                 val audios = entries.orEmpty().filterAudios(preferences = preferences)
                 audios.groupBy { it.parentPath }
-                    .map { (path, folderAudios) -> summarize(path = path, audios = folderAudios) }
+                    .map { (path, folderAudios) ->
+                        summarize(
+                            path = path,
+                            audios = folderAudios,
+                        )
+                    }
                     .sortedByDescending { it.videosCount }
                     .take(n = POPULAR_FOLDERS_LIMIT)
             }.collect { folders ->
@@ -128,15 +133,26 @@ class MusicSearchViewModel(
             val audios = entries.orEmpty().filterAudios(preferences = preferences)
             val matcher = SearchMatcher(query = normalizedQuery)
             val folders = audios.groupBy { it.parentPath }
-                .map { (path, folderAudios) -> summarize(path = path, audios = folderAudios) }
+                .map { (path, folderAudios) ->
+                    summarize(
+                        path = path,
+                        audios = folderAudios,
+                    )
+                }
                 .mapNotNull { folder ->
-                    val score = matcher.calculateScore(folder.name, folder.path)
+                    val score = matcher.calculateScore(
+                        folder.name,
+                        folder.path,
+                    )
                     if (score > 0) folder to score else null
                 }
                 .sortedByDescending { it.second }
                 .map { it.first }
             val matchingAudios = audios.mapNotNull { audio ->
-                val score = matcher.calculateScore(audio.nameWithExtension, audio.path)
+                val score = matcher.calculateScore(
+                    audio.nameWithExtension,
+                    audio.path,
+                )
                 if (score > 0) audio to score else null
             }
                 .sortedByDescending { it.second }
@@ -167,7 +183,10 @@ class MusicSearchViewModel(
         if (startUri !in playlist) return
         // 点播即视为一次有效搜索，写入搜索历史
         addSearchQuery(query = stateInternal.value.query)
-        output.playAudios(playlist, startUri)
+        output.playAudios(
+            playlist,
+            startUri,
+        )
     }
 
     private fun openFolder(path: String) {
@@ -240,7 +259,9 @@ class MusicSearchViewModel(
             if (audio.parentPath == path) {
                 directCount++
             } else {
-                childFolders.add(audio.path.removePrefix(prefix = prefix).substringBefore(PATH_SEPARATOR))
+                childFolders.add(
+                    audio.path.removePrefix(prefix = prefix).substringBefore(PATH_SEPARATOR),
+                )
             }
         }
         val file = File(path)

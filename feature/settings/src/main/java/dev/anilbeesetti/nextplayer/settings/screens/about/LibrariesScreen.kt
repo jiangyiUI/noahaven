@@ -92,11 +92,7 @@ private fun LibrariesScreenContent(state: LibrariesUiState, onAction: (Libraries
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-internal fun LibraryListItem(
-    library: Library,
-    isFirstItem: Boolean,
-    isLastItem: Boolean,
-) {
+internal fun LibraryListItem(library: Library, isFirstItem: Boolean, isLastItem: Boolean) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
 

@@ -7,7 +7,16 @@ import android.webkit.MimeTypeMap
 import java.io.File
 
 private val IMAGE_EXTENSIONS = setOf(
-    "jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif", "avif", "jxl",
+    "jpg",
+    "jpeg",
+    "png",
+    "webp",
+    "gif",
+    "bmp",
+    "heic",
+    "heif",
+    "avif",
+    "jxl",
 )
 
 /** 只遍历明确指定的白名单目录，扫描阶段只读 stat，不读取图片内容。 */
@@ -64,7 +73,13 @@ class FileSystemImageScanner {
         onFile: suspend (ScannedImage) -> Unit,
     ): Boolean {
         val children = directory.listFiles() ?: return false
-        val hidden = noMediaHidden || children.any { it.name.equals(NOMEDIA_FILE, ignoreCase = true) }
+        val hidden =
+            noMediaHidden || children.any {
+                it.name.equals(
+                    NOMEDIA_FILE,
+                    ignoreCase = true,
+                )
+            }
         var complete = true
         for (child in children) {
             val name = child.name
@@ -74,8 +89,22 @@ class FileSystemImageScanner {
                 continue
             }
             if (stat.isDirectory) {
-                if (name.startsWith(".") || name.equals("Android", ignoreCase = true)) continue
-                if (!walk(child, whitelistRoot, hidden, onFile)) complete = false
+                if (name.startsWith(".") || name.equals(
+                        "Android",
+                        ignoreCase = true,
+                    )
+                ) {
+                    continue
+                }
+                if (!walk(
+                        child,
+                        whitelistRoot,
+                        hidden,
+                        onFile,
+                    )
+                ) {
+                    complete = false
+                }
             } else {
                 if (name.startsWith(".") || !name.hasImageExtension()) continue
                 onFile(
@@ -125,7 +154,10 @@ class FileSystemImageScanner {
     }
 
     private fun String.hasImageExtension(): Boolean {
-        val extension = substringAfterLast('.', missingDelimiterValue = "").lowercase()
+        val extension = substringAfterLast(
+            '.',
+            missingDelimiterValue = "",
+        ).lowercase()
         if (extension.isEmpty()) return false
         if (extension in IMAGE_EXTENSIONS) return true
         return MimeTypeMap.getSingleton()
@@ -144,7 +176,10 @@ class FileSystemImageScanner {
 fun readImageDimensions(path: String): Pair<Int, Int> {
     val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     return runCatching {
-        BitmapFactory.decodeFile(path, options)
+        BitmapFactory.decodeFile(
+            path,
+            options,
+        )
         options.outWidth.coerceAtLeast(0) to options.outHeight.coerceAtLeast(0)
     }.getOrDefault(0 to 0)
 }

@@ -68,6 +68,7 @@ class MusicViewModel(
     )
 
     private val folderPath = MutableStateFlow<String?>(null)
+
     // 记录进入过的目录，返回时回到上一个访问的目录而不是父目录
     private val folderHistory = mutableListOf<String?>()
     private val audiosInternal = MutableStateFlow<Result<List<AudioFile>>?>(null)
@@ -108,7 +109,8 @@ class MusicViewModel(
             initialValue = MusicUiState(
                 isLoading = true,
                 hasAllFilesAccess = context.hasAllFilesAccess(),
-                preferences = preferencesRepository.applicationPreferences.value.toMusicPreferences(),
+                preferences = preferencesRepository.applicationPreferences.value
+                    .toMusicPreferences(),
             ),
         )
 
@@ -122,7 +124,10 @@ class MusicViewModel(
                 val path = folderPath.value
                 val prefix = path?.trimEnd('/')?.plus(PATH_SEPARATOR)
                 audiosInternal.value = Result.success(
-                    audios.filter { audio -> prefix == null || audio.path.startsWith(prefix = prefix) },
+                    audios.filter { audio ->
+                        prefix == null ||
+                            audio.path.startsWith(prefix = prefix)
+                    },
                 )
             }
         }
@@ -158,7 +163,10 @@ class MusicViewModel(
             is MusicAction.OnAudioClick -> {
                 val playlist = state.value.audios.map { it.uriString.toUri() }
                 if (playlist.isEmpty()) return
-                output.playAudios(playlist, action.audio.uriString.toUri())
+                output.playAudios(
+                    playlist,
+                    action.audio.uriString.toUri(),
+                )
             }
 
             is MusicAction.OnPlayAllClick -> {
@@ -166,13 +174,21 @@ class MusicViewModel(
                 val recentAudio = recentlyPlayedAudio.value
                 if (recentAudio != null && File(recentAudio.path).exists()) {
                     val uri = recentAudio.uriString.toUri()
-                    output.playAudios(listOf(uri), uri)
+                    output.playAudios(
+                        listOf(uri),
+                        uri,
+                    )
                     return
                 }
                 val playlist = allAudiosUnderCurrentPath()
                     .sortedWith(state.value.preferences.musicSort().audioComparator())
                     .map { it.uriString.toUri() }
-                playlist.firstOrNull()?.let { first -> output.playAudios(playlist, first) }
+                playlist.firstOrNull()?.let { first ->
+                    output.playAudios(
+                        playlist,
+                        first,
+                    )
+                }
             }
 
             is MusicAction.UpdatePreferences -> updatePreferences(action.preferences)
@@ -183,7 +199,12 @@ class MusicViewModel(
 
             is MusicAction.PlaySelected -> {
                 val uris = action.items.toAudioUris()
-                uris.firstOrNull()?.let { first -> output.playAudios(uris, first) }
+                uris.firstOrNull()?.let { first ->
+                    output.playAudios(
+                        uris,
+                        first,
+                    )
+                }
             }
 
             is MusicAction.ShareSelected -> {
@@ -192,11 +213,20 @@ class MusicViewModel(
                 viewModelScope.launch { mediaOperationsService.shareMedia(uris) }
             }
 
-            is MusicAction.CopySelected -> transferSelected(action.items, mode = TransferMode.COPY)
+            is MusicAction.CopySelected -> transferSelected(
+                action.items,
+                mode = TransferMode.COPY,
+            )
 
-            is MusicAction.MoveSelected -> transferSelected(action.items, mode = TransferMode.MOVE)
+            is MusicAction.MoveSelected -> transferSelected(
+                action.items,
+                mode = TransferMode.MOVE,
+            )
 
-            is MusicAction.RenameSelected -> renameAudio(uri = action.uri, to = action.to)
+            is MusicAction.RenameSelected -> renameAudio(
+                uri = action.uri,
+                to = action.to,
+            )
 
             is MusicAction.DeleteSelected -> deleteSelected(
                 items = action.items,
@@ -216,7 +246,9 @@ class MusicViewModel(
                 addToPlaylistState.value = AddToPlaylistState()
             }
 
-            is MusicAction.AddSelectionToPlaylist -> addSelectionToPlaylist(playlistId = action.playlistId)
+            is MusicAction.AddSelectionToPlaylist -> addSelectionToPlaylist(
+                playlistId = action.playlistId,
+            )
 
             is MusicAction.CreatePlaylistWithSelection ->
                 createPlaylistWithSelection(name = action.name)
@@ -249,7 +281,10 @@ class MusicViewModel(
         viewModelScope.launch {
             refreshing.value = true
             mediaSynchronizer.refresh()
-            audioMediaService.requestRefresh(folderPath = folderPath.value, force = true)
+            audioMediaService.requestRefresh(
+                folderPath = folderPath.value,
+                force = true,
+            )
             refresh()
             refreshing.value = false
         }
@@ -279,7 +314,11 @@ class MusicViewModel(
                 progress = TransferProgress(totalFiles = uris.size),
             )
             transferJob = viewModelScope.launch {
-                mediaOperationsService.transferMedia(uris, targetFolder, mode)
+                mediaOperationsService.transferMedia(
+                    uris,
+                    targetFolder,
+                    mode,
+                )
                     .catch { transferFlowState.value = TransferFlowState.Idle }
                     .collect { event ->
                         when (event) {
@@ -307,8 +346,14 @@ class MusicViewModel(
 
     private fun renameAudio(uri: Uri, to: String) {
         viewModelScope.launch {
-            mediaOperationsService.renameMedia(uri = uri, to = to)
-            audioMediaService.requestRefresh(folderPath = folderPath.value, force = true)
+            mediaOperationsService.renameMedia(
+                uri = uri,
+                to = to,
+            )
+            audioMediaService.requestRefresh(
+                folderPath = folderPath.value,
+                force = true,
+            )
             refresh()
         }
     }
@@ -317,7 +362,10 @@ class MusicViewModel(
         val uris = items.toAudioUris()
         if (uris.isEmpty()) return
         viewModelScope.launch {
-            val deleted = mediaOperationsService.deleteMedia(uris = uris, permanently = permanently)
+            val deleted = mediaOperationsService.deleteMedia(
+                uris = uris,
+                permanently = permanently,
+            )
             if (deleted) {
                 // 文件删除成功后同步清掉它的播放历史，避免历史里残留无法播放的条目
                 mediaRepository.removePlaybackHistory(uris = uris.map { uri -> uri.toString() })
@@ -331,7 +379,12 @@ class MusicViewModel(
         if (uris.isEmpty()) return
         addToPlaylistState.value = addToPlaylistState.value.copy(isSaving = true)
         viewModelScope.launch {
-            runCatching { playlistRepository.addVideos(playlistId, uris) }
+            runCatching {
+                playlistRepository.addVideos(
+                    playlistId,
+                    uris,
+                )
+            }
             pendingSelection = emptySet()
             addToPlaylistState.value = AddToPlaylistState()
         }
@@ -342,7 +395,12 @@ class MusicViewModel(
         if (uris.isEmpty()) return
         addToPlaylistState.value = addToPlaylistState.value.copy(isSaving = true)
         viewModelScope.launch {
-            runCatching { playlistRepository.create(name = name, videoUris = uris) }
+            runCatching {
+                playlistRepository.create(
+                    name = name,
+                    videoUris = uris,
+                )
+            }
             pendingSelection = emptySet()
             addToPlaylistState.value = AddToPlaylistState()
         }
@@ -354,14 +412,20 @@ class MusicViewModel(
             .filterNot { it.isInExcludedFolder(excludeFolders) }
     }
 
-    private fun Set<SelectionItem>.toAudioUris(): List<Uri> = toAudioFiles().map { it.uriString.toUri() }
+    private fun Set<SelectionItem>.toAudioUris(): List<Uri> = toAudioFiles().map {
+        it.uriString.toUri()
+    }
 
     private fun Set<SelectionItem>.toAudioFiles(): List<AudioFile> {
         val all = allAudiosUnderCurrentPath()
         return flatMap { item ->
             when (item) {
                 is SelectionItem.Video -> all.filter { it.uriString == item.id }
-                is SelectionItem.Folder -> audiosUnder(path = item.path, audios = all)
+
+                is SelectionItem.Folder -> audiosUnder(
+                    path = item.path,
+                    audios = all,
+                )
             }
         }.distinctBy { it.uriString }
     }
@@ -415,7 +479,16 @@ class MusicViewModel(
 
             MediaViewMode.VIDEOS -> {
                 folders = emptyList()
-                audios = (if (path == null) all else audiosUnder(path = path, audios = all))
+                audios = (
+                    if (path == null) {
+                        all
+                    } else {
+                        audiosUnder(
+                            path = path,
+                            audios = all,
+                        )
+                    }
+                    )
                     .sortedWith(sort.audioComparator())
             }
         }
@@ -432,30 +505,46 @@ class MusicViewModel(
     }
 
     /** 树形展示：当前目录下的曲目 + 一层子目录（顶层只有多存储卷时才显示卷目录）。 */
-    private fun buildTree(
-        root: String?,
-        audios: List<AudioFile>,
-        sort: Sort,
-    ): MusicTree {
+    private fun buildTree(root: String?, audios: List<AudioFile>, sort: Sort): MusicTree {
         if (root == null) {
             val volumes = audios.mapNotNull { volumeRootOf(it.path) }.distinct()
-            if (volumes.isEmpty()) return MusicTree(folders = emptyList(), directAudios = emptyList())
+            if (volumes.isEmpty()) {
+                return MusicTree(
+                    folders = emptyList(),
+                    directAudios = emptyList(),
+                )
+            }
             if (volumes.size > 1) {
                 val folders = volumes
                     .map { volume ->
-                        summarize(path = volume, audios = audiosUnder(path = volume, audios = audios))
+                        summarize(
+                            path = volume,
+                            audios = audiosUnder(
+                                path = volume,
+                                audios = audios,
+                            ),
+                        )
                     }
                     .sortedWith(sort.folderComparator())
-                return MusicTree(folders = folders, directAudios = emptyList())
+                return MusicTree(
+                    folders = folders,
+                    directAudios = emptyList(),
+                )
             }
         }
 
         val rootPath = root ?: audios.mapNotNull { volumeRootOf(it.path) }.distinct().firstOrNull()
-            ?: return MusicTree(folders = emptyList(), directAudios = emptyList())
+            ?: return MusicTree(
+                folders = emptyList(),
+                directAudios = emptyList(),
+            )
         val prefix = rootPath.trimEnd('/') + PATH_SEPARATOR
         val directAudios = ArrayList<AudioFile>()
         val audiosByFolder = LinkedHashMap<String, MutableList<AudioFile>>()
-        for (audio in audiosUnder(path = rootPath, audios = audios)) {
+        for (audio in audiosUnder(
+            path = rootPath,
+            audios = audios,
+        )) {
             if (audio.parentPath == rootPath) {
                 directAudios.add(element = audio)
                 continue
@@ -466,7 +555,12 @@ class MusicViewModel(
             audiosByFolder.getOrPut(key = childPath) { ArrayList() }.add(element = audio)
         }
         val folders = audiosByFolder.asSequence()
-            .map { (path, folderAudios) -> summarize(path = path, audios = folderAudios) }
+            .map { (path, folderAudios) ->
+                summarize(
+                    path = path,
+                    audios = folderAudios,
+                )
+            }
             .sortedWith(sort.folderComparator())
             .toList()
         return MusicTree(
@@ -476,12 +570,15 @@ class MusicViewModel(
     }
 
     /** 「文件夹」模式顶层：所有含曲目的目录平铺展示。 */
-    private fun flatFolders(
-        audios: List<AudioFile>,
-        sort: Sort,
-    ): List<Folder> = audios.groupBy { it.parentPath }
-        .map { (path, folderAudios) -> summarize(path = path, audios = folderAudios) }
-        .sortedWith(sort.folderComparator())
+    private fun flatFolders(audios: List<AudioFile>, sort: Sort): List<Folder> =
+        audios.groupBy { it.parentPath }
+            .map { (path, folderAudios) ->
+                summarize(
+                    path = path,
+                    audios = folderAudios,
+                )
+            }
+            .sortedWith(sort.folderComparator())
 
     private fun audiosUnder(path: String, audios: List<AudioFile>): List<AudioFile> {
         val prefix = path.trimEnd('/') + PATH_SEPARATOR
@@ -490,7 +587,8 @@ class MusicViewModel(
 
     private fun AudioFile.isInExcludedFolder(excludeFolders: List<String>): Boolean =
         excludeFolders.any { folder ->
-            parentPath == folder || parentPath.startsWith(prefix = folder.trimEnd('/') + PATH_SEPARATOR)
+            parentPath == folder ||
+                parentPath.startsWith(prefix = folder.trimEnd('/') + PATH_SEPARATOR)
         }
 
     private fun summarize(path: String, audios: List<AudioFile>): Folder {
@@ -507,7 +605,9 @@ class MusicViewModel(
             if (audio.parentPath == path) {
                 directCount++
             } else {
-                childFolders.add(audio.path.removePrefix(prefix = prefix).substringBefore(PATH_SEPARATOR))
+                childFolders.add(
+                    audio.path.removePrefix(prefix = prefix).substringBefore(PATH_SEPARATOR),
+                )
             }
         }
         val file = File(path)
@@ -540,10 +640,7 @@ class MusicViewModel(
     }
 }
 
-private data class MusicTree(
-    val folders: List<Folder>,
-    val directAudios: List<AudioFile>,
-)
+private data class MusicTree(val folders: List<Folder>, val directAudios: List<AudioFile>)
 
 sealed interface MusicAction {
     data class OnFolderClick(val folderPath: String) : MusicAction

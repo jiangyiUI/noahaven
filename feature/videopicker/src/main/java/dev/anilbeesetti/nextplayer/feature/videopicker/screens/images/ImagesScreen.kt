@@ -91,7 +91,7 @@ fun ImagesScreen(viewModel: ImagesViewModel) {
             viewModel.onAction(ImagesAction.OnPermissionAccepted)
         }
         wasStorageAccessGranted = granted
-        onPauseOrDispose { }
+        onPauseOrDispose {}
     }
 
     // 从搜索页点击文件夹返回时，直接进入该目录
@@ -99,7 +99,7 @@ fun ImagesScreen(viewModel: ImagesViewModel) {
         PendingImageFolder.consume()?.let { path ->
             viewModel.onAction(ImagesAction.OnFolderClick(folderPath = path))
         }
-        onPauseOrDispose { }
+        onPauseOrDispose {}
     }
 
     LaunchedEffect(hasStorageAccess) {
@@ -224,7 +224,12 @@ internal fun ImagesScreenContent(
                                 if (selectedItemsSize != totalItemsSize) {
                                     val items = buildList {
                                         state.folders.forEach {
-                                            add(SelectionItem.Folder(it.name, it.path))
+                                            add(
+                                                SelectionItem.Folder(
+                                                    it.name,
+                                                    it.path,
+                                                ),
+                                            )
                                         }
                                         state.images.forEach { add(it.toSelectionItem()) }
                                     }
@@ -308,7 +313,12 @@ internal fun ImagesScreenContent(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(scaffoldPadding.copy(bottom = 0.dp))
-                .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                .clip(
+                    RoundedCornerShape(
+                        topStart = 24.dp,
+                        topEnd = 24.dp,
+                    ),
+                )
                 .background(MaterialTheme.colorScheme.background),
         ) {
             if (!hasStorageAccess) {
@@ -340,7 +350,10 @@ internal fun ImagesScreenContent(
                                 if (selectionManager.isInSelectionMode) {
                                     state.folders.find { it.path == path }?.let { folder ->
                                         selectionManager.toggleSelection(
-                                            SelectionItem.Folder(folder.name, folder.path),
+                                            SelectionItem.Folder(
+                                                folder.name,
+                                                folder.path,
+                                            ),
                                         )
                                     }
                                 } else {
@@ -357,7 +370,10 @@ internal fun ImagesScreenContent(
                             },
                             onFolderLongClick = { folder ->
                                 selectionManager.toggleSelection(
-                                    SelectionItem.Folder(folder.name, folder.path),
+                                    SelectionItem.Folder(
+                                        folder.name,
+                                        folder.path,
+                                    ),
                                 )
                             },
                             onImageLongClick = { image ->
@@ -394,7 +410,12 @@ internal fun ImagesScreenContent(
                 name = image.nameWithExtension,
                 onDismiss = { renameImageUri = null },
                 onDone = {
-                    onAction(ImagesAction.RenameSelected(uri.toUri(), it))
+                    onAction(
+                        ImagesAction.RenameSelected(
+                            uri.toUri(),
+                            it,
+                        ),
+                    )
                     selectionManager.exitSelectionMode()
                     renameImageUri = null
                 },
@@ -404,7 +425,10 @@ internal fun ImagesScreenContent(
 
     infoImagePath?.let { path ->
         state.images.firstOrNull { it.path == path }?.let { image ->
-            ImageInfoDialog(image = image, onDismiss = { infoImagePath = null })
+            ImageInfoDialog(
+                image = image,
+                onDismiss = { infoImagePath = null },
+            )
         }
     }
 
@@ -425,7 +449,14 @@ internal fun ImagesScreenContent(
         val count = selectionManager.selectionItems.size
         NextDialog(
             onDismissRequest = { showDeleteConfirmation = false },
-            title = { Text(stringResource(R.string.delete_items, count)) },
+            title = {
+                Text(
+                    stringResource(
+                        R.string.delete_items,
+                        count,
+                    ),
+                )
+            },
             content = {
                 Text(
                     stringResource(
@@ -466,9 +497,18 @@ private fun ImageInfoDialog(image: ImageFile, onDismiss: () -> Unit) {
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                ImageInfoRow(stringResource(R.string.file), image.nameWithExtension)
-                ImageInfoRow(stringResource(R.string.location), image.parentPath)
-                ImageInfoRow(stringResource(R.string.size), image.formattedFileSize)
+                ImageInfoRow(
+                    stringResource(R.string.file),
+                    image.nameWithExtension,
+                )
+                ImageInfoRow(
+                    stringResource(R.string.location),
+                    image.parentPath,
+                )
+                ImageInfoRow(
+                    stringResource(R.string.size),
+                    image.formattedFileSize,
+                )
                 if (image.hasDimensions) {
                     ImageInfoRow(
                         stringResource(R.string.resolution),
@@ -490,10 +530,19 @@ private fun ImageInfoDialog(image: ImageFile, onDismiss: () -> Unit) {
 @Composable
 private fun ImageInfoRow(title: String, value: String) {
     Row {
-        Text(text = "$title: ", style = MaterialTheme.typography.titleSmall)
-        Text(text = value, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            text = "$title: ",
+            style = MaterialTheme.typography.titleSmall,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+        )
     }
 }
 
-private fun ImageFile.toSelectionItem() =
-    SelectionItem.Video(name = displayName, uriString = uriString, path = path)
+private fun ImageFile.toSelectionItem() = SelectionItem.Video(
+    name = displayName,
+    uriString = uriString,
+    path = path,
+)

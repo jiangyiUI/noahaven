@@ -44,7 +44,10 @@ fun EntryProviderScope<NavKey>.mediaNavGraph(context: Context, backStack: NavBac
 fun EntryProviderScope<NavKey>.musicNavGraph(context: Context, backStack: NavBackStack<NavKey>) {
     musicEntry(
         onPlayAudios = { playlist, startUri ->
-            context.startAudioPlayback(uris = playlist, startUri = startUri)
+            context.startAudioPlayback(
+                uris = playlist,
+                startUri = startUri,
+            )
         },
         onSettingsClick = backStack::navigateToSettings,
         onSearchClick = backStack::navigateToMusicSearch,
@@ -53,7 +56,10 @@ fun EntryProviderScope<NavKey>.musicNavGraph(context: Context, backStack: NavBac
     musicSearchEntry(
         onNavigateUp = { backStack.removeLastIfNotRoot() },
         onPlayAudios = { playlist, startUri ->
-            context.startAudioPlayback(uris = playlist, startUri = startUri)
+            context.startAudioPlayback(
+                uris = playlist,
+                startUri = startUri,
+            )
         },
         onOpenFolder = { folderPath ->
             // 记录目标文件夹，返回音乐库后由页面消费并进入该目录
@@ -144,8 +150,14 @@ internal fun Context.startAudioPlayback(uris: List<Uri>, startUri: Uri? = null) 
     ).apply {
         action = Intent.ACTION_VIEW
         // setType 会清空已设置的 data，必须用 setDataAndType 同时设置
-        setDataAndType(uri, "audio/*")
-        putExtra("video_list_is_explicit", true)
+        setDataAndType(
+            uri,
+            "audio/*",
+        )
+        putExtra(
+            "video_list_is_explicit",
+            true,
+        )
         putParcelableArrayListExtra(
             PlayerApi.API_PLAYLIST,
             ArrayList(playlist),

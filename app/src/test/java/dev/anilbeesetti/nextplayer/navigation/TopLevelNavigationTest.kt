@@ -86,11 +86,17 @@ class TopLevelNavigationTest {
         )
         state.goBack()
         assertEquals(
-            listOf(MoreRoute, PlaylistListRoute),
+            listOf(
+                MoreRoute,
+                PlaylistListRoute,
+            ),
             state.currentStack,
         )
         state.goBack()
-        assertEquals(listOf<NavKey>(MoreRoute), state.currentStack)
+        assertEquals(
+            listOf<NavKey>(MoreRoute),
+            state.currentStack,
+        )
         state.goBack()
         assertEquals(
             TopLevelDestination.MEDIA.route,

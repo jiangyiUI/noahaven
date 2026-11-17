@@ -385,13 +385,16 @@ private fun ThumbnailView(
 }
 
 @Composable
-private fun AudioThumbnail(
-    uriString: String,
-    modifier: Modifier = Modifier,
-) {
+private fun AudioThumbnail(uriString: String, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val bitmap by produceState<Bitmap?>(initialValue = null, key1 = uriString) {
-        value = AudioArtwork.load(context = context, pathOrUri = uriString)
+    val bitmap by produceState<Bitmap?>(
+        initialValue = null,
+        key1 = uriString,
+    ) {
+        value = AudioArtwork.load(
+            context = context,
+            pathOrUri = uriString,
+        )
     }
     bitmap?.let { cover ->
         Image(

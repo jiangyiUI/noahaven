@@ -241,9 +241,15 @@ class VideoThumbnailDecoder(
         val baseName = videoFile.nameWithoutExtension
         if (baseName.isBlank()) return@withContext null
         COVER_IMAGE_EXTENSIONS.firstNotNullOfOrNull { extension ->
-            File(directory, "$baseName.$extension")
+            File(
+                directory,
+                "$baseName.$extension",
+            )
                 .takeIf { it.isFile }
-                ?: File(directory, "$baseName.${extension.uppercase()}").takeIf { it.isFile }
+                ?: File(
+                    directory,
+                    "$baseName.${extension.uppercase()}",
+                ).takeIf { it.isFile }
         }
     }
 
@@ -254,6 +260,7 @@ class VideoThumbnailDecoder(
                 val uri = metadata.uri.toAndroidUri()
                 when (uri.scheme?.lowercase()) {
                     "file" -> uri.path
+
                     else -> runCatching {
                         options.context.contentResolver.query(
                             uri,
@@ -284,17 +291,29 @@ class VideoThumbnailDecoder(
     private suspend fun decodeCoverImage(coverFile: File): DecodeResult? =
         withContext(Dispatchers.IO) {
             val boundsOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeFile(coverFile.path, boundsOptions)
+            BitmapFactory.decodeFile(
+                coverFile.path,
+                boundsOptions,
+            )
             val srcWidth = boundsOptions.outWidth
             val srcHeight = boundsOptions.outHeight
             if (srcWidth <= 0 || srcHeight <= 0) return@withContext null
 
             val decodeOptions = BitmapFactory.Options().apply {
-                inSampleSize = computeCoverSampleSize(srcWidth = srcWidth, srcHeight = srcHeight)
+                inSampleSize = computeCoverSampleSize(
+                    srcWidth = srcWidth,
+                    srcHeight = srcHeight,
+                )
             }
-            val bitmap = BitmapFactory.decodeFile(coverFile.path, decodeOptions)
+            val bitmap = BitmapFactory.decodeFile(
+                coverFile.path,
+                decodeOptions,
+            )
                 ?: return@withContext null
-            val dstSize = computeDstSize(srcWidth = bitmap.width, srcHeight = bitmap.height)
+            val dstSize = computeDstSize(
+                srcWidth = bitmap.width,
+                srcHeight = bitmap.height,
+            )
             val scaledBitmap = normalizeBitmap(
                 inBitmap = bitmap,
                 srcWidth = bitmap.width,
@@ -450,7 +469,13 @@ class VideoThumbnailDecoder(
 /**
  * Image extensions tried, in order, when looking for a cover image next to a video.
  */
-private val COVER_IMAGE_EXTENSIONS = listOf("jpg", "png", "bmp", "jpeg", "webp")
+private val COVER_IMAGE_EXTENSIONS = listOf(
+    "jpg",
+    "png",
+    "bmp",
+    "jpeg",
+    "webp",
+)
 
 private inline fun <T> MediaMetadataRetriever.use(block: (MediaMetadataRetriever) -> T): T {
     try {

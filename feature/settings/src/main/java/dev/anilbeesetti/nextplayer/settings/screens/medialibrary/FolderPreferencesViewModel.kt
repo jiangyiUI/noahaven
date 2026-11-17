@@ -111,9 +111,11 @@ class FolderPreferencesViewModel(
             preferencesRepository.updateApplicationPreferences { preferences ->
                 when {
                     output.imageFolders -> preferences.copy(imageFolders = newRoots)
+
                     output.audioFolders -> preferences.copy(
                         excludeAudioFolders = preferences.excludeAudioFolders.toggle(path),
                     )
+
                     else -> preferences.copy(
                         excludeFolders = preferences.excludeFolders.toggle(path),
                     )
@@ -147,8 +149,15 @@ class FolderPreferencesViewModel(
         val documentId = runCatching { DocumentsContract.getTreeDocumentId(this) }.getOrNull()
             ?: return null
         val volume = documentId.substringBefore(':')
-        val relative = documentId.substringAfter(':', missingDelimiterValue = "").trim('/')
-        val root = if (volume.equals("primary", ignoreCase = true)) {
+        val relative = documentId.substringAfter(
+            ':',
+            missingDelimiterValue = "",
+        ).trim('/')
+        val root = if (volume.equals(
+                "primary",
+                ignoreCase = true,
+            )
+        ) {
             Environment.getExternalStorageDirectory().path
         } else {
             "/storage/$volume"

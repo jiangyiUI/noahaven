@@ -36,8 +36,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.anilbeesetti.nextplayer.core.media.services.AudioArtwork
-import dev.anilbeesetti.nextplayer.core.model.AudioFile
 import dev.anilbeesetti.nextplayer.core.model.ApplicationPreferences
+import dev.anilbeesetti.nextplayer.core.model.AudioFile
 import dev.anilbeesetti.nextplayer.core.model.MediaLayoutMode
 import dev.anilbeesetti.nextplayer.core.ui.components.NextSegmentedListItem
 import dev.anilbeesetti.nextplayer.core.ui.designsystem.NextIcons
@@ -53,8 +53,14 @@ fun AudioCover(
     contentDescription: String? = null,
 ) {
     val context = LocalContext.current
-    val bitmap by produceState<Bitmap?>(initialValue = null, key1 = audio.path) {
-        value = AudioArtwork.load(context = context, pathOrUri = audio.path)
+    val bitmap by produceState<Bitmap?>(
+        initialValue = null,
+        key1 = audio.path,
+    ) {
+        value = AudioArtwork.load(
+            context = context,
+            pathOrUri = audio.path,
+        )
     }
 
     val shape = RoundedCornerShape(size = 8.dp)
@@ -131,7 +137,10 @@ private fun MusicListItem(
     onClick: () -> Unit = {},
     onLongClick: (() -> Unit)? = null,
 ) {
-    val metadata = listOf(audio.artist, audio.album)
+    val metadata = listOf(
+        audio.artist,
+        audio.album,
+    )
         .filter { it.isNotBlank() }
         .joinToString(separator = " · ")
     val details = buildList {
@@ -261,7 +270,9 @@ private fun MusicGridItem(
                 }
                 // 标题固定两行高度，单行/双行等高，和视频网格一致
                 val titleText = audio.titleOrDisplayName
-                val titleStyle = MaterialTheme.typography.titleMedium.copy(lineBreak = LineBreak.Simple)
+                val titleStyle = MaterialTheme.typography.titleMedium.copy(
+                    lineBreak = LineBreak.Simple,
+                )
                 val titleHeight = with(LocalDensity.current) { (titleStyle.lineHeight * 2).toDp() }
                 Box(
                     modifier = Modifier
@@ -278,7 +289,10 @@ private fun MusicGridItem(
                     )
                 }
                 Text(
-                    text = listOf(audio.artist, audio.album)
+                    text = listOf(
+                        audio.artist,
+                        audio.album,
+                    )
                         .filter { it.isNotBlank() }
                         .joinToString(separator = " · ")
                         .ifEmpty { "\u200B" },

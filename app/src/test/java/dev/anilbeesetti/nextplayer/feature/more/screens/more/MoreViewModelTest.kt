@@ -190,21 +190,30 @@ class MoreViewModelTest {
         runTest(context = dispatcher) {
             val first = Video.sample.copy(uriString = "content://video/1")
             val second = Video.sample.copy(uriString = "content://video/2")
-            history.value = listOf(first, second)
+            history.value = listOf(
+                first,
+                second,
+            )
             runCurrent()
 
             viewModel.onAction(MoreAction.ToggleSelection(uriString = first.uriString))
             viewModel.onAction(MoreAction.ToggleSelection(uriString = second.uriString))
             runCurrent()
             assertEquals(
-                setOf(first.uriString, second.uriString),
+                setOf(
+                    first.uriString,
+                    second.uriString,
+                ),
                 viewModel.state.value.selectedUris,
             )
 
             viewModel.onAction(MoreAction.DeleteSelected)
             runCurrent()
             assertEquals(
-                listOf(first.uriString, second.uriString),
+                listOf(
+                    first.uriString,
+                    second.uriString,
+                ),
                 removedHistory,
             )
             assertTrue(viewModel.state.value.selectedUris.isEmpty())

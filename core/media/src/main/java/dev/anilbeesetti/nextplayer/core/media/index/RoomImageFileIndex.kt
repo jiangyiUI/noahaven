@@ -41,11 +41,7 @@ class RoomImageFileIndex(
     private val dimensionsRequested = HashMap<String, DimensionsRequest>()
     private val dimensionsQueue = Channel<DimensionsRequest>(capacity = Channel.UNLIMITED)
 
-    private data class DimensionsRequest(
-        val path: String,
-        val size: Long,
-        val dateModified: Long,
-    )
+    private data class DimensionsRequest(val path: String, val size: Long, val dateModified: Long)
 
     private val _entries = MutableStateFlow<List<ImageFile>?>(null)
     override val entries: StateFlow<List<ImageFile>?> = _entries.asStateFlow()
@@ -97,7 +93,9 @@ class RoomImageFileIndex(
                     val removedPaths = ArrayList<String>()
                     val changed = ArrayList<ImageFileIndexEntity>()
                     for (entry in index.values.toList()) {
-                        if (entry.whitelistRoot !in normalized && !entry.path.isWithinAny(normalized)) {
+                        if (entry.whitelistRoot !in normalized &&
+                            !entry.path.isWithinAny(normalized)
+                        ) {
                             continue
                         }
                         val retainedRoot = retained.firstOrNull { entry.path.isWithin(it) }
@@ -159,13 +157,22 @@ class RoomImageFileIndex(
                     folderPath = target,
                     whitelistRoot = root,
                     onBatch = { batch ->
-                        stateMutex.withLock { applyBatchLocked(batch = batch, seen = seen) }
+                        stateMutex.withLock {
+                            applyBatchLocked(
+                                batch = batch,
+                                seen = seen,
+                            )
+                        }
                     },
                 )
                 // 权限读取失败时保留旧索引，不能把未读到误判成已删除。
                 if (!complete) continue
                 stateMutex.withLock {
-                    removeMissingLocked(root = root, target = target, seen = seen)
+                    removeMissingLocked(
+                        root = root,
+                        target = target,
+                        seen = seen,
+                    )
                 }
             }
         }
@@ -205,15 +212,22 @@ class RoomImageFileIndex(
                 path = file.path,
                 parentPath = file.parentPath,
                 whitelistRoot = file.whitelistRoot,
-                uriString = current?.uriString ?: android.net.Uri.fromFile(File(file.path)).toString(),
+                uriString =
+                    current?.uriString ?: android.net.Uri.fromFile(File(file.path)).toString(),
                 nameWithExtension = file.displayName,
                 size = file.size,
                 dateModified = file.dateModified,
                 width = if (contentChanged) 0 else current?.width ?: 0,
                 height = if (contentChanged) 0 else current?.height ?: 0,
                 noMediaHidden = file.noMediaHidden,
-                dimensionsLoaded = if (contentChanged) false else current?.dimensionsLoaded ?: false,
-                formattedFileSize = dev.anilbeesetti.nextplayer.core.common.Utils.formatFileSize(file.size),
+                dimensionsLoaded = if (contentChanged) {
+                    false
+                } else {
+                    current?.dimensionsLoaded ?: false
+                },
+                formattedFileSize = dev.anilbeesetti.nextplayer.core.common.Utils.formatFileSize(
+                    file.size,
+                ),
             )
             index[file.path] = entry
             changed.add(entry.toEntity())
@@ -262,7 +276,9 @@ class RoomImageFileIndex(
                         dimensionsRequested.remove(request.path)
                     }
                     val current = index[request.path] ?: continue
-                    if (current.size != request.size || current.dateModified != request.dateModified) {
+                    if (current.size != request.size ||
+                        current.dateModified != request.dateModified
+                    ) {
                         if (!current.dimensionsLoaded) requestDimensionsLocked(current)
                         continue
                     }
@@ -336,7 +352,12 @@ private fun outermostRoots(roots: Collection<String>): List<String> = roots
     .filter { it.isNotBlank() }
     .map(::normalizeRoot)
     .distinct()
-    .filter { root -> roots.map(::normalizeRoot).none { other -> other != root && root.isWithin(other) } }
+    .filter { root ->
+        roots.map(::normalizeRoot).none { other ->
+            other != root &&
+                root.isWithin(other)
+        }
+    }
 
 private fun String.isWithin(root: String): Boolean =
     this == root || startsWith(root.trimEnd(File.separatorChar) + File.separator)

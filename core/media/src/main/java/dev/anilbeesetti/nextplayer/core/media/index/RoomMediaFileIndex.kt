@@ -93,12 +93,19 @@ class RoomMediaFileIndex(
             val key = folderPath ?: ALL_VOLUMES_KEY
             val now = System.currentTimeMillis()
             val last = lastRefreshAt[key]
-            if (last != null && minIntervalMillis > 0 && now - last < minIntervalMillis) return@withLock
+            if (last != null && minIntervalMillis > 0 &&
+                now - last < minIntervalMillis
+            ) {
+                return@withLock
+            }
             lastRefreshAt[key] = now
 
             // 读不到就放弃本次差异更新，避免把「没有权限」误判成「文件被删除」
             val scanned = scanner.scan(folderPath = folderPath) ?: return@withLock
-            applyScanLocked(folderPath = folderPath, scanned = scanned)
+            applyScanLocked(
+                folderPath = folderPath,
+                scanned = scanned,
+            )
         }
     }
 

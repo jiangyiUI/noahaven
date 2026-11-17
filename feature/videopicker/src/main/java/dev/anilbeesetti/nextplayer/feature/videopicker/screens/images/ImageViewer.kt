@@ -120,7 +120,10 @@ fun ImageViewer(
                             awaitEachGesture {
                                 val firstDown = awaitFirstDown(requireUnconsumed = false)
                                 val velocityTracker = VelocityTracker()
-                                velocityTracker.addPosition(firstDown.uptimeMillis, firstDown.position)
+                                velocityTracker.addPosition(
+                                    firstDown.uptimeMillis,
+                                    firstDown.position,
+                                )
                                 var multiTouch = false
                                 var dragDistanceX = 0f
                                 do {
@@ -135,7 +138,10 @@ fun ImageViewer(
                                     if (pressedPointers >= 2) multiTouch = true
                                     if (pressedPointers >= 2 || scale > 1f) {
                                         val newScale = (scale * event.calculateZoom())
-                                            .coerceIn(1f, 5f)
+                                            .coerceIn(
+                                                1f,
+                                                5f,
+                                            )
                                         val newOffset = if (newScale == 1f) {
                                             Offset.Zero
                                         } else {
@@ -143,8 +149,14 @@ fun ImageViewer(
                                             val maxY = size.height * (newScale - 1f) / 2f
                                             val pan = event.calculatePan()
                                             Offset(
-                                                x = (offset.x + pan.x).coerceIn(-maxX, maxX),
-                                                y = (offset.y + pan.y).coerceIn(-maxY, maxY),
+                                                x = (offset.x + pan.x).coerceIn(
+                                                    -maxX,
+                                                    maxX,
+                                                ),
+                                                y = (offset.y + pan.y).coerceIn(
+                                                    -maxY,
+                                                    maxY,
+                                                ),
                                             )
                                         }
                                         scale = newScale
@@ -166,13 +178,19 @@ fun ImageViewer(
                                     val targetPage = when {
                                         dragDistanceX <= -distanceThreshold ||
                                             velocityX <= -velocityThreshold ->
-                                            (pagerState.currentPage + 1).coerceAtMost(images.lastIndex)
+                                            (pagerState.currentPage + 1).coerceAtMost(
+                                                images.lastIndex,
+                                            )
+
                                         dragDistanceX >= distanceThreshold ||
                                             velocityX >= velocityThreshold ->
                                             (pagerState.currentPage - 1).coerceAtLeast(0)
+
                                         else -> null
                                     }
-                                    if (targetPage != null && targetPage != pagerState.currentPage) {
+                                    if (targetPage != null &&
+                                        targetPage != pagerState.currentPage
+                                    ) {
                                         scope.launch {
                                             pagerState.animateScrollToPage(page = targetPage)
                                         }
@@ -210,7 +228,10 @@ fun ImageViewer(
                         .align(Alignment.TopCenter)
                         .background(Color.Black.copy(alpha = 0.55f))
                         .statusBarsPadding()
-                        .padding(horizontal = 4.dp, vertical = 4.dp),
+                        .padding(
+                            horizontal = 4.dp,
+                            vertical = 4.dp,
+                        ),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = onDismiss) {

@@ -376,7 +376,11 @@ class MediaPickerViewModel(
             )
             // 文件删除成功后同步清掉它的播放历史，避免历史里残留无法播放的条目
             if (deleted) {
-                mediaRepository.removePlaybackHistory(uris = videoUris.map { uri -> uri.toString() })
+                mediaRepository.removePlaybackHistory(
+                    uris = videoUris.map { uri ->
+                        uri.toString()
+                    },
+                )
             }
         }
     }

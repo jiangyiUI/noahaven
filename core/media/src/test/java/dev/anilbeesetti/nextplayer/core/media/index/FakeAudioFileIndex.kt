@@ -2,9 +2,7 @@ package dev.anilbeesetti.nextplayer.core.media.index
 
 import kotlinx.coroutines.flow.MutableStateFlow
 
-class FakeAudioFileIndex(
-    initialEntries: List<AudioIndexEntry>? = emptyList(),
-) : AudioFileIndex {
+class FakeAudioFileIndex(initialEntries: List<AudioIndexEntry>? = emptyList()) : AudioFileIndex {
 
     override val entries: MutableStateFlow<List<AudioIndexEntry>?> =
         MutableStateFlow(initialEntries)

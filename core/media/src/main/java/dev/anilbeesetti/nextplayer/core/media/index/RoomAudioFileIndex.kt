@@ -112,14 +112,20 @@ class RoomAudioFileIndex(
             val seen = HashSet<String>()
             val complete = scanner.scan(folderPath = folderPath) { batch ->
                 stateMutex.withLock {
-                    applyBatchLocked(batch = batch, seen = seen)
+                    applyBatchLocked(
+                        batch = batch,
+                        seen = seen,
+                    )
                 }
             }
             // 读不到目录时不能把「没有权限」误判成「文件被删除」
             if (!complete) return
 
             stateMutex.withLock {
-                removeMissingLocked(folderPath = folderPath, seen = seen)
+                removeMissingLocked(
+                    folderPath = folderPath,
+                    seen = seen,
+                )
             }
         }
     }

@@ -54,7 +54,10 @@ fun EntryProviderScope<NavKey>.moreNavGraph(context: Context, backStack: NavBack
 private fun Context.playHistoryMedia(video: Video) {
     val uri = video.uriString.toUri()
     if (video.isAudio) {
-        startAudioPlayback(uris = listOf(element = uri), startUri = uri)
+        startAudioPlayback(
+            uris = listOf(element = uri),
+            startUri = uri,
+        )
     } else {
         startPlayback(uri = uri)
     }

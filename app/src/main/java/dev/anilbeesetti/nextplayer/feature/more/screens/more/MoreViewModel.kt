@@ -46,11 +46,17 @@ class MoreViewModel(
     override fun onAction(action: MoreAction) {
         when (action) {
             is MoreAction.PlayVideo -> output.playVideo(action.video)
+
             is MoreAction.PlayUri -> output.playUri(action.uri)
+
             is MoreAction.OpenSettings -> output.openSettings()
+
             is MoreAction.OpenTrash -> output.openTrash()
+
             is MoreAction.OpenVault -> output.openVault()
+
             is MoreAction.OpenPlaylists -> output.openPlaylists()
+
             is MoreAction.OpenNetwork -> output.openNetwork()
 
             is MoreAction.ToggleSelection -> toggleSelection(uriString = action.uriString)

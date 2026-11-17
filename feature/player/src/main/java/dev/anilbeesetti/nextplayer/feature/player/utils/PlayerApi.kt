@@ -15,6 +15,7 @@ import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.DecoderMode
 /** The VIEW intent contract shared by MX Player Free, Pro, and Next Player. */
 class PlayerApi(private val intent: Intent) {
     private val extras = intent.extras
+
     // Intent.setData 会清空 type，播放中切歌后仍要记住启动时的 MIME 类型
     private val mimeType: String? = intent.type
     val isApiAccess: Boolean get() = extras?.keySet()?.any { it in API_KEYS } == true
@@ -34,6 +35,7 @@ class PlayerApi(private val intent: Intent) {
         playbackSpeed?.let(player::setPlaybackSpeed)
     }
     val videoVisible: Boolean get() = boolean("video") ?: true
+
     /** 「音乐」页启动的音频播放：显示内嵌封面，并隐藏视频专属控件。 */
     val audioOnly: Boolean get() = mimeType?.startsWith("audio/") == true
     val suppressErrorMessage: Boolean get() = boolean("suppress_error_message") == true

@@ -39,10 +39,7 @@ private val AUDIO_COLLECTION_URI: Uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_
  * 封面不在这里读，由界面按需从音频文件内嵌封面里取。
  */
 @Single
-class AudioMediaService(
-    private val context: Context,
-    private val audioFileIndex: AudioFileIndex,
-) {
+class AudioMediaService(private val context: Context, private val audioFileIndex: AudioFileIndex) {
 
     private companion object {
         private val AUDIO_PROJECTION = arrayOf(
@@ -85,7 +82,10 @@ class AudioMediaService(
 
     /** 请求在后台刷新某个文件夹的磁盘索引（null 表示所有存储卷）。 */
     fun requestRefresh(folderPath: String?, force: Boolean = false) {
-        audioFileIndex.requestRefresh(folderPath = folderPath, force = force)
+        audioFileIndex.requestRefresh(
+            folderPath = folderPath,
+            force = force,
+        )
     }
 
     private fun mediaStoreAudios(): Flow<List<AudioFile>> = callbackFlow {
@@ -95,7 +95,11 @@ class AudioMediaService(
             }
         }
         val resolver = context.contentResolver
-        resolver.registerContentObserver(AUDIO_COLLECTION_URI, true, observer)
+        resolver.registerContentObserver(
+            AUDIO_COLLECTION_URI,
+            true,
+            observer,
+        )
         // 重新订阅时也查一次：应用从后台回来时能重新确认外部变化
         trySend(Unit)
         awaitClose { resolver.unregisterContentObserver(observer) }
@@ -143,14 +147,16 @@ class AudioMediaService(
     }
 
     private fun Cursor.toAudioFiles(): List<AudioFile> {
-        val idIndex = getColumnIndex(MediaStore.Audio.Media._ID).takeIf { it >= 0 } ?: return emptyList()
+        val idIndex =
+            getColumnIndex(MediaStore.Audio.Media._ID).takeIf { it >= 0 } ?: return emptyList()
         val dataIndex = getColumnIndex(MediaStore.Audio.Media.DATA).takeIf { it >= 0 }
             ?: return emptyList()
         val nameIndex = getColumnIndex(MediaStore.Audio.Media.DISPLAY_NAME).takeIf { it >= 0 }
             ?: return emptyList()
         val durationIndex = getColumnIndex(MediaStore.Audio.Media.DURATION).takeIf { it >= 0 }
             ?: return emptyList()
-        val sizeIndex = getColumnIndex(MediaStore.Audio.Media.SIZE).takeIf { it >= 0 } ?: return emptyList()
+        val sizeIndex =
+            getColumnIndex(MediaStore.Audio.Media.SIZE).takeIf { it >= 0 } ?: return emptyList()
         val dateModifiedIndex = getColumnIndex(MediaStore.Audio.Media.DATE_MODIFIED)
             .takeIf { it >= 0 } ?: return emptyList()
         val artistIndex = getColumnIndex(MediaStore.Audio.Media.ARTIST)
@@ -169,15 +175,24 @@ class AudioMediaService(
                     path = path,
                     parentPath = File(path).parent ?: "/",
                     duration = duration,
-                    uriString = ContentUris.withAppendedId(AUDIO_COLLECTION_URI, id).toString(),
+                    uriString = ContentUris.withAppendedId(
+                        AUDIO_COLLECTION_URI,
+                        id,
+                    ).toString(),
                     nameWithExtension = getString(nameIndex) ?: File(path).name,
                     size = size,
                     dateModified = getLong(dateModifiedIndex),
                     formattedDuration = Utils.formatDurationMillis(millis = duration),
                     formattedFileSize = Utils.formatFileSize(size = size),
-                    artist = artistIndex?.let { index -> getString(index).toReadableMetadata() }.orEmpty(),
-                    album = albumIndex?.let { index -> getString(index).toReadableMetadata() }.orEmpty(),
-                    title = titleIndex?.let { index -> getString(index).toReadableMetadata() }.orEmpty(),
+                    artist = artistIndex?.let { index ->
+                        getString(index).toReadableMetadata()
+                    }.orEmpty(),
+                    album = albumIndex?.let { index ->
+                        getString(index).toReadableMetadata()
+                    }.orEmpty(),
+                    title = titleIndex?.let { index ->
+                        getString(index).toReadableMetadata()
+                    }.orEmpty(),
                 ),
             )
         }
@@ -185,6 +200,10 @@ class AudioMediaService(
     }
 
     /** MediaStore 里没有标签时会写 "<unknown>"，界面上按空处理。 */
-    private fun String?.toReadableMetadata(): String =
-        this?.takeUnless { it.isBlank() || it.equals(other = "<unknown>", ignoreCase = true) }.orEmpty()
+    private fun String?.toReadableMetadata(): String = this?.takeUnless {
+        it.isBlank() || it.equals(
+            other = "<unknown>",
+            ignoreCase = true,
+        )
+    }.orEmpty()
 }

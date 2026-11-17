@@ -112,18 +112,32 @@ class MediaStoreMediaService(
 
     override fun observeFolders(folderPath: String?): Flow<List<MediaFolder>> =
         observeMedia(folderPath = folderPath) { ignoreNoMedia, token ->
-            toFolders(videos = allVideos(ignoreNoMedia = ignoreNoMedia, token = token).under(folderPath))
+            toFolders(
+                videos = allVideos(
+                    ignoreNoMedia = ignoreNoMedia,
+                    token = token,
+                ).under(folderPath),
+            )
         }
 
     override fun observeVideos(folderPath: String?): Flow<List<MediaVideo>> =
         observeMedia(folderPath = folderPath) { ignoreNoMedia, token ->
-            allVideos(ignoreNoMedia = ignoreNoMedia, token = token).under(folderPath)
+            allVideos(
+                ignoreNoMedia = ignoreNoMedia,
+                token = token,
+            ).under(folderPath)
         }
 
     override fun observeTrashVideos(): Flow<List<MediaVideo>> = mediaChanges
         .map {
             safeQuery {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) queryTrashVideos() else emptyList()
+                if (Build.VERSION.SDK_INT >=
+                    Build.VERSION_CODES.R
+                ) {
+                    queryTrashVideos()
+                } else {
+                    emptyList()
+                }
             }
         }
         .flowOn(Dispatchers.IO)
@@ -146,7 +160,14 @@ class MediaStoreMediaService(
             // 每次都拿一个全新的快照序号：从后台回来/换文件夹时能重新确认 MediaStore 的真实状态
             emit(changeToken.incrementAndGet() to ignoreNoMedia.first())
         }
-        .map { (token, ignore) -> safeQuery { transform(ignore, token) } }
+        .map { (token, ignore) ->
+            safeQuery {
+                transform(
+                    ignore,
+                    token,
+                )
+            }
+        }
         .flowOn(Dispatchers.IO)
         .distinctUntilChanged()
 
@@ -158,7 +179,10 @@ class MediaStoreMediaService(
     override suspend fun fetchVideos(folderPath: String?): List<MediaVideo> =
         withContext(Dispatchers.IO) {
             val ignoreNoMedia = preferencesDataSource.preferences.first().ignoreNoMedia
-            allVideos(ignoreNoMedia = ignoreNoMedia, token = changeToken.get()).under(folderPath)
+            allVideos(
+                ignoreNoMedia = ignoreNoMedia,
+                token = changeToken.get(),
+            ).under(folderPath)
         }
 
     override suspend fun findVideo(uri: Uri): MediaVideo? = withContext(Dispatchers.IO) {

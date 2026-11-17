@@ -26,9 +26,7 @@ fun NavBackStack<NavKey>.navigateToLibraries() {
     add(element = LibrariesRoute)
 }
 
-fun EntryProviderScope<NavKey>.aboutPreferencesEntry(
-    onNavigateUp: () -> Unit,
-) {
+fun EntryProviderScope<NavKey>.aboutPreferencesEntry(onNavigateUp: () -> Unit) {
     entry<AboutPreferencesRoute> {
         val output = AboutPreferencesViewModel.Output(
             navigateUp = onNavigateUp,

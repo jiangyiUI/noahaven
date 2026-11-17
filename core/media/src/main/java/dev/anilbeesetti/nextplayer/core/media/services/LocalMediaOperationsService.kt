@@ -81,12 +81,14 @@ class LocalMediaOperationsService(
             val mediaStorePaths = resolveMediaStorePaths(uris = mediaStoreUris)
             val mediaStoreDeleted = when {
                 mediaStoreUris.isEmpty() -> true
+
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.R ->
                     if (permanently) {
                         deleteMediaR(uris = mediaStoreUris)
                     } else {
                         trashMediaR(uris = mediaStoreUris)
                     }
+
                 else -> deleteMediaBelowR(uris = mediaStoreUris)
             }
             if (mediaStoreDeleted) removeIndexedPaths(paths = mediaStorePaths)
@@ -99,9 +101,19 @@ class LocalMediaOperationsService(
         for (uri in uris) {
             runCatching {
                 context.contentResolver
-                    .query(uri, arrayOf(MediaStore.MediaColumns.DATA), null, null, null)
+                    .query(
+                        uri,
+                        arrayOf(MediaStore.MediaColumns.DATA),
+                        null,
+                        null,
+                        null,
+                    )
                     ?.use { cursor ->
-                        if (cursor.moveToFirst()) cursor.getString(0)?.let { path -> paths.add(path) }
+                        if (cursor.moveToFirst()) {
+                            cursor.getString(0)?.let { path ->
+                                paths.add(path)
+                            }
+                        }
                     }
             }
         }
@@ -157,11 +169,16 @@ class LocalMediaOperationsService(
 
     override suspend fun renameMedia(uri: Uri, to: String): Boolean = withContext(Dispatchers.IO) {
         return@withContext when {
-            uri.scheme == "file" -> renameFileMedia(uri = uri, to = to)
+            uri.scheme == "file" -> renameFileMedia(
+                uri = uri,
+                to = to,
+            )
+
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> renameMediaR(
                 uri = uri,
                 to = to,
             )
+
             else -> renameMediaBelowR(
                 uri = uri,
                 to = to,
@@ -171,7 +188,10 @@ class LocalMediaOperationsService(
 
     private suspend fun renameFileMedia(uri: Uri, to: String): Boolean = runCatching {
         val oldFile = uri.path?.let(::File) ?: return@runCatching false
-        val newFile = File(oldFile.parentFile, to)
+        val newFile = File(
+            oldFile.parentFile,
+            to,
+        )
         if (newFile.exists() || !oldFile.renameTo(newFile)) return@runCatching false
         removeIndexedPaths(paths = listOf(oldFile.path))
         context.scanPaths(paths = listOf(newFile.path))

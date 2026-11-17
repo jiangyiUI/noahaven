@@ -9,9 +9,29 @@ import dev.anilbeesetti.nextplayer.core.common.extensions.getStorageVolumes
 import java.io.File
 
 private val AUDIO_EXTENSIONS = setOf(
-    "mp3", "m4a", "m4b", "aac", "flac", "ogg", "oga", "opus", "wav", "wave",
-    "wma", "ape", "alac", "mka", "amr", "mid", "midi", "tta", "dsf", "dff",
-    "aiff", "aif", "3gp",
+    "mp3",
+    "m4a",
+    "m4b",
+    "aac",
+    "flac",
+    "ogg",
+    "oga",
+    "opus",
+    "wav",
+    "wave",
+    "wma",
+    "ape",
+    "alac",
+    "mka",
+    "amr",
+    "mid",
+    "midi",
+    "tta",
+    "dsf",
+    "dff",
+    "aiff",
+    "aif",
+    "3gp",
 )
 
 /**
@@ -42,10 +62,7 @@ class FileSystemAudioScanner(private val context: Context) {
      * @return true 表示扫描完整；false 表示有目录读不到（没有权限），
      *         调用方不能据此删除索引里的条目。
      */
-    suspend fun scan(
-        folderPath: String?,
-        onBatch: suspend (List<ScannedAudio>) -> Unit,
-    ): Boolean {
+    suspend fun scan(folderPath: String?, onBatch: suspend (List<ScannedAudio>) -> Unit): Boolean {
         val batch = ArrayList<ScannedAudio>(BATCH_SIZE)
         var lastFlushAt = System.currentTimeMillis()
 
@@ -71,13 +88,24 @@ class FileSystemAudioScanner(private val context: Context) {
             if (!root.exists() || !root.isDirectory) {
                 true
             } else {
-                walk(directory = root, noMediaHidden = false, onFile = { audio -> emit(audio) })
+                walk(
+                    directory = root,
+                    noMediaHidden = false,
+                    onFile = { audio -> emit(audio) },
+                )
             }
         } else {
             var failed = false
             for (root in context.getStorageVolumes()) {
                 if (!root.isDirectory) continue
-                if (!walk(directory = root, noMediaHidden = false, onFile = { audio -> emit(audio) })) {
+                if (!walk(
+                        directory = root,
+                        noMediaHidden = false,
+                        onFile = { audio ->
+                            emit(audio)
+                        },
+                    )
+                ) {
                     failed = true
                 }
             }
@@ -97,17 +125,33 @@ class FileSystemAudioScanner(private val context: Context) {
         onFile: suspend (ScannedAudio) -> Unit,
     ): Boolean {
         val children = directory.listFiles() ?: return false
-        val hidden = noMediaHidden || children.any { it.name.equals(NOMEDIA_FILE, ignoreCase = true) }
+        val hidden =
+            noMediaHidden || children.any {
+                it.name.equals(
+                    NOMEDIA_FILE,
+                    ignoreCase = true,
+                )
+            }
         var complete = true
         for (child in children) {
             val name = child.name
             val stat = child.statInfo() ?: continue
             if (stat.isDirectory) {
                 // 跳过隐藏目录（.thumbnails/.trash 等）和应用私有目录 Android/
-                if (name.startsWith(prefix = ".") || name.equals(other = "Android", ignoreCase = true)) {
+                if (name.startsWith(prefix = ".") ||
+                    name.equals(
+                        other = "Android",
+                        ignoreCase = true,
+                    )
+                ) {
                     continue
                 }
-                if (!walk(directory = child, noMediaHidden = hidden, onFile = onFile)) {
+                if (!walk(
+                        directory = child,
+                        noMediaHidden = hidden,
+                        onFile = onFile,
+                    )
+                ) {
                     complete = false
                 }
             } else {
@@ -158,7 +202,10 @@ class FileSystemAudioScanner(private val context: Context) {
     }
 
     private fun String.hasAudioExtension(): Boolean {
-        val extension = substringAfterLast('.', missingDelimiterValue = "").lowercase()
+        val extension = substringAfterLast(
+            '.',
+            missingDelimiterValue = "",
+        ).lowercase()
         if (extension.isEmpty()) return false
         if (extension in AUDIO_EXTENSIONS) return true
         return MimeTypeMap.getSingleton()
@@ -212,5 +259,9 @@ fun readAudioMetadata(path: String): AudioMetadata? {
 }
 
 /** MediaStore 里没有标签时会写 "<unknown>"，界面上按空处理。 */
-private fun String?.toReadableMetadata(): String =
-    this?.takeUnless { it.isBlank() || it.equals(other = "<unknown>", ignoreCase = true) }.orEmpty()
+private fun String?.toReadableMetadata(): String = this?.takeUnless {
+    it.isBlank() || it.equals(
+        other = "<unknown>",
+        ignoreCase = true,
+    )
+}.orEmpty()

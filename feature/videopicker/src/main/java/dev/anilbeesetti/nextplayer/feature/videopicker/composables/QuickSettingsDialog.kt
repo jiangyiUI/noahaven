@@ -86,7 +86,9 @@ fun QuickSettingsDialog(
                             ),
                         ) {
                             Text(
-                                text = if (viewMode == MediaViewMode.VIDEOS && mediaFilesLabel != null) {
+                                text = if (viewMode == MediaViewMode.VIDEOS &&
+                                    mediaFilesLabel != null
+                                ) {
                                     mediaFilesLabel
                                 } else {
                                     viewMode.name()
@@ -171,7 +173,11 @@ fun QuickSettingsDialog(
                         )
                     },
                     sortOptions = if (imageMode) {
-                        listOf(Sort.By.TITLE, Sort.By.DATE, Sort.By.SIZE)
+                        listOf(
+                            Sort.By.TITLE,
+                            Sort.By.DATE,
+                            Sort.By.SIZE,
+                        )
                     } else {
                         listOf(
                             Sort.By.TITLE,
@@ -205,8 +211,10 @@ fun QuickSettingsDialog(
                                 label = stringResource(id = R.string.folder_duration),
                                 selected = preferences.showFolderDurationField,
                                 onClick = {
+                                    val showFolderDurationField =
+                                        preferences.showFolderDurationField
                                     preferences = preferences.copy(
-                                        showFolderDurationField = !preferences.showFolderDurationField,
+                                        showFolderDurationField = !showFolderDurationField,
                                     )
                                 },
                             )

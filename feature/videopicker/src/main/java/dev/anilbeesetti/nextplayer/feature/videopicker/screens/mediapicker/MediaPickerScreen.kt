@@ -151,7 +151,7 @@ fun MediaPickerScreen(viewModel: MediaPickerViewModel) {
             viewModel.onAction(MediaPickerAction.OnPermissionAccepted)
         }
         wasStorageAccessGranted = granted
-        onPauseOrDispose { }
+        onPauseOrDispose {}
     }
 
     // 首次进入且没有权限时，自动打开系统的授权页面

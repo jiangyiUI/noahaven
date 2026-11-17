@@ -113,10 +113,18 @@ data class Sort(val by: By, val order: Order) {
 
         val comparator = when (by) {
             By.TITLE -> audioTitleComparator
-            By.LENGTH -> compareBy<AudioFile> { it.duration }.then(comparator = audioTitleComparator)
+
+            By.LENGTH -> compareBy<AudioFile> {
+                it.duration
+            }.then(comparator = audioTitleComparator)
+
             By.PATH -> audioPathComparator
+
             By.SIZE -> compareBy<AudioFile> { it.size }.then(comparator = audioTitleComparator)
-            By.DATE -> compareBy<AudioFile> { it.dateModified }.then(comparator = audioTitleComparator)
+
+            By.DATE -> compareBy<AudioFile> {
+                it.dateModified
+            }.then(comparator = audioTitleComparator)
         }
 
         return when (order) {
@@ -127,15 +135,25 @@ data class Sort(val by: By, val order: Order) {
 
     fun imageComparator(): Comparator<ImageFile> {
         val titleComparator = Comparator<ImageFile> { first, second ->
-            stringComparator.compare(first.displayName.lowercase(), second.displayName.lowercase())
+            stringComparator.compare(
+                first.displayName.lowercase(),
+                second.displayName.lowercase(),
+            )
         }
         val comparator = when (by) {
             By.TITLE -> titleComparator
+
             By.LENGTH -> titleComparator
+
             By.PATH -> Comparator { first, second ->
-                stringComparator.compare(first.path.lowercase(), second.path.lowercase())
+                stringComparator.compare(
+                    first.path.lowercase(),
+                    second.path.lowercase(),
+                )
             }
+
             By.SIZE -> compareBy<ImageFile> { it.size }.then(titleComparator)
+
             By.DATE -> compareBy<ImageFile> { it.dateModified }.then(titleComparator)
         }
         return when (order) {

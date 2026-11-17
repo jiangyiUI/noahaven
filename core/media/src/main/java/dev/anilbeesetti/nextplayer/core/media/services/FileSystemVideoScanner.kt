@@ -10,8 +10,24 @@ import dev.anilbeesetti.nextplayer.core.common.extensions.getStorageVolumes
 import java.io.File
 
 private val VIDEO_EXTENSIONS = setOf(
-    "mp4", "mkv", "webm", "avi", "mov", "flv", "ts", "m2ts", "m4v",
-    "3gp", "wmv", "mpg", "mpeg", "rmvb", "ogv", "rm", "divx", "vob",
+    "mp4",
+    "mkv",
+    "webm",
+    "avi",
+    "mov",
+    "flv",
+    "ts",
+    "m2ts",
+    "m4v",
+    "3gp",
+    "wmv",
+    "mpg",
+    "mpeg",
+    "rmvb",
+    "ogv",
+    "rm",
+    "divx",
+    "vob",
 )
 
 /**
@@ -46,14 +62,28 @@ class FileSystemVideoScanner(private val context: Context) {
             val root = File(folderPath)
             // 目录已经不存在（被删除/重命名）：返回空列表，让调用方清掉这份子树的缓存。
             if (!root.exists() || !root.isDirectory) return emptyList()
-            if (!walk(directory = root, noMediaHidden = false, out = videos)) return null
+            if (!walk(
+                    directory = root,
+                    noMediaHidden = false,
+                    out = videos,
+                )
+            ) {
+                return null
+            }
             return videos
         }
 
         var failed = false
         for (root in context.getStorageVolumes()) {
             if (!root.isDirectory) continue
-            if (!walk(directory = root, noMediaHidden = false, out = videos)) failed = true
+            if (!walk(
+                    directory = root,
+                    noMediaHidden = false,
+                    out = videos,
+                )
+            ) {
+                failed = true
+            }
         }
         return if (failed) null else videos
     }
@@ -67,15 +97,34 @@ class FileSystemVideoScanner(private val context: Context) {
         out: MutableList<ScannedVideo>,
     ): Boolean {
         val children = directory.listFiles() ?: return false
-        val hidden = noMediaHidden || children.any { it.name.equals(NOMEDIA_FILE, ignoreCase = true) }
+        val hidden =
+            noMediaHidden || children.any {
+                it.name.equals(
+                    NOMEDIA_FILE,
+                    ignoreCase = true,
+                )
+            }
         var complete = true
         for (child in children) {
             val name = child.name
             val stat = child.statInfo() ?: continue
             if (stat.isDirectory) {
                 // 跳过隐藏目录（.thumbnails/.trash 等）和应用私有目录 Android/，避免无意义的遍历
-                if (name.startsWith(".") || name.equals("Android", ignoreCase = true)) continue
-                if (!walk(directory = child, noMediaHidden = hidden, out = out)) complete = false
+                if (name.startsWith(".") || name.equals(
+                        "Android",
+                        ignoreCase = true,
+                    )
+                ) {
+                    continue
+                }
+                if (!walk(
+                        directory = child,
+                        noMediaHidden = hidden,
+                        out = out,
+                    )
+                ) {
+                    complete = false
+                }
             } else {
                 if (name.startsWith(".") || !name.hasVideoExtension()) continue
                 out.add(
@@ -131,7 +180,10 @@ class FileSystemVideoScanner(private val context: Context) {
     }
 
     private fun String.hasVideoExtension(): Boolean {
-        val extension = substringAfterLast('.', missingDelimiterValue = "").lowercase()
+        val extension = substringAfterLast(
+            '.',
+            missingDelimiterValue = "",
+        ).lowercase()
         if (extension.isEmpty()) return false
         if (extension in VIDEO_EXTENSIONS) return true
         return MimeTypeMap.getSingleton()
@@ -144,11 +196,7 @@ class FileSystemVideoScanner(private val context: Context) {
     }
 }
 
-data class VideoMetadata(
-    val duration: Long,
-    val width: Int,
-    val height: Int,
-)
+data class VideoMetadata(val duration: Long, val width: Int, val height: Int)
 
 /**
  * 读取单个视频的时长/分辨率。需要 [MediaMetadataRetriever]，比较慢，只应在后台补齐元数据时调用。

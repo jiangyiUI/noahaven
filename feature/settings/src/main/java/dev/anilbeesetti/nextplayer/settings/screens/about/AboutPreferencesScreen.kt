@@ -257,7 +257,10 @@ fun AboutApp(
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            horizontalArrangement = Arrangement.spacedBy(
+                8.dp,
+                Alignment.CenterHorizontally,
+            ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Button(
@@ -294,7 +297,10 @@ fun AboutApp(
                 shape = RoundedCornerShape(8.dp),
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 modifier = Modifier
-                    .weight(1f, fill = false)
+                    .weight(
+                        1f,
+                        fill = false,
+                    )
                     .heightIn(min = 56.dp),
             ) {
                 Icon(

@@ -22,23 +22,34 @@ object AudioArtwork {
         override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
     }
 
-    suspend fun load(
-        context: Context,
-        pathOrUri: String,
-        maxSizePx: Int = 512,
-    ): Bitmap? = withContext(context = Dispatchers.IO) {
-        cache.get(pathOrUri) ?: runCatching {
-            val bytes = readEmbeddedPicture(context, pathOrUri) ?: return@runCatching null
-            decodeSampledBitmap(bytes = bytes, maxSizePx = maxSizePx)
-        }.getOrNull()?.also { bitmap -> cache.put(pathOrUri, bitmap) }
-    }
+    suspend fun load(context: Context, pathOrUri: String, maxSizePx: Int = 512): Bitmap? =
+        withContext(context = Dispatchers.IO) {
+            cache.get(pathOrUri) ?: runCatching {
+                val bytes = readEmbeddedPicture(
+                    context,
+                    pathOrUri,
+                ) ?: return@runCatching null
+                decodeSampledBitmap(
+                    bytes = bytes,
+                    maxSizePx = maxSizePx,
+                )
+            }.getOrNull()?.also { bitmap ->
+                cache.put(
+                    pathOrUri,
+                    bitmap,
+                )
+            }
+        }
 
     private fun readEmbeddedPicture(context: Context, pathOrUri: String): ByteArray? {
         val uri = pathOrUri.toUri()
         val retriever = MediaMetadataRetriever()
         return try {
             if (uri.scheme == "content") {
-                retriever.setDataSource(context, uri)
+                retriever.setDataSource(
+                    context,
+                    uri,
+                )
             } else {
                 // 兼容 file:// 与纯文件路径（.nomedia 目录里的音频走 file:// uri）
                 val file = File(uri.path ?: pathOrUri)
@@ -55,7 +66,12 @@ object AudioArtwork {
 
     private fun decodeSampledBitmap(bytes: ByteArray, maxSizePx: Int): Bitmap? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        BitmapFactory.decodeByteArray(
+            bytes,
+            0,
+            bytes.size,
+            bounds,
+        )
         val width = bounds.outWidth
         val height = bounds.outHeight
         if (width <= 0 || height <= 0) return null
@@ -65,7 +81,12 @@ object AudioArtwork {
             sampleSize *= 2
         }
         val options = BitmapFactory.Options().apply { inSampleSize = sampleSize }
-        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+        return BitmapFactory.decodeByteArray(
+            bytes,
+            0,
+            bytes.size,
+            options,
+        )
     }
 }
 

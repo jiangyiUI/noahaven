@@ -148,7 +148,10 @@ private fun ImageListItem(
         onLongClick = onLongClick,
         leadingContent = {
             if (preferences.showThumbnailField) {
-                ImageThumbnail(image = image, modifier = Modifier.size(52.dp))
+                ImageThumbnail(
+                    image = image,
+                    modifier = Modifier.size(52.dp),
+                )
             } else {
                 Icon(
                     imageVector = NextIcons.Image,
@@ -211,7 +214,10 @@ private fun ImageGridItem(
                     .aspectRatio(1f),
             ) {
                 if (!showFields || preferences.showThumbnailField) {
-                    ImageThumbnail(image = image, modifier = Modifier.fillMaxSize())
+                    ImageThumbnail(
+                        image = image,
+                        modifier = Modifier.fillMaxSize(),
+                    )
                 } else {
                     Icon(
                         imageVector = NextIcons.Image,

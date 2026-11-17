@@ -61,8 +61,8 @@ class LocalMediaOperationsServiceTest {
             val moved = LocalMediaOperationsService(
                 context = context,
                 mediaFileIndex = NoOpMediaFileIndex(),
-            audioFileIndex = NoOpAudioFileIndex(),
-            imageFileIndex = NoOpImageFileIndex(),
+                audioFileIndex = NoOpAudioFileIndex(),
+                imageFileIndex = NoOpImageFileIndex(),
             ).moveMedia(targets = mapOf(pair = sourceUri to existingVaultFile))
 
             assertNull(

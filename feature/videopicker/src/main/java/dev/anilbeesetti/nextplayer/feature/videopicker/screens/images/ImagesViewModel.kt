@@ -38,14 +38,15 @@ class ImagesViewModel(
     @Named(DiQualifiers.DEFAULT_DISPATCHER) private val defaultDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
 
-    data class Output(
-        val openSettings: () -> Unit,
-        val openSearch: () -> Unit,
+    data class Output(val openSettings: () -> Unit, val openSearch: () -> Unit)
+
+    internal var output: Output = Output(
+        openSettings = {},
+        openSearch = {},
     )
 
-    internal var output: Output = Output(openSettings = {}, openSearch = {})
-
     private val folderPath = MutableStateFlow<String?>(null)
+
     // 记录进入过的目录，返回时回到上一个访问的目录而不是父目录
     private val folderHistory = mutableListOf<String?>()
     private val imagesInternal = MutableStateFlow<List<ImageFile>?>(null)
@@ -70,7 +71,8 @@ class ImagesViewModel(
             initialValue = ImagesUiState(
                 isLoading = true,
                 hasAllFilesAccess = context.hasAllFilesAccess(),
-                preferences = preferencesRepository.applicationPreferences.value.toImagePreferences(),
+                preferences = preferencesRepository.applicationPreferences.value
+                    .toImagePreferences(),
             ),
         )
 
@@ -108,13 +110,24 @@ class ImagesViewModel(
             }
 
             ImagesAction.OnSearchClick -> output.openSearch()
+
             ImagesAction.OnSettingsClick -> output.openSettings()
+
             ImagesAction.OnPermissionAccepted -> refresh()
+
             ImagesAction.Refresh -> refresh(force = true)
+
             is ImagesAction.UpdatePreferences -> updatePreferences(action.preferences)
+
             is ImagesAction.OnImageViewed -> markImageViewed(action.path)
+
             is ImagesAction.ShareSelected -> shareSelected(action.items)
-            is ImagesAction.RenameSelected -> renameImage(action.uri, action.to)
+
+            is ImagesAction.RenameSelected -> renameImage(
+                action.uri,
+                action.to,
+            )
+
             is ImagesAction.DeleteSelected -> deleteSelected(action.items)
         }
     }
@@ -174,13 +187,24 @@ class ImagesViewModel(
     private fun shareSelected(items: Set<SelectionItem>) {
         val uris = items.toImageUris()
         if (uris.isEmpty()) return
-        viewModelScope.launch { mediaOperationsService.shareMedia(uris, mimeType = "image/*") }
+        viewModelScope.launch {
+            mediaOperationsService.shareMedia(
+                uris,
+                mimeType = "image/*",
+            )
+        }
     }
 
     private fun renameImage(uri: Uri, to: String) {
         viewModelScope.launch {
             val oldPath = uri.path ?: return@launch
-            if (!mediaOperationsService.renameMedia(uri = uri, to = to)) return@launch
+            if (!mediaOperationsService.renameMedia(
+                    uri = uri,
+                    to = to,
+                )
+            ) {
+                return@launch
+            }
             imageFileIndex.removePaths(listOf(oldPath))
             imageFileIndex.requestRefresh(
                 whitelistRoots = preferencesRepository.applicationPreferences.value.imageFolders,
@@ -252,7 +276,11 @@ class ImagesViewModel(
         val sort = preferences.imageSort()
         val sortedAll = all.sortedWith(sort.imageComparator())
 
-        val tree = buildTree(root = path, images = all, sort = sort)
+        val tree = buildTree(
+            root = path,
+            images = all,
+            sort = sort,
+        )
         val folders: List<Folder>
         val images: List<ImageFile>
         when (imagePreferences.mediaViewMode) {
@@ -262,7 +290,14 @@ class ImagesViewModel(
             }
 
             MediaViewMode.FOLDERS -> {
-                folders = if (path == null) flatFolders(all, sort) else emptyList()
+                folders = if (path == null) {
+                    flatFolders(
+                        all,
+                        sort,
+                    )
+                } else {
+                    emptyList()
+                }
                 images = if (path == null) emptyList() else tree.directImages
             }
 
@@ -287,9 +322,17 @@ class ImagesViewModel(
     private fun buildTree(root: String?, images: List<ImageFile>, sort: Sort): ImagesTree {
         if (root == null) {
             val folders = images.groupBy { it.whitelistRoot }
-                .map { (path, rootImages) -> summarize(path, rootImages) }
+                .map { (path, rootImages) ->
+                    summarize(
+                        path,
+                        rootImages,
+                    )
+                }
                 .sortedWith(sort.folderComparator())
-            return ImagesTree(folders = folders, directImages = emptyList())
+            return ImagesTree(
+                folders = folders,
+                directImages = emptyList(),
+            )
         }
         val prefix = root.trimEnd('/') + PATH_SEPARATOR
         val directImages = ArrayList<ImageFile>()
@@ -305,7 +348,12 @@ class ImagesViewModel(
             imagesByFolder.getOrPut(childPath) { ArrayList() }.add(image)
         }
         return ImagesTree(
-            folders = imagesByFolder.map { (path, folderImages) -> summarize(path, folderImages) }
+            folders = imagesByFolder.map { (path, folderImages) ->
+                summarize(
+                    path,
+                    folderImages,
+                )
+            }
                 .sortedWith(sort.folderComparator()),
             directImages = directImages.sortedWith(sort.imageComparator()),
         )
@@ -313,7 +361,12 @@ class ImagesViewModel(
 
     private fun flatFolders(images: List<ImageFile>, sort: Sort): List<Folder> =
         images.groupBy { it.parentPath }
-            .map { (path, folderImages) -> summarize(path, folderImages) }
+            .map { (path, folderImages) ->
+                summarize(
+                    path,
+                    folderImages,
+                )
+            }
             .sortedWith(sort.folderComparator())
 
     private fun List<ImageFile>.imagesUnder(path: String): List<ImageFile> {
@@ -369,15 +422,13 @@ data class ImagesUiState(
     val refreshing: Boolean = false,
 )
 
-private data class ImagesTree(
-    val folders: List<Folder>,
-    val directImages: List<ImageFile>,
-)
+private data class ImagesTree(val folders: List<Folder>, val directImages: List<ImageFile>)
 
 sealed interface ImagesAction {
     data class OnFolderClick(val folderPath: String) : ImagesAction
     data object OnNavigateUpClick : ImagesAction
     data class UpdatePreferences(val preferences: ApplicationPreferences) : ImagesAction
+
     /** 查看器翻到某张图片时记录，供「继续查看」使用 */
     data class OnImageViewed(val path: String) : ImagesAction
     data object OnPermissionAccepted : ImagesAction

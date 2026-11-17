@@ -178,7 +178,11 @@ class GetFolderTreeMediaUseCase(
                     video.path.removePrefix(prefix = prefix).substringBefore(PATH_SEPARATOR),
                 )
             }
-            if (video.isNew(nowMillis = nowMillis, thresholdDays = thresholdDays)) {
+            if (video.isNew(
+                    nowMillis = nowMillis,
+                    thresholdDays = thresholdDays,
+                )
+            ) {
                 newVideosCount++
             }
         }

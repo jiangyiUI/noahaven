@@ -81,7 +81,9 @@ private fun FolderPreferencesScreenContent(
                 },
                 actions = {
                     if (state.imageFolders) {
-                        IconButton(onClick = { onAction(FolderPreferencesUiEvent.AddImageFolder) }) {
+                        IconButton(onClick = {
+                            onAction(FolderPreferencesUiEvent.AddImageFolder)
+                        }) {
                             Icon(
                                 imageVector = NextIcons.Add,
                                 contentDescription = stringResource(id = R.string.add_folder),

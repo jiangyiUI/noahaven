@@ -2,9 +2,7 @@ package dev.anilbeesetti.nextplayer.core.media.index
 
 import kotlinx.coroutines.flow.MutableStateFlow
 
-class FakeMediaFileIndex(
-    initialEntries: List<MediaIndexEntry>? = emptyList(),
-) : MediaFileIndex {
+class FakeMediaFileIndex(initialEntries: List<MediaIndexEntry>? = emptyList()) : MediaFileIndex {
 
     override val entries: MutableStateFlow<List<MediaIndexEntry>?> =
         MutableStateFlow(initialEntries)

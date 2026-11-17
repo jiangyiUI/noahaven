@@ -16,6 +16,9 @@ data class ImageFile(
     val formattedFileSize: String = "",
 ) {
     val displayName: String = nameWithExtension.substringBeforeLast(delimiter = ".")
-    val extension: String = nameWithExtension.substringAfterLast(delimiter = ".", missingDelimiterValue = "")
+    val extension: String = nameWithExtension.substringAfterLast(
+        delimiter = ".",
+        missingDelimiterValue = "",
+    )
     val hasDimensions: Boolean get() = width > 0 && height > 0
 }

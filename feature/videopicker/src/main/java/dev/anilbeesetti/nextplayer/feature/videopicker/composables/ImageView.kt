@@ -77,7 +77,10 @@ fun ImageView(
         }
         val folderSpanCount = if (folders.isEmpty()) 1 else folderColumns
         val imageSpanCount = if (images.isEmpty()) 1 else imageColumns
-        val spans = lcm(folderSpanCount, imageSpanCount)
+        val spans = lcm(
+            folderSpanCount,
+            imageSpanCount,
+        )
         val singleFolderSpan = spans / folderSpanCount
         val singleImageSpan = spans / imageSpanCount
 

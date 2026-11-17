@@ -32,10 +32,7 @@ import dev.anilbeesetti.nextplayer.core.ui.designsystem.NextIcons
  * 音频播放画面：显示音频文件内嵌封面，没有封面时显示缺省图。
  */
 @Composable
-internal fun AudioArtworkView(
-    player: Player,
-    modifier: Modifier = Modifier,
-) {
+internal fun AudioArtworkView(player: Player, modifier: Modifier = Modifier) {
     var path by remember {
         mutableStateOf(value = player.currentMediaItem?.artworkPath())
     }
@@ -50,8 +47,17 @@ internal fun AudioArtworkView(
     }
 
     val context = LocalContext.current
-    val bitmap by produceState<Bitmap?>(initialValue = null, key1 = path) {
-        value = path?.let { AudioArtwork.load(context = context, pathOrUri = it, maxSizePx = 1024) }
+    val bitmap by produceState<Bitmap?>(
+        initialValue = null,
+        key1 = path,
+    ) {
+        value = path?.let {
+            AudioArtwork.load(
+                context = context,
+                pathOrUri = it,
+                maxSizePx = 1024,
+            )
+        }
     }
 
     BoxWithConstraints(

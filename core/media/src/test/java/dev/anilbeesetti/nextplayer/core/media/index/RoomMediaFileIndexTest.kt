@@ -33,7 +33,10 @@ class RoomMediaFileIndexTest {
 
     @Before
     fun setUp() {
-        root = File(RuntimeEnvironment.getApplication().cacheDir, "library").apply { mkdirs() }
+        root = File(
+            RuntimeEnvironment.getApplication().cacheDir,
+            "library",
+        ).apply { mkdirs() }
         index = RoomMediaFileIndex(
             context = RuntimeEnvironment.getApplication(),
             mediaFileIndexDao = dao,
@@ -51,42 +54,85 @@ class RoomMediaFileIndexTest {
     fun `refresh reflects added removed and renamed files`() = runBlocking {
         val first = video(name = "first.mp4")
         index.refresh(folderPath = root.path)
-        assertEquals(listOf(first.path), currentPaths())
+        assertEquals(
+            listOf(first.path),
+            currentPaths(),
+        )
 
         val second = video(name = "second.mkv")
         index.refresh(folderPath = root.path)
-        assertEquals(setOf(first.path, second.path), currentPaths().toSet())
+        assertEquals(
+            setOf(
+                first.path,
+                second.path,
+            ),
+            currentPaths().toSet(),
+        )
 
-        val renamed = File(root, "renamed.mkv")
+        val renamed = File(
+            root,
+            "renamed.mkv",
+        )
         check(second.renameTo(renamed))
         index.refresh(folderPath = root.path)
-        assertEquals(setOf(first.path, renamed.path), currentPaths().toSet())
+        assertEquals(
+            setOf(
+                first.path,
+                renamed.path,
+            ),
+            currentPaths().toSet(),
+        )
 
         check(first.delete())
         index.refresh(folderPath = root.path)
-        assertEquals(listOf(renamed.path), currentPaths())
+        assertEquals(
+            listOf(renamed.path),
+            currentPaths(),
+        )
 
         // 数据库里的缓存和内存索引保持一致
-        assertEquals(setOf(renamed.path), dao.rows.keys)
+        assertEquals(
+            setOf(renamed.path),
+            dao.rows.keys,
+        )
     }
 
     @Test
-    fun `refresh keeps cache when a folder no longer exists only removes its files`() = runBlocking {
-        val nested = File(root, "nested").apply { mkdirs() }
-        val outer = video(name = "outer.mp4")
-        val inner = video(name = "nested/inner.mp4")
-        index.refresh(folderPath = root.path)
-        assertEquals(setOf(outer.path, inner.path), currentPaths().toSet())
+    fun `refresh keeps cache when a folder no longer exists only removes its files`() =
+        runBlocking {
+            val nested = File(
+                root,
+                "nested",
+            ).apply { mkdirs() }
+            val outer = video(name = "outer.mp4")
+            val inner = video(name = "nested/inner.mp4")
+            index.refresh(folderPath = root.path)
+            assertEquals(
+                setOf(
+                    outer.path,
+                    inner.path,
+                ),
+                currentPaths().toSet(),
+            )
 
-        check(nested.deleteRecursively())
-        index.refresh(folderPath = root.path)
-        assertEquals(listOf(outer.path), currentPaths())
-    }
+            check(nested.deleteRecursively())
+            index.refresh(folderPath = root.path)
+            assertEquals(
+                listOf(outer.path),
+                currentPaths(),
+            )
+        }
 
     @Test
     fun `files under a no media marker are recorded as hidden`() = runBlocking {
-        val hidden = File(root, "hidden").apply { mkdirs() }
-        File(hidden, ".nomedia").writeText(text = "")
+        val hidden = File(
+            root,
+            "hidden",
+        ).apply { mkdirs() }
+        File(
+            hidden,
+            ".nomedia",
+        ).writeText(text = "")
         val video = video(name = "hidden/video.mp4")
 
         index.refresh(folderPath = root.path)
@@ -98,7 +144,10 @@ class RoomMediaFileIndexTest {
 
     @Test
     fun `cached rows are served before a scan runs`() = runBlocking {
-        val cached = File(root, "cached.mp4").apply { writeText(text = "x") }
+        val cached = File(
+            root,
+            "cached.mp4",
+        ).apply { writeText(text = "x") }
         dao.rows[cached.path] = MediaFileIndexEntity(
             path = cached.path,
             parentPath = root.path,
@@ -125,11 +174,17 @@ class RoomMediaFileIndexTest {
 
         val entry = entries.value?.firstOrNull { it.path == cached.path }
         assertNotNull(entry)
-        assertEquals(42_000L, entry!!.duration)
+        assertEquals(
+            42_000L,
+            entry!!.duration,
+        )
     }
 
     private fun video(name: String): File {
-        val file = File(root, name)
+        val file = File(
+            root,
+            name,
+        )
         file.parentFile?.mkdirs()
         file.writeText(text = "video")
         return file

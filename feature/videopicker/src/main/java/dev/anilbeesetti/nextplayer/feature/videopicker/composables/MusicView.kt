@@ -67,7 +67,11 @@ fun MusicView(
         val maxAudios = (maxWidth / audioMinWidth).toInt().coerceAtLeast(minimumValue = 1)
         val spans = when (preferences.mediaLayoutMode) {
             MediaLayoutMode.LIST -> 1
-            MediaLayoutMode.GRID -> lcm(a = maxFolders, b = maxAudios)
+
+            MediaLayoutMode.GRID -> lcm(
+                a = maxFolders,
+                b = maxAudios,
+            )
         }
         val singleFolderSpan = when (preferences.mediaLayoutMode) {
             MediaLayoutMode.LIST -> 1

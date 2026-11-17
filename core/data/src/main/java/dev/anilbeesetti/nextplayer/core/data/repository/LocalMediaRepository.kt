@@ -138,13 +138,21 @@ class LocalMediaRepository(
 
     private fun mediaUriExists(uri: Uri): Boolean = when (uri.scheme?.lowercase()) {
         "file" -> uri.path?.let { path -> File(path).exists() } == true
+
         "content" -> runCatching {
             // 查询失败（例如非 MediaStore 的 provider）时保守保留，避免误删
             context.contentResolver
-                .query(uri, arrayOf(BaseColumns._ID), null, null, null)
+                .query(
+                    uri,
+                    arrayOf(BaseColumns._ID),
+                    null,
+                    null,
+                    null,
+                )
                 ?.use { cursor -> cursor.moveToFirst() }
                 ?: true
         }.getOrDefault(true)
+
         else -> true
     }
 

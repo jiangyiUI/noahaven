@@ -91,7 +91,7 @@ fun MusicScreen(viewModel: MusicViewModel) {
             viewModel.onAction(MusicAction.OnPermissionAccepted)
         }
         wasStorageAccessGranted = granted
-        onPauseOrDispose { }
+        onPauseOrDispose {}
     }
 
     // 从搜索页点击文件夹返回时，直接进入该目录
@@ -99,7 +99,7 @@ fun MusicScreen(viewModel: MusicViewModel) {
         PendingMusicFolder.consume()?.let { path ->
             viewModel.onAction(MusicAction.OnFolderClick(folderPath = path))
         }
-        onPauseOrDispose { }
+        onPauseOrDispose {}
     }
 
     LaunchedEffect(hasStorageAccess) {
@@ -216,7 +216,12 @@ internal fun MusicScreenContent(
                                 if (selectedItemsSize != totalItemsSize) {
                                     val items = buildList {
                                         state.folders.forEach {
-                                            add(SelectionItem.Folder(name = it.name, path = it.path))
+                                            add(
+                                                SelectionItem.Folder(
+                                                    name = it.name,
+                                                    path = it.path,
+                                                ),
+                                            )
                                         }
                                         state.audios.forEach {
                                             add(
@@ -325,7 +330,12 @@ internal fun MusicScreenContent(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues = scaffoldPadding.copy(bottom = 0.dp))
-                .clip(shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                .clip(
+                    shape = RoundedCornerShape(
+                        topStart = 24.dp,
+                        topEnd = 24.dp,
+                    ),
+                )
                 .background(color = MaterialTheme.colorScheme.background),
         ) {
             if (!hasStorageAccess) {
@@ -377,7 +387,10 @@ internal fun MusicScreenContent(
                             },
                             onFolderLongClick = { folder ->
                                 selectionManager.toggleSelection(
-                                    SelectionItem.Folder(name = folder.name, path = folder.path),
+                                    SelectionItem.Folder(
+                                        name = folder.name,
+                                        path = folder.path,
+                                    ),
                                 )
                             },
                             onAudioLongClick = { audio ->
@@ -438,7 +451,12 @@ internal fun MusicScreenContent(
                 name = audio.displayName,
                 onDismiss = { renameAudioUri = null },
                 onDone = {
-                    onAction(MusicAction.RenameSelected(uri = uri.toUri(), to = it))
+                    onAction(
+                        MusicAction.RenameSelected(
+                            uri = uri.toUri(),
+                            to = it,
+                        ),
+                    )
                     selectionManager.exitSelectionMode()
                     renameAudioUri = null
                 },
@@ -467,5 +485,8 @@ internal fun MusicScreenContent(
     }
 }
 
-private fun AudioFile.toSelectionItem() =
-    SelectionItem.Video(name = displayName, uriString = uriString, path = path)
+private fun AudioFile.toSelectionItem() = SelectionItem.Video(
+    name = displayName,
+    uriString = uriString,
+    path = path,
+)

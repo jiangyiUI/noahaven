@@ -40,10 +40,7 @@ class ImageSearchViewModel(
     @InjectedParam internal var output: Output,
 ) : MviViewModel<ImageSearchUiState, ImageSearchUiEvent>() {
 
-    data class Output(
-        val navigateUp: () -> Unit,
-        val openFolder: (String) -> Unit,
-    )
+    data class Output(val navigateUp: () -> Unit, val openFolder: (String) -> Unit)
 
     private val stateInternal = MutableStateFlow(value = ImageSearchUiState())
     override val state: StateFlow<ImageSearchUiState> = stateInternal.asStateFlow()
@@ -73,7 +70,12 @@ class ImageSearchViewModel(
             ) { entries, preferences ->
                 entries.orEmpty().filterImages(preferences = preferences)
                     .groupBy { it.parentPath }
-                    .map { (path, folderImages) -> summarize(path = path, images = folderImages) }
+                    .map { (path, folderImages) ->
+                        summarize(
+                            path = path,
+                            images = folderImages,
+                        )
+                    }
                     .sortedByDescending { it.videosCount }
                     .take(n = POPULAR_FOLDERS_LIMIT)
             }.collect { folders ->
@@ -123,15 +125,26 @@ class ImageSearchViewModel(
             val images = entries.orEmpty().filterImages(preferences = preferences)
             val matcher = SearchMatcher(query = normalizedQuery)
             val folders = images.groupBy { it.parentPath }
-                .map { (path, folderImages) -> summarize(path = path, images = folderImages) }
+                .map { (path, folderImages) ->
+                    summarize(
+                        path = path,
+                        images = folderImages,
+                    )
+                }
                 .mapNotNull { folder ->
-                    val score = matcher.calculateScore(folder.name, folder.path)
+                    val score = matcher.calculateScore(
+                        folder.name,
+                        folder.path,
+                    )
                     if (score > 0) folder to score else null
                 }
                 .sortedByDescending { it.second }
                 .map { it.first }
             val matchingImages = images.mapNotNull { image ->
-                val score = matcher.calculateScore(image.nameWithExtension, image.path)
+                val score = matcher.calculateScore(
+                    image.nameWithExtension,
+                    image.path,
+                )
                 if (score > 0) image to score else null
             }
                 .sortedByDescending { it.second }

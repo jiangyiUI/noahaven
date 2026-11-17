@@ -111,7 +111,10 @@ class PlayerActivity : ComponentActivity() {
     private val playbackStateListener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             // setData 会清空 type，用 setDataAndType 保留音频模式标记
-            intent.setDataAndType(mediaItem?.localConfiguration?.uri, intent.type)
+            intent.setDataAndType(
+                mediaItem?.localConfiguration?.uri,
+                intent.type,
+            )
             isPlaybackFinished = false
             playbackFailed = false
         }
@@ -458,7 +461,13 @@ class PlayerActivity : ComponentActivity() {
             return@withContext
         }
 
-        val mediaContentUri = if (request.isApiAccess || request.audioOnly) null else getMediaContentUri(uri)
+        val mediaContentUri = if (request.isApiAccess ||
+            request.audioOnly
+        ) {
+            null
+        } else {
+            getMediaContentUri(uri)
+        }
         val explicitPlaylist = request.getPlaylist()
         val playlist = explicitPlaylist.takeIf { it.isNotEmpty() }
             ?: mediaContentUri?.let { mediaUri ->
