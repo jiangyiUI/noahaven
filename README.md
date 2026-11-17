@@ -1,6 +1,6 @@
-# Noa Player
+# Noa Haven
 
-Noa Player 是一个 Android 原生本地媒体播放器，基于 [Next Player](https://github.com/anilbeesetti/nextplayer) 修改而来。
+Noa Haven 是一个 Android 原生本地媒体播放器，基于 [Next Player](https://github.com/anilbeesetti/nextplayer) 修改而来。
 除了视频播放，还提供音乐库、图片库、漫画库、播放列表和网络存储（SMB / FTP / SFTP / WebDAV）支持。
 
 - 包名：`dev.jiangyiui.noaplayer`

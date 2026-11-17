@@ -15,7 +15,7 @@
     <string name="settings_import_success">Settings imported</string>
     <string name="settings_import_failed">Could not finish importing settings. Please try again.</string>
     <string name="settings_import_invalid">Could not read this file, or it contains no supported JSON settings</string>
-    <string name="app_name" translatable="false">Noa Player</string>
+    <string name="app_name" translatable="false">Noa Haven</string>
     <string name="about_description">Version, support, credits</string>
     <string name="about_name">About</string>
     <string name="appearance_description">Adjust the app to your liking</string>
