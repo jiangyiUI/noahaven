@@ -64,7 +64,7 @@ import dev.anilbeesetti.nextplayer.core.ui.components.tvFocusDown
 import dev.anilbeesetti.nextplayer.core.ui.components.tvListFocus
 import dev.anilbeesetti.nextplayer.core.ui.designsystem.NextIcons
 
-private const val GITHUB_URL = "https://github.com/jiangyiUI"
+private const val GITHUB_URL = "https://github.com/jiangyiUI/noaplayer"
 private const val NEXTPLAYER_URL = "https://github.com/anilbeesetti/nextplayer"
 
 @Composable
