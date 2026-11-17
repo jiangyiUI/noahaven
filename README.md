@@ -1,0 +1,41 @@
+# Noa Player
+
+Noa Player 是一个 Android 原生本地媒体播放器，基于 [Next Player](https://github.com/anilbeesetti/nextplayer) 修改而来。
+除了视频播放，还提供音乐库、图片库、播放列表和网络存储（SMB / FTP / SFTP / WebDAV）支持。
+
+- 包名：`dev.jiangyiui.noaplayer`
+- 许可证：GNU GPL v3.0（见 [LICENSE](LICENSE)）
+- 上游项目：[anilbeesetti/nextplayer](https://github.com/anilbeesetti/nextplayer)
+
+## 功能
+
+- 视频、音乐、图片三个独立媒体库，支持树形目录 / 文件夹 / 文件三种浏览模式
+- 网格、列表、九宫格布局与快捷设置，搜索历史与常用文件夹
+- 图片全屏查看：左右翻页、双指缩放、双击放大、拖动
+- 播放列表、播放历史、Media3 播放器、后台播放、画中画
+- 音轨与字幕选择、外部字幕、播放速度、手势调节亮度与音量
+- Android TV 支持
+- 网络存储（SMB / FTP / SFTP / WebDAV）
+
+## 构建
+
+需要 JDK 17 和 Android SDK。
+
+```bash
+./gradlew assembleDebug
+```
+
+Release 构建需要自行配置签名，仓库不包含任何发布密钥。
+
+## 播放器 Intent API
+
+支持 MX Player 兼容的 VIEW intent，详见 [PLAYER_API.md](PLAYER_API.md)。
+
+## 致谢
+
+- 上游项目：[Next Player](https://github.com/anilbeesetti/nextplayer)
+- 以及 README 历史中列出的 Findroid、Just (Video) Player、LibreTube、ReadYou、Seal 等开源项目
+
+## 许可证
+
+本项目遵循 GNU General Public License v3.0。作为 Next Player 的衍生作品，分发时需同样遵守 GPL-3.0。
