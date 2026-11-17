@@ -15,8 +15,8 @@ android {
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         applicationId = "dev.jiangyiui.noaplayer"
-        versionCode = 79
-        versionName = "0.21.1"
+        versionCode = 80
+        versionName = "0.22.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         testInstrumentationRunnerArguments["clearPackageData"] = "true"
     }
