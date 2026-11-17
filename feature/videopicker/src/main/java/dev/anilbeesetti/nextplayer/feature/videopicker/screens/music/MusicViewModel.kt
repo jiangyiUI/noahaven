@@ -77,6 +77,9 @@ class MusicViewModel(
     // 历史里最近播放的音频，用于「继续播放」；历史被清空时自动变为 null
     private val recentlyPlayedAudio = MutableStateFlow<Video?>(null)
 
+    // 完整播放历史，用于在当前目录内标记上次播放的音频
+    private val playbackHistory = MutableStateFlow(value = emptyList<Video>())
+
     val playlists: StateFlow<List<PlaylistSummary>> = playlistRepository.observePlaylists()
         .stateIn(
             scope = viewModelScope,
@@ -95,11 +98,13 @@ class MusicViewModel(
         audiosInternal,
         preferencesRepository.applicationPreferences,
         refreshing,
-    ) { path, audiosResult, preferences, isRefreshing ->
+        playbackHistory,
+    ) { path, audiosResult, preferences, isRefreshing, history ->
         audiosResult.toUiState(
             path = path,
             preferences = preferences,
             refreshing = isRefreshing,
+            playbackHistory = history,
         )
     }
         .flowOn(context = defaultDispatcher)
@@ -133,6 +138,7 @@ class MusicViewModel(
         }
         viewModelScope.launch(defaultDispatcher) {
             mediaRepository.observePlaybackHistory().collect { history ->
+                playbackHistory.value = history
                 recentlyPlayedAudio.value = history
                     .filter { it.isAudio && it.lastPlayedAt != null }
                     .maxByOrNull { it.lastPlayedAt!!.time }
@@ -446,6 +452,7 @@ class MusicViewModel(
         path: String?,
         preferences: ApplicationPreferences,
         refreshing: Boolean,
+        playbackHistory: List<Video>,
     ): MusicUiState {
         val musicPreferences = preferences.toMusicPreferences()
         // 先剔除被排除目录下的音频，这样只含被排除内容的上层目录不会再出现在列表里
@@ -492,6 +499,12 @@ class MusicViewModel(
                     .sortedWith(sort.audioComparator())
             }
         }
+        // 只标记当前目录里可见的音频，与视频库「每个文件夹中上次播放的媒体」一致
+        val visibleAudioPaths = all.mapTo(destination = HashSet()) { audio -> audio.path }
+        val recentlyPlayedAudio = playbackHistory
+            .filter { history -> history.isAudio && history.lastPlayedAt != null }
+            .filter { history -> history.path in visibleAudioPaths }
+            .maxByOrNull { history -> history.lastPlayedAt!!.time }
         return MusicUiState(
             folderPath = path,
             folderName = path?.let { File(it).prettyName },
@@ -501,6 +514,7 @@ class MusicViewModel(
             isLoading = this == null,
             hasAllFilesAccess = context.hasAllFilesAccess(),
             refreshing = refreshing,
+            recentlyPlayedAudio = recentlyPlayedAudio,
         )
     }
 

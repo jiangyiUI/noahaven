@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -126,7 +127,10 @@ internal fun ImagesScreenContent(
     hasStorageAccess: Boolean = true,
     onAllFilesAccessGranted: () -> Unit = {},
 ) {
-    val lazyGridState = rememberLazyGridState()
+    // 文件夹层和图片层各自持有滚动状态：进入文件夹从顶部开始，返回时文件夹列表仍停在原位置
+    val folderGridState = rememberLazyGridState()
+    val imageGridState = remember(state.folderPath) { LazyGridState() }
+    val lazyGridState = if (state.folderPath == null) folderGridState else imageGridState
     val navigationBottomPadding = LocalNavigationBottomPadding.current
     val selectionManager = rememberSelectionManager()
     val contentFocusRequester = remember { FocusRequester() }

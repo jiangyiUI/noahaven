@@ -93,6 +93,7 @@ fun AudioCover(
 fun MusicItem(
     audio: AudioFile,
     preferences: ApplicationPreferences,
+    isRecentlyPlayed: Boolean = false,
     modifier: Modifier = Modifier,
     isFirstItem: Boolean = false,
     isLastItem: Boolean = false,
@@ -103,6 +104,7 @@ fun MusicItem(
     when (preferences.mediaLayoutMode) {
         MediaLayoutMode.LIST -> MusicListItem(
             audio = audio,
+            isRecentlyPlayed = isRecentlyPlayed,
             preferences = preferences,
             modifier = modifier,
             isFirstItem = isFirstItem,
@@ -114,6 +116,7 @@ fun MusicItem(
 
         MediaLayoutMode.GRID -> MusicGridItem(
             audio = audio,
+            isRecentlyPlayed = isRecentlyPlayed,
             preferences = preferences,
             modifier = modifier,
             isFirstItem = isFirstItem,
@@ -129,6 +132,7 @@ fun MusicItem(
 @Composable
 private fun MusicListItem(
     audio: AudioFile,
+    isRecentlyPlayed: Boolean,
     preferences: ApplicationPreferences,
     modifier: Modifier = Modifier,
     isFirstItem: Boolean = false,
@@ -154,6 +158,16 @@ private fun MusicListItem(
         selected = selected,
         contentPadding = PaddingValues(all = 8.dp),
         colors = ListItemDefaults.segmentedColors(
+            contentColor = if (isRecentlyPlayed && preferences.markLastPlayedMedia) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                ListItemDefaults.segmentedColors().contentColor
+            },
+            supportingContentColor = if (isRecentlyPlayed && preferences.markLastPlayedMedia) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                ListItemDefaults.colors().supportingContentColor
+            },
             selectedContainerColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f),
         ),
         isFirstItem = isFirstItem,
@@ -208,6 +222,7 @@ private fun MusicListItem(
 @Composable
 private fun MusicGridItem(
     audio: AudioFile,
+    isRecentlyPlayed: Boolean,
     preferences: ApplicationPreferences,
     modifier: Modifier = Modifier,
     isFirstItem: Boolean = false,
@@ -221,6 +236,16 @@ private fun MusicGridItem(
         selected = selected,
         contentPadding = PaddingValues(all = 8.dp),
         colors = ListItemDefaults.segmentedColors(
+            contentColor = if (isRecentlyPlayed && preferences.markLastPlayedMedia) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                ListItemDefaults.segmentedColors().contentColor
+            },
+            supportingContentColor = if (isRecentlyPlayed && preferences.markLastPlayedMedia) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                ListItemDefaults.colors().supportingContentColor
+            },
             selectedContainerColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f),
         ),
         isFirstItem = isFirstItem,
@@ -286,6 +311,11 @@ private fun MusicGridItem(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.Center,
+                        color = if (isRecentlyPlayed && preferences.markLastPlayedMedia) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            ListItemDefaults.colors().contentColor
+                        },
                     )
                 }
                 Text(

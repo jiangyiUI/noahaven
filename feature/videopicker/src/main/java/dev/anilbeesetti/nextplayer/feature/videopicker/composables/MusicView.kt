@@ -33,6 +33,7 @@ import dev.anilbeesetti.nextplayer.core.model.AudioFile
 import dev.anilbeesetti.nextplayer.core.model.Folder
 import dev.anilbeesetti.nextplayer.core.model.MediaLayoutMode
 import dev.anilbeesetti.nextplayer.core.model.MediaViewMode
+import dev.anilbeesetti.nextplayer.core.model.Video
 import dev.anilbeesetti.nextplayer.core.ui.R
 import dev.anilbeesetti.nextplayer.core.ui.components.ListSectionTitle
 import dev.anilbeesetti.nextplayer.core.ui.designsystem.NextIcons
@@ -42,6 +43,8 @@ fun MusicView(
     folders: List<Folder>,
     audios: List<AudioFile>,
     preferences: ApplicationPreferences,
+    recentlyPlayedAudio: Video? = null,
+    recentlyPlayedFolder: Folder? = null,
     contentPadding: PaddingValues = PaddingValues(),
     lazyGridState: LazyGridState = rememberLazyGridState(),
     modifier: Modifier = Modifier,
@@ -109,7 +112,7 @@ fun MusicView(
             ) { index, folder ->
                 FolderItem(
                     folder = folder,
-                    isRecentlyPlayedFolder = false,
+                    isRecentlyPlayedFolder = folder.path == recentlyPlayedFolder?.path,
                     preferences = preferences,
                     isFirstItem = index == 0,
                     isLastItem = index == folders.lastIndex,
@@ -142,6 +145,7 @@ fun MusicView(
                 MusicItem(
                     audio = audio,
                     preferences = preferences,
+                    isRecentlyPlayed = audio.path == recentlyPlayedAudio?.path,
                     isFirstItem = index == 0,
                     isLastItem = index == audios.lastIndex,
                     selected = audio.uriString in selectedIds,
