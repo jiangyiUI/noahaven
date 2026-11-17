@@ -111,6 +111,20 @@
     <string name="no_music_found">未找到音乐</string>
     <string name="images">图片</string>
     <string name="no_images_found">未找到图片，请先在设置中添加图片文件夹</string>
+
+    <!-- 漫画库 -->
+    <string name="comics">漫画</string>
+    <string name="search_comics">搜索漫画</string>
+    <string name="search_comics_and_folders">搜索漫画和文件夹</string>
+    <string name="no_comics_found">未找到漫画，请先在设置中添加漫画文件夹</string>
+    <string name="comic_folders_empty">尚未选择任何漫画文件夹</string>
+    <string name="comic_folders_setup">前往设置</string>
+    <string name="manage_comic_folders">管理漫画文件夹</string>
+    <string name="manage_comic_folders_desc">选择要在漫画库中包含的文件夹</string>
+    <string name="comic_reading_direction">翻页方向</string>
+    <string name="comic_reading_direction_ltr">左→右（欧美、大陆）</string>
+    <string name="comic_reading_direction_rtl">右→左（日漫）</string>
+    <string name="comic_pages">%1$d 页</string>
     <string name="add_folder">添加文件夹</string>
     <string name="manage_folders">管理视频文件夹</string>
     <string name="ff_rewind">快进/快退</string>
@@ -121,7 +135,7 @@
     <string name="manage_image_folders">管理图片文件夹</string>
     <string name="manage_image_folders_desc">选择要在图片库中包含的文件夹</string>
     <string name="ignore_no_media">忽略 .nomedia</string>
-    <string name="ignore_no_media_desc">开启后会忽略文件夹里的 .nomedia 标记，正常扫描这些文件夹中的视频/音乐/图片</string>
+    <string name="ignore_no_media_desc">开启后会忽略文件夹里的 .nomedia 标记，正常扫描这些文件夹中的视频、音乐、图片和漫画</string>
     <string name="screen_rotation">屏幕旋转</string>
     <string name="automatic">自动（传感器）</string>
     <string name="landscape">横向</string>
@@ -255,6 +269,8 @@
     <string name="nine_grid">九宫格</string>
     <string name="folder_layout">文件夹布局</string>
     <string name="image_layout">图片布局</string>
+    <string name="comic_layout">漫画布局</string>
+    <string name="continue_reading">继续阅读</string>
     <string name="info">信息</string>
     <string name="play">播放</string>
     <string name="recently_played">近期播放</string>

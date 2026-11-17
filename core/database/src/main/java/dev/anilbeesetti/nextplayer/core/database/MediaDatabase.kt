@@ -5,6 +5,8 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import dev.anilbeesetti.nextplayer.core.database.dao.AudioFileIndexDao
+import dev.anilbeesetti.nextplayer.core.database.dao.ComicFileIndexDao
+import dev.anilbeesetti.nextplayer.core.database.dao.ComicProgressDao
 import dev.anilbeesetti.nextplayer.core.database.dao.HiddenVideoDao
 import dev.anilbeesetti.nextplayer.core.database.dao.ImageFileIndexDao
 import dev.anilbeesetti.nextplayer.core.database.dao.MediaFileIndexDao
@@ -12,6 +14,8 @@ import dev.anilbeesetti.nextplayer.core.database.dao.MediumStateDao
 import dev.anilbeesetti.nextplayer.core.database.dao.NetworkConnectionDao
 import dev.anilbeesetti.nextplayer.core.database.dao.PlaylistDao
 import dev.anilbeesetti.nextplayer.core.database.entities.AudioFileIndexEntity
+import dev.anilbeesetti.nextplayer.core.database.entities.ComicFileIndexEntity
+import dev.anilbeesetti.nextplayer.core.database.entities.ComicProgressEntity
 import dev.anilbeesetti.nextplayer.core.database.entities.HiddenVideoEntity
 import dev.anilbeesetti.nextplayer.core.database.entities.ImageFileIndexEntity
 import dev.anilbeesetti.nextplayer.core.database.entities.MediaFileIndexEntity
@@ -30,8 +34,10 @@ import dev.anilbeesetti.nextplayer.core.database.entities.PlaylistItemEntity
         MediaFileIndexEntity::class,
         AudioFileIndexEntity::class,
         ImageFileIndexEntity::class,
+        ComicFileIndexEntity::class,
+        ComicProgressEntity::class,
     ],
-    version = 16,
+    version = 20,
     exportSchema = true,
 )
 abstract class MediaDatabase : RoomDatabase() {
@@ -43,6 +49,10 @@ abstract class MediaDatabase : RoomDatabase() {
     abstract fun audioFileIndexDao(): AudioFileIndexDao
 
     abstract fun imageFileIndexDao(): ImageFileIndexDao
+
+    abstract fun comicFileIndexDao(): ComicFileIndexDao
+
+    abstract fun comicProgressDao(): ComicProgressDao
 
     abstract fun hiddenVideoDao(): HiddenVideoDao
 
@@ -509,6 +519,77 @@ abstract class MediaDatabase : RoomDatabase() {
                         `dimensions_loaded` INTEGER NOT NULL,
                         PRIMARY KEY(`path`)
                     )
+                    """,
+                )
+            }
+        }
+
+        /** 漫画压缩包索引是纯新增表，不触碰任何已有数据。 */
+        val MIGRATION_16_17 = object : Migration(
+            16,
+            17,
+        ) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    sql = """
+                    CREATE TABLE IF NOT EXISTS `comic_file_index` (
+                        `path` TEXT NOT NULL,
+                        `parent_path` TEXT NOT NULL,
+                        `whitelist_root` TEXT NOT NULL,
+                        `display_name` TEXT NOT NULL,
+                        `size` INTEGER NOT NULL,
+                        `date_modified` INTEGER NOT NULL,
+                        `image_count` INTEGER NOT NULL,
+                        PRIMARY KEY(`path`)
+                    )
+                    """,
+                )
+            }
+        }
+
+        /** 漫画阅读进度表是纯新增表，与索引分开，扫描刷新不会覆盖进度。 */
+        val MIGRATION_17_18 = object : Migration(
+            17,
+            18,
+        ) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    sql = """
+                    CREATE TABLE IF NOT EXISTS `comic_progress` (
+                        `path` TEXT NOT NULL,
+                        `last_page` INTEGER NOT NULL DEFAULT 0,
+                        `reading_direction` TEXT NOT NULL DEFAULT 'RIGHT_TO_LEFT',
+                        PRIMARY KEY(`path`)
+                    )
+                    """,
+                )
+            }
+        }
+        /** 漫画索引补 .nomedia 标记列，让漫画库也能跟随「忽略 .nomedia」设置。 */
+        val MIGRATION_18_19 = object : Migration(
+            18,
+            19,
+        ) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    sql = """
+                    ALTER TABLE `comic_file_index`
+                    ADD COLUMN `no_media_hidden` INTEGER NOT NULL DEFAULT 0
+                    """,
+                )
+            }
+        }
+
+        /** 漫画进度补最近阅读时间列，「更多」页历史记录按它排序。 */
+        val MIGRATION_19_20 = object : Migration(
+            19,
+            20,
+        ) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    sql = """
+                    ALTER TABLE `comic_progress`
+                    ADD COLUMN `updated_at` INTEGER NOT NULL DEFAULT 0
                     """,
                 )
             }

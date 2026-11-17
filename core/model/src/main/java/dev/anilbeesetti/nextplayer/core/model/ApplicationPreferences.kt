@@ -44,6 +44,22 @@ data class ApplicationPreferences(
     /** 最后一次在查看器中浏览的图片路径，用于底部按钮「继续查看」 */
     val lastViewedImagePath: String? = null,
 
+    // Comics tab
+    /** 漫画库白名单目录（只扫描这些文件夹下的 zip/cbz）。 */
+    val comicFolders: List<String> = emptyList(),
+    /** 漫画查看器默认翻页方向：左→右（欧美）或右→左（日漫）。 */
+    val comicReadingDirection: ComicReadingDirection = ComicReadingDirection.RIGHT_TO_LEFT,
+    /** 最后一次在查看器中浏览的漫画文件路径，用于底部按钮「继续阅读」。 */
+    val lastViewedComicPath: String? = null,
+    /** 图片页顶部 tab 的顺序，可在 tab 上长按拖动调整。 */
+    val imageLibraryTabOrder: List<MediaLibraryTab> = MediaLibraryTab.defaultOrder,
+    /** 漫画库的显示模式/布局/排序（与图片库分开记忆）。 */
+    val comicViewMode: MediaViewMode = MediaViewMode.FOLDERS,
+    val comicFolderLayoutMode: MediaLayoutMode = MediaLayoutMode.GRID,
+    val comicLayoutMode: ImageLayoutMode = ImageLayoutMode.GRID,
+    val comicSortBy: Sort.By = Sort.By.TITLE,
+    val comicSortOrder: Sort.Order = Sort.Order.ASCENDING,
+
     // Fields
     val showDurationField: Boolean = true,
     val showFolderDurationField: Boolean = true,

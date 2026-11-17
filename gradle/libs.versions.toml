@@ -49,6 +49,7 @@ mockito = "5.24.0"
 okhttp = "4.12.0"
 commonsNet = "3.13.0"
 sardineAndroid = "0.9"
+zip4j = "2.11.5"
 
 
 [libraries]
@@ -123,6 +124,7 @@ sshj = { group = "com.hierynomus", name = "sshj", version.ref = "sshj" }
 bouncycastle-provider = { group = "org.bouncycastle", name = "bcprov-jdk18on", version.ref = "bouncyCastle" }
 commons-net = { group = "commons-net", name = "commons-net", version.ref = "commonsNet" }
 sardine-android = { group = "com.github.thegrizzlylabs", name = "sardine-android", version.ref = "sardineAndroid" }
+zip4j = { module = "net.lingala.zip4j:zip4j", version.ref = "zip4j" }
 
 [plugins]
 koin-compiler = { id = "io.insert-koin.compiler.plugin", version.ref = "koinCompiler" }

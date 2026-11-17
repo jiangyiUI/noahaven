@@ -228,10 +228,9 @@ fun ImageViewer(
                         .align(Alignment.TopCenter)
                         .background(Color.Black.copy(alpha = 0.55f))
                         .statusBarsPadding()
-                        .padding(
-                            horizontal = 4.dp,
-                            vertical = 4.dp,
-                        ),
+                        // 左 0dp + IconButton 内部 12dp 让关闭图标落在约 16dp，和底部页码对齐；
+                        // 右 16dp 让标题省略号不越过底部内容的右边缘。
+                        .padding(start = 0.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = onDismiss) {

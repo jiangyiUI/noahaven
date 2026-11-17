@@ -14,6 +14,7 @@ import androidx.compose.material.icons.rounded.AppSettingsAlt
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Audiotrack
+import androidx.compose.material.icons.rounded.Book
 import androidx.compose.material.icons.rounded.BrightnessHigh
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.CalendarMonth
@@ -92,6 +93,7 @@ import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Update
+import androidx.compose.material.icons.rounded.Visibility
 
 object NextIcons {
     val Add = Icons.Rounded.Add
@@ -164,6 +166,7 @@ object NextIcons {
     val Title = Icons.Rounded.Title
     val Update = Icons.Rounded.Update
     val Video = Icons.Rounded.Movie
+    val View = Icons.Rounded.Visibility
     val VolumeUp = Icons.AutoMirrored.Rounded.VolumeUp
     val ButtonsPosition = Icons.Rounded.AppSettingsAlt
     val Close = Icons.Rounded.Close
@@ -181,6 +184,7 @@ object NextIcons {
     val More = Icons.Rounded.MoreHoriz
     val DeleteSweep = Icons.Rounded.DeleteSweep
     val Image = Icons.Rounded.Image
+    val Comic = Icons.Rounded.Book
     val Frame = Icons.Rounded.FilterFrames
     val Lock = Icons.Rounded.Lock
     val Fingerprint = Icons.Rounded.Fingerprint

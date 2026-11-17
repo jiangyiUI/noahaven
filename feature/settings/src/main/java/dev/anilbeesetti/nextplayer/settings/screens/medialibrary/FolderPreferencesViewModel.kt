@@ -8,6 +8,7 @@ import dev.anilbeesetti.nextplayer.core.common.extensions.prettyName
 import dev.anilbeesetti.nextplayer.core.common.service.system.SystemService
 import dev.anilbeesetti.nextplayer.core.data.repository.MediaRepository
 import dev.anilbeesetti.nextplayer.core.data.repository.PreferencesRepository
+import dev.anilbeesetti.nextplayer.core.media.index.ComicFileIndex
 import dev.anilbeesetti.nextplayer.core.media.index.ImageFileIndex
 import dev.anilbeesetti.nextplayer.core.model.ApplicationPreferences
 import dev.anilbeesetti.nextplayer.core.model.Folder
@@ -28,6 +29,7 @@ class FolderPreferencesViewModel(
     private val preferencesRepository: PreferencesRepository,
     private val systemService: SystemService,
     private val imageFileIndex: ImageFileIndex,
+    private val comicFileIndex: ComicFileIndex,
     @InjectedParam internal var output: Output,
 ) : MviViewModel<FolderPreferencesUiState, FolderPreferencesUiEvent>() {
 
@@ -35,19 +37,21 @@ class FolderPreferencesViewModel(
         val navigateUp: () -> Unit,
         val audioFolders: Boolean = false,
         val imageFolders: Boolean = false,
+        val comicFolders: Boolean = false,
     )
 
     private val stateInternal = MutableStateFlow(
         value = FolderPreferencesUiState(
             audioFolders = output.audioFolders,
             imageFolders = output.imageFolders,
+            comicFolders = output.comicFolders,
             preferences = preferencesRepository.applicationPreferences.value,
         ),
     )
     override val state: StateFlow<FolderPreferencesUiState> = stateInternal.asStateFlow()
 
     init {
-        if (!output.imageFolders) {
+        if (!output.imageFolders && !output.comicFolders) {
             viewModelScope.launch {
                 val folders = if (output.audioFolders) {
                     mediaRepository.observeAudioFolders()
@@ -67,10 +71,14 @@ class FolderPreferencesViewModel(
                 stateInternal.update { current ->
                     current.copy(
                         preferences = preferences,
-                        foldersDataState = if (output.imageFolders) {
-                            DataState.Success(preferences.imageFolders.map(::imageFolder))
-                        } else {
-                            current.foldersDataState
+                        foldersDataState = when {
+                            output.imageFolders ->
+                                DataState.Success(preferences.imageFolders.map(::imageFolder))
+
+                            output.comicFolders ->
+                                DataState.Success(preferences.comicFolders.map(::imageFolder))
+
+                            else -> current.foldersDataState
                         },
                     )
                 }
@@ -83,6 +91,7 @@ class FolderPreferencesViewModel(
             is FolderPreferencesUiEvent.NavigateUp -> output.navigateUp()
             is FolderPreferencesUiEvent.UpdateExcludeList -> updateFolder(action.path)
             FolderPreferencesUiEvent.AddImageFolder -> addImageFolder()
+            FolderPreferencesUiEvent.AddComicFolder -> addComicFolder()
         }
     }
 
@@ -104,35 +113,67 @@ class FolderPreferencesViewModel(
         }
     }
 
+    private fun addComicFolder() {
+        viewModelScope.launch {
+            val path = systemService.pickFolder()?.toFolderPath() ?: return@launch
+            val oldRoots = preferencesRepository.applicationPreferences.value.comicFolders
+            if (path in oldRoots) return@launch
+            val newRoots = (oldRoots + path).distinct()
+            preferencesRepository.updateApplicationPreferences {
+                it.copy(comicFolders = newRoots)
+            }
+            // 新增白名单只扫描这个目录，已有目录不重扫。
+            comicFileIndex.requestRefresh(
+                whitelistRoots = newRoots,
+                folderPath = path,
+                force = true,
+            )
+        }
+    }
+
     private fun updateFolder(path: String) {
         viewModelScope.launch {
-            val oldRoots = preferencesRepository.applicationPreferences.value.imageFolders
-            val newRoots = oldRoots.toggle(path)
-            preferencesRepository.updateApplicationPreferences { preferences ->
-                when {
-                    output.imageFolders -> preferences.copy(imageFolders = newRoots)
+            val preferences = preferencesRepository.applicationPreferences.value
+            when {
+                output.imageFolders -> {
+                    val newRoots = preferences.imageFolders.toggle(path)
+                    preferencesRepository.updateApplicationPreferences {
+                        it.copy(imageFolders = newRoots)
+                    }
+                    if (path in newRoots) {
+                        imageFileIndex.requestRefresh(
+                            whitelistRoots = newRoots,
+                            folderPath = path,
+                            force = true,
+                        )
+                    } else {
+                        imageFileIndex.removeRoots(
+                            roots = listOf(path),
+                            retainedRoots = newRoots,
+                        )
+                    }
+                }
 
-                    output.audioFolders -> preferences.copy(
-                        excludeAudioFolders = preferences.excludeAudioFolders.toggle(path),
-                    )
-
-                    else -> preferences.copy(
-                        excludeFolders = preferences.excludeFolders.toggle(path),
+                output.comicFolders -> {
+                    val newRoots = preferences.comicFolders.toggle(path)
+                    preferencesRepository.updateApplicationPreferences {
+                        it.copy(comicFolders = newRoots)
+                    }
+                    // 重新协调全部白名单：已移除根目录的漫画会被清理。
+                    comicFileIndex.requestRefresh(
+                        whitelistRoots = newRoots,
+                        folderPath = null,
+                        force = true,
                     )
                 }
-            }
-            if (!output.imageFolders) return@launch
-            if (path in newRoots) {
-                imageFileIndex.requestRefresh(
-                    whitelistRoots = newRoots,
-                    folderPath = path,
-                    force = true,
-                )
-            } else {
-                imageFileIndex.removeRoots(
-                    roots = listOf(path),
-                    retainedRoots = newRoots,
-                )
+
+                output.audioFolders -> preferencesRepository.updateApplicationPreferences {
+                    it.copy(excludeAudioFolders = it.excludeAudioFolders.toggle(path))
+                }
+
+                else -> preferencesRepository.updateApplicationPreferences {
+                    it.copy(excludeFolders = it.excludeFolders.toggle(path))
+                }
             }
         }
     }
@@ -174,10 +215,12 @@ data class FolderPreferencesUiState(
     val preferences: ApplicationPreferences = ApplicationPreferences(),
     val audioFolders: Boolean = false,
     val imageFolders: Boolean = false,
+    val comicFolders: Boolean = false,
 )
 
 sealed interface FolderPreferencesUiEvent {
     data object NavigateUp : FolderPreferencesUiEvent
     data object AddImageFolder : FolderPreferencesUiEvent
+    data object AddComicFolder : FolderPreferencesUiEvent
     data class UpdateExcludeList(val path: String) : FolderPreferencesUiEvent
 }

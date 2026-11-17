@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.anilbeesetti.nextplayer.core.media.services.MediaOperationsService
+import dev.anilbeesetti.nextplayer.core.model.Video
 import dev.anilbeesetti.nextplayer.core.ui.R
 import dev.anilbeesetti.nextplayer.core.ui.base.DataState
 import dev.anilbeesetti.nextplayer.core.ui.components.BindTopLevelBottomBarVisible
@@ -59,6 +60,7 @@ import dev.anilbeesetti.nextplayer.core.ui.components.TopLevelFabKey
 import dev.anilbeesetti.nextplayer.core.ui.components.tvFocusRing
 import dev.anilbeesetti.nextplayer.core.ui.designsystem.NextIcons
 import dev.anilbeesetti.nextplayer.core.ui.extensions.copy
+import dev.anilbeesetti.nextplayer.feature.more.components.ComicHistoryListItem
 import dev.anilbeesetti.nextplayer.feature.more.components.HistoryEmptyState
 import dev.anilbeesetti.nextplayer.feature.videopicker.composables.CenterCircularProgressBar
 import dev.anilbeesetti.nextplayer.feature.videopicker.composables.VideoListItem
@@ -79,7 +81,7 @@ internal fun MoreScreenContent(state: MoreUiState, onAction: (MoreAction) -> Uni
     var showClearConfirmation by rememberSaveable { mutableStateOf(value = false) }
 
     val isInSelectionMode = state.selectedUris.isNotEmpty()
-    val historySize = state.history.result.orEmpty().size
+    val historySize = state.historySize
     val isAllSelected = historySize > 0 && state.selectedUris.size == historySize
 
     if (!isInSelectionMode) {
@@ -133,7 +135,7 @@ internal fun MoreScreenContent(state: MoreUiState, onAction: (MoreAction) -> Uni
                                 text = stringResource(
                                     R.string.m_n_selected,
                                     state.selectedUris.size,
-                                    state.history.result.orEmpty().size,
+                                    state.historySize,
                                 ),
                                 style = MaterialTheme.typography.labelLarge,
                             )
@@ -363,47 +365,93 @@ private fun HistoryContent(
             color = MaterialTheme.colorScheme.error,
         )
 
-        is DataState.Success -> if (history.value.isEmpty()) {
-            HistoryEmptyState(
-                isHistoryOff = false,
-                modifier = modifier.fillMaxSize().verticalScroll(state = rememberScrollState()),
-            )
-        } else {
-            LazyColumn(
-                modifier = modifier,
-                contentPadding = PaddingValues(
-                    start = 8.dp,
-                    top = 4.dp,
-                    end = 8.dp,
-                    bottom = bottomPadding + LocalNavigationBottomPadding.current,
-                ),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                itemsIndexed(
-                    items = history.value,
-                    key = { _, video -> video.uriString },
-                ) { index, video ->
-                    VideoListItem(
-                        video = video,
-                        isRecentlyPlayedVideo = false,
-                        preferences = state.preferences,
-                        isFirstItem = index == 0,
-                        isLastItem = index == history.value.lastIndex,
-                        selected = video.uriString in state.selectedUris,
-                        onClick = {
-                            if (state.selectedUris.isEmpty()) {
-                                onAction(MoreAction.PlayVideo(video))
-                            } else {
-                                onAction(MoreAction.ToggleSelection(video.uriString))
-                            }
-                        },
-                        onLongClick = {
-                            onAction(MoreAction.ToggleSelection(video.uriString))
-                        },
-                    )
+        is DataState.Success -> {
+            // 视频/音频历史和漫画阅读记录混排，按最近一次的时间倒序
+            val rows = remember(history.value, state.comicHistory) {
+                buildList<HistoryRow> {
+                    history.value.forEach { add(HistoryRow.VideoRow(video = it)) }
+                    state.comicHistory.forEach { add(HistoryRow.ComicRow(entry = it)) }
+                }.sortedByDescending { it.time }
+            }
+            if (rows.isEmpty()) {
+                HistoryEmptyState(
+                    isHistoryOff = false,
+                    modifier = modifier.fillMaxSize().verticalScroll(state = rememberScrollState()),
+                )
+            } else {
+                LazyColumn(
+                    modifier = modifier,
+                    contentPadding = PaddingValues(
+                        start = 8.dp,
+                        top = 4.dp,
+                        end = 8.dp,
+                        bottom = bottomPadding + LocalNavigationBottomPadding.current,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    itemsIndexed(
+                        items = rows,
+                        key = { _, row -> row.key },
+                    ) { index, row ->
+                        val isSelected = row.key in state.selectedUris
+                        when (row) {
+                            is HistoryRow.VideoRow -> VideoListItem(
+                                video = row.video,
+                                isRecentlyPlayedVideo = false,
+                                preferences = state.preferences,
+                                isFirstItem = index == 0,
+                                isLastItem = index == rows.lastIndex,
+                                selected = isSelected,
+                                onClick = {
+                                    if (state.selectedUris.isEmpty()) {
+                                        onAction(MoreAction.PlayVideo(row.video))
+                                    } else {
+                                        onAction(MoreAction.ToggleSelection(row.key))
+                                    }
+                                },
+                                onLongClick = {
+                                    onAction(MoreAction.ToggleSelection(row.key))
+                                },
+                            )
+
+                            is HistoryRow.ComicRow -> ComicHistoryListItem(
+                                entry = row.entry,
+                                preferences = state.preferences,
+                                isFirstItem = index == 0,
+                                isLastItem = index == rows.lastIndex,
+                                selected = isSelected,
+                                onClick = {
+                                    if (state.selectedUris.isEmpty()) {
+                                        onAction(MoreAction.OpenComic(row.entry.comic.path))
+                                    } else {
+                                        onAction(MoreAction.ToggleSelection(row.key))
+                                    }
+                                },
+                                onLongClick = {
+                                    onAction(MoreAction.ToggleSelection(row.key))
+                                },
+                            )
+                        }
+                    }
                 }
             }
         }
+    }
+}
+
+/** 历史列表混排时的一行：视频/音频或漫画。 */
+private sealed interface HistoryRow {
+    val key: String
+    val time: Long
+
+    data class VideoRow(val video: Video) : HistoryRow {
+        override val key: String get() = video.uriString
+        override val time: Long get() = video.lastPlayedAt?.time ?: 0L
+    }
+
+    data class ComicRow(val entry: ComicHistoryEntry) : HistoryRow {
+        override val key: String get() = entry.comic.path
+        override val time: Long get() = entry.progress.updatedAt
     }
 }
 

@@ -60,6 +60,14 @@ dependencies {
     }
     implementation(libs.androidx.media3.datasource)
 
+    // ZIP/CBZ 漫画压缩包读写
+    implementation(libs.zip4j) {
+        exclude(
+            group = "org.slf4j",
+            module = "slf4j-api",
+        )
+    }
+
     // Koin
     implementation(libs.koin.core)
     implementation(libs.koin.annotations)

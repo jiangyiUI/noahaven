@@ -1,0 +1,297 @@
+package dev.anilbeesetti.nextplayer.core.media.index
+
+import android.content.Context
+import dev.anilbeesetti.nextplayer.core.common.di.DiQualifiers
+import dev.anilbeesetti.nextplayer.core.database.dao.ComicFileIndexDao
+import dev.anilbeesetti.nextplayer.core.database.dao.ComicProgressDao
+import dev.anilbeesetti.nextplayer.core.database.entities.ComicFileIndexEntity
+import dev.anilbeesetti.nextplayer.core.database.entities.ComicProgressEntity
+import dev.anilbeesetti.nextplayer.core.model.ComicFile
+import dev.anilbeesetti.nextplayer.core.model.ComicProgress
+import dev.anilbeesetti.nextplayer.core.model.ComicReadingDirection
+import java.io.File
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import org.koin.core.annotation.Named
+import org.koin.core.annotation.Single
+
+/**
+ * 漫画压缩包白名单索引。相比图片索引：
+ * 1. 没有"分辨率异步补齐"阶段——扫描 zip 时一次性把内部条目读完；
+ * 2. 封面图扫描时同步解到缓存，无需后台队列。
+ */
+@Single(binds = [ComicFileIndex::class])
+class RoomComicFileIndex(
+    private val dao: ComicFileIndexDao,
+    private val progressDao: ComicProgressDao,
+    private val context: Context,
+    @Named(DiQualifiers.APPLICATION_SCOPE) private val applicationScope: CoroutineScope,
+) : ComicFileIndex {
+
+    private val stateMutex = Mutex()
+    private val scanMutex = Mutex()
+    private val index = HashMap<String, ComicFile>()
+    private var loaded = false
+    private val lastRefreshAt = HashMap<String, Long>()
+
+    /** 封面缓存路径（zipPath → coverCachePath），进程内缓存。 */
+    private val coverCache = HashMap<String, String?>()
+
+    private val _entries = MutableStateFlow<List<ComicFile>?>(null)
+    override val entries: StateFlow<List<ComicFile>?> = _entries.asStateFlow()
+
+    init {
+        applicationScope.launch(Dispatchers.IO) {
+            stateMutex.withLock { loadLocked() }
+        }
+    }
+
+    override fun requestRefresh(
+        whitelistRoots: Collection<String>,
+        folderPath: String?,
+        force: Boolean,
+    ) {
+        applicationScope.launch(Dispatchers.IO) {
+            refresh(
+                whitelistRoots = whitelistRoots,
+                folderPath = folderPath,
+                minIntervalMillis = when {
+                    force -> 0L
+                    folderPath == null -> FULL_REFRESH_INTERVAL_MS
+                    else -> FOLDER_REFRESH_INTERVAL_MS
+                },
+            )
+        }
+    }
+
+    override suspend fun find(path: String): ComicFile? = stateMutex.withLock {
+        loadLocked()
+        index[path]
+    }
+
+    override suspend fun getProgress(path: String): ComicProgress? = withContext(Dispatchers.IO) {
+        progressDao.get(path)?.toModel()
+    }
+
+    override suspend fun saveProgress(progress: ComicProgress) {
+        withContext(Dispatchers.IO) {
+            progressDao.upsert(
+                ComicProgressEntity(
+                    path = progress.path,
+                    lastPage = progress.lastPage,
+                    readingDirection = progress.readingDirection.name,
+                    updatedAt = System.currentTimeMillis(),
+                ),
+            )
+        }
+    }
+
+    override fun observeProgress(): Flow<List<ComicProgress>> =
+        progressDao.observeAll().map { entities -> entities.map { it.toModel() } }
+
+    override suspend fun deleteProgress(path: String) {
+        withContext(Dispatchers.IO) { progressDao.delete(path) }
+    }
+
+    override suspend fun clearProgress() {
+        withContext(Dispatchers.IO) { progressDao.clear() }
+    }
+
+    private fun ComicProgressEntity.toModel(): ComicProgress = ComicProgress(
+        path = path,
+        lastPage = lastPage,
+        readingDirection = runCatching {
+            ComicReadingDirection.valueOf(readingDirection)
+        }.getOrDefault(ComicReadingDirection.RIGHT_TO_LEFT),
+        updatedAt = updatedAt,
+    )
+
+    private suspend fun refresh(
+        whitelistRoots: Collection<String>,
+        folderPath: String?,
+        minIntervalMillis: Long,
+    ) {
+        scanMutex.withLock {
+            val roots = outermostRoots(whitelistRoots)
+            if (roots.isEmpty()) {
+                stateMutex.withLock {
+                    index.clear()
+                    publishLocked()
+                }
+                dao.clear()
+                return@withLock
+            }
+            val key = folderPath ?: ALL_ROOTS_KEY
+            val now = System.currentTimeMillis()
+            stateMutex.withLock {
+                loadLocked()
+                val last = lastRefreshAt[key]
+                if (last != null && minIntervalMillis > 0 && now - last < minIntervalMillis) return
+                lastRefreshAt[key] = now
+            }
+
+            val targets = if (folderPath == null) {
+                roots.map { it to it }
+            } else {
+                roots.filter { folderPath.isWithin(it) }.map { it to folderPath }
+            }
+
+            val seen = HashSet<String>()
+            val upsertBatch = ArrayList<ComicFileIndexEntity>()
+
+            for ((root, target) in targets) {
+                val found = collectComicsInFolder(
+                    target,
+                    root,
+                )
+                for (scanned in found) {
+                    seen.add(scanned.path)
+                    val current = index[scanned.path]
+                    val changed = current == null ||
+                        current.size != scanned.size ||
+                        current.dateModified != scanned.dateModified ||
+                        current.imageCount != scanned.imageCount ||
+                        current.parentPath != scanned.parentPath ||
+                        current.whitelistRoot != scanned.whitelistRoot ||
+                        current.displayName != scanned.displayName ||
+                        current.noMediaHidden != scanned.noMediaHidden
+
+                    if (!changed) continue
+
+                    // 生成封面缓存（如果 zip 有效且有图片）
+                    val coverPath = if (scanned.imageCount > 0) {
+                        coverCache[scanned.path] ?: run {
+                            val entries = runCatching {
+                                ComicArchiveReader(scanned.path).use { it.listImageEntries() }
+                            }.getOrDefault(emptyList())
+                            val path = extractCoverLocked(
+                                context,
+                                scanned.path,
+                                entries,
+                            )
+                            coverCache[scanned.path] = path
+                            path
+                        }
+                    } else {
+                        null
+                    }
+
+                    val comic = ComicFile(
+                        path = scanned.path,
+                        parentPath = scanned.parentPath,
+                        whitelistRoot = scanned.whitelistRoot,
+                        displayName = scanned.displayName,
+                        size = scanned.size,
+                        dateModified = scanned.dateModified,
+                        imageCount = scanned.imageCount,
+                        coverCachePath = coverPath,
+                        formattedFileSize = dev.anilbeesetti.nextplayer.core.common.Utils
+                            .formatFileSize(scanned.size),
+                        noMediaHidden = scanned.noMediaHidden,
+                    )
+                    stateMutex.withLock {
+                        index[scanned.path] = comic
+                    }
+                    upsertBatch += comic.toEntity()
+                }
+            }
+
+            // 删除不再存在的（只清理本次扫描覆盖的白名单，避免误删其它根目录）
+            val scannedRoots = targets.map { it.first }.toSet()
+            stateMutex.withLock {
+                val stale = index.values.filter {
+                    it.path !in seen && (folderPath == null || it.whitelistRoot in scannedRoots)
+                }
+                if (stale.isNotEmpty()) {
+                    stale.forEach { index.remove(it.path) }
+                    dao.deleteByPaths(stale.map { it.path })
+                }
+                if (upsertBatch.isNotEmpty()) {
+                    upsertBatch.chunked(UPSERT_CHUNK_SIZE).forEach { dao.upsertAll(it) }
+                }
+                publishLocked()
+            }
+        }
+    }
+
+    private suspend fun loadLocked() {
+        if (loaded) return
+        val rows = runCatching { dao.getAll() }.getOrElse { emptyList() }
+        rows.forEach { row ->
+            val cover = coverCache[row.path]
+                ?: ComicArchiveReader.extractCover(
+                    context,
+                    row.path,
+                    emptyList(),
+                ).also {
+                    coverCache[row.path] = it
+                }
+            index[row.path] = row.toComicFile(cover)
+        }
+        loaded = true
+        publishLocked()
+    }
+
+    private suspend fun publishLocked() {
+        _entries.value = index.values.sortedWith(
+            compareBy<ComicFile> { it.parentPath.lowercase() }
+                .thenBy { it.displayName.lowercase() },
+        )
+    }
+
+    private suspend fun removeRootsLocked(roots: Collection<String>) {
+        val normalized = roots.map { normalizeRoot(it) }.toSet()
+        val removed = index.values.filter {
+            it.whitelistRoot in normalized || it.path.isWithinAny(normalized)
+        }
+        removed.forEach { index.remove(it.path) }
+        if (removed.isNotEmpty()) {
+            dao.deleteByPaths(removed.map { it.path })
+        }
+    }
+
+    fun removeRoots(roots: Collection<String>) {
+        if (roots.isEmpty()) return
+        applicationScope.launch(Dispatchers.IO) {
+            scanMutex.withLock {
+                stateMutex.withLock { loadLocked() }
+                removeRootsLocked(roots)
+                stateMutex.withLock { publishLocked() }
+            }
+        }
+    }
+
+    private companion object {
+        const val ALL_ROOTS_KEY = "/"
+        const val FOLDER_REFRESH_INTERVAL_MS = 15_000L
+        const val FULL_REFRESH_INTERVAL_MS = 60_000L
+        const val UPSERT_CHUNK_SIZE = 90
+    }
+}
+
+private fun normalizeRoot(path: String): String =
+    File(path).absolutePath.trimEnd(File.separatorChar).ifEmpty { File.separator }
+
+private fun outermostRoots(roots: Collection<String>): List<String> = roots
+    .filter { it.isNotBlank() }
+    .map(::normalizeRoot)
+    .distinct()
+    .filter { root ->
+        roots.map(::normalizeRoot).none { other ->
+            other != root && root.isWithin(other)
+        }
+    }
+
+private fun String.isWithin(root: String): Boolean =
+    this == root || startsWith(root.trimEnd(File.separatorChar) + File.separator)
+
+private fun String.isWithinAny(roots: Collection<String>): Boolean = roots.any { isWithin(it) }

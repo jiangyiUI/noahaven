@@ -64,6 +64,7 @@ private fun FolderPreferencesScreenContent(
                 title = stringResource(
                     id = when {
                         state.imageFolders -> R.string.manage_image_folders
+                        state.comicFolders -> R.string.manage_comic_folders
                         state.audioFolders -> R.string.manage_audio_folders
                         else -> R.string.manage_folders
                     },
@@ -80,14 +81,27 @@ private fun FolderPreferencesScreenContent(
                     }
                 },
                 actions = {
-                    if (state.imageFolders) {
-                        IconButton(onClick = {
-                            onAction(FolderPreferencesUiEvent.AddImageFolder)
-                        }) {
-                            Icon(
-                                imageVector = NextIcons.Add,
-                                contentDescription = stringResource(id = R.string.add_folder),
-                            )
+                    when {
+                        state.imageFolders -> {
+                            IconButton(onClick = {
+                                onAction(FolderPreferencesUiEvent.AddImageFolder)
+                            }) {
+                                Icon(
+                                    imageVector = NextIcons.Add,
+                                    contentDescription = stringResource(id = R.string.add_folder),
+                                )
+                            }
+                        }
+
+                        state.comicFolders -> {
+                            IconButton(onClick = {
+                                onAction(FolderPreferencesUiEvent.AddComicFolder)
+                            }) {
+                                Icon(
+                                    imageVector = NextIcons.Add,
+                                    contentDescription = stringResource(id = R.string.add_folder),
+                                )
+                            }
                         }
                     }
                 },
@@ -115,6 +129,7 @@ private fun FolderPreferencesScreenContent(
                     itemsIndexed(state.foldersDataState.value) { index, folder ->
                         val selectedFolders = when {
                             state.imageFolders -> state.preferences.imageFolders
+                            state.comicFolders -> state.preferences.comicFolders
                             state.audioFolders -> state.preferences.excludeAudioFolders
                             else -> state.preferences.excludeFolders
                         }
@@ -127,7 +142,7 @@ private fun FolderPreferencesScreenContent(
                             },
                             isFirstItem = index == 0,
                             isLastItem = index == state.foldersDataState.value.lastIndex,
-                            strikeThroughSelected = !state.imageFolders,
+                            strikeThroughSelected = !state.imageFolders && !state.comicFolders,
                         )
                     }
                 }

@@ -30,6 +30,10 @@ class DatabaseModule {
             MediaDatabase.MIGRATION_13_14,
             MediaDatabase.MIGRATION_14_15,
             MediaDatabase.MIGRATION_15_16,
+            MediaDatabase.MIGRATION_16_17,
+            MediaDatabase.MIGRATION_17_18,
+            MediaDatabase.MIGRATION_18_19,
+            MediaDatabase.MIGRATION_19_20,
         )
         fallbackToDestructiveMigration(dropAllTables = false)
     }.build()

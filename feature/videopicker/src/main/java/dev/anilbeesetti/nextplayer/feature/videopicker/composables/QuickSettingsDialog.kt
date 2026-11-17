@@ -57,6 +57,7 @@ fun QuickSettingsDialog(
     showFieldSettings: Boolean = true,
     mediaFilesLabel: String? = null,
     imageMode: Boolean = false,
+    comicMode: Boolean = false,
 ) {
     var preferences by remember { mutableStateOf(value = applicationPreferences) }
 
@@ -128,9 +129,18 @@ fun QuickSettingsDialog(
                             }
                         }
                     }
-                    DialogSectionTitle(text = stringResource(R.string.image_layout))
+                    DialogSectionTitle(
+                        text = stringResource(
+                            if (comicMode) R.string.comic_layout else R.string.image_layout,
+                        ),
+                    )
                     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        ImageLayoutMode.entries.forEachIndexed { index, mode ->
+                        val layoutModes = if (comicMode) {
+                            listOf(ImageLayoutMode.LIST, ImageLayoutMode.GRID)
+                        } else {
+                            ImageLayoutMode.entries
+                        }
+                        layoutModes.forEachIndexed { index, mode ->
                             SegmentedButton(
                                 selected = preferences.imageLayoutMode == mode,
                                 onClick = {
@@ -138,7 +148,7 @@ fun QuickSettingsDialog(
                                 },
                                 shape = SegmentedButtonDefaults.itemShape(
                                     index = index,
-                                    count = ImageLayoutMode.entries.size,
+                                    count = layoutModes.size,
                                 ),
                                 colors = SegmentedButtonDefaults.colors(
                                     activeContentColor = MaterialTheme.colorScheme.primary,
@@ -228,14 +238,16 @@ fun QuickSettingsDialog(
                                 )
                             },
                         )
-                        FieldChip(
-                            label = stringResource(id = R.string.path),
-                            selected = preferences.showPathField,
-                            onClick = {
-                                preferences =
-                                    preferences.copy(showPathField = !preferences.showPathField)
-                            },
-                        )
+                        if (!comicMode) {
+                            FieldChip(
+                                label = stringResource(id = R.string.path),
+                                selected = preferences.showPathField,
+                                onClick = {
+                                    preferences =
+                                        preferences.copy(showPathField = !preferences.showPathField)
+                                },
+                            )
+                        }
                         if (!imageMode) {
                             FieldChip(
                                 label = stringResource(id = R.string.played_progress),
@@ -247,15 +259,17 @@ fun QuickSettingsDialog(
                                 },
                             )
                         }
-                        FieldChip(
-                            label = stringResource(id = R.string.resolution),
-                            selected = preferences.showResolutionField,
-                            onClick = {
-                                preferences = preferences.copy(
-                                    showResolutionField = !preferences.showResolutionField,
-                                )
-                            },
-                        )
+                        if (!comicMode) {
+                            FieldChip(
+                                label = stringResource(id = R.string.resolution),
+                                selected = preferences.showResolutionField,
+                                onClick = {
+                                    preferences = preferences.copy(
+                                        showResolutionField = !preferences.showResolutionField,
+                                    )
+                                },
+                            )
+                        }
                         FieldChip(
                             label = stringResource(id = R.string.size),
                             selected = preferences.showSizeField,

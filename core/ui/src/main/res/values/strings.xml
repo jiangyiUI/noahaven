@@ -46,6 +46,20 @@
     <string name="no_music_found">No music found</string>
     <string name="images">Images</string>
     <string name="no_images_found">No images found. Add an image folder in Settings.</string>
+
+    <!-- Comics -->
+    <string name="comics">Comics</string>
+    <string name="search_comics">Search comics</string>
+    <string name="search_comics_and_folders">Search comics and folders</string>
+    <string name="no_comics_found">No comics found. Add a comic folder in Settings.</string>
+    <string name="comic_folders_empty">No comic folders selected.</string>
+    <string name="comic_folders_setup">Go to Settings</string>
+    <string name="manage_comic_folders">Manage comic folders</string>
+    <string name="manage_comic_folders_desc">Choose the folders to include in the comic library</string>
+    <string name="comic_reading_direction">Reading direction</string>
+    <string name="comic_reading_direction_ltr">Left to right (Western)</string>
+    <string name="comic_reading_direction_rtl">Right to left (Manga)</string>
+    <string name="comic_pages">%1$d pages</string>
     <string name="add_folder">Add folder</string>
     <string name="open_settings">Open Settings</string>
     <string name="permission_info">The Next Player app needs \"%1$s\" permission to access and play media. Without it, media access and playback won\'t work. To use the app fully, grant the permission.</string>
@@ -130,7 +144,7 @@
     <string name="manage_image_folders">Manage image folders</string>
     <string name="manage_image_folders_desc">Choose the folders to include in the image library</string>
     <string name="ignore_no_media">Ignore .nomedia</string>
-    <string name="ignore_no_media_desc">Scan videos, music and images inside folders even if they contain a .nomedia file</string>
+    <string name="ignore_no_media_desc">Scan videos, music, images and comics inside folders even if they contain a .nomedia file</string>
     <string name="video">Video</string>
     <string name="videos">Videos</string>
     <string name="screen_rotation">Screen Rotation</string>
@@ -289,6 +303,8 @@
     <string name="nine_grid">Nine grid</string>
     <string name="folder_layout">Folder layout</string>
     <string name="image_layout">Image layout</string>
+    <string name="comic_layout">Comic layout</string>
+    <string name="continue_reading">Continue reading</string>
     <string name="info">Info</string>
     <string name="play">Play</string>
     <string name="recently_played">Recently played</string>

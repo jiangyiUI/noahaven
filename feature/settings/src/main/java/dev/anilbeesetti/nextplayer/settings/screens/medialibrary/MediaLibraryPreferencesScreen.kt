@@ -182,6 +182,18 @@ private fun MediaLibraryPreferencesScreenContent(
                     isFirstItem = false,
                     isLastItem = false,
                 )
+                ClickablePreferenceItem(
+                    modifier = Modifier.restorableFocusItem(
+                        state = focusState,
+                        key = "manage_comic_folders",
+                    ),
+                    title = stringResource(id = R.string.manage_comic_folders),
+                    description = stringResource(id = R.string.manage_comic_folders_desc),
+                    icon = NextIcons.Comic,
+                    onClick = { onAction(MediaLibraryPreferencesUiEvent.OpenComicFolders) },
+                    isFirstItem = false,
+                    isLastItem = false,
+                )
                 PreferenceSwitch(
                     modifier = Modifier.restorableFocusItem(
                         state = focusState,

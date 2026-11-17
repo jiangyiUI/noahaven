@@ -3,8 +3,10 @@ package dev.anilbeesetti.nextplayer.feature.videopicker.navigation
 import androidx.compose.runtime.SideEffect
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
-import dev.anilbeesetti.nextplayer.feature.videopicker.screens.images.ImagesScreen
+import dev.anilbeesetti.nextplayer.feature.videopicker.screens.comics.ComicsViewModel
 import dev.anilbeesetti.nextplayer.feature.videopicker.screens.images.ImagesViewModel
+import dev.anilbeesetti.nextplayer.feature.videopicker.screens.images.LibraryTabsViewModel
+import dev.anilbeesetti.nextplayer.feature.videopicker.screens.images.MediaLibraryScreen
 import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -14,14 +16,27 @@ data object ImagesRoute : NavKey
 fun EntryProviderScope<NavKey>.imagesEntry(
     onSettingsClick: () -> Unit,
     onSearchClick: () -> Unit,
+    onComicSearchClick: () -> Unit,
 ) {
     entry<ImagesRoute> {
-        val output = ImagesViewModel.Output(
+        val imagesOutput = ImagesViewModel.Output(
             openSettings = onSettingsClick,
             openSearch = onSearchClick,
         )
-        val viewModel = koinViewModel<ImagesViewModel>()
-        SideEffect { viewModel.output = output }
-        ImagesScreen(viewModel = viewModel)
+        val imagesViewModel = koinViewModel<ImagesViewModel>()
+        SideEffect { imagesViewModel.output = imagesOutput }
+
+        val comicsOutput = ComicsViewModel.Output(
+            openSettings = onSettingsClick,
+            openSearch = onComicSearchClick,
+        )
+        val comicsViewModel = koinViewModel<ComicsViewModel>()
+        SideEffect { comicsViewModel.output = comicsOutput }
+
+        MediaLibraryScreen(
+            imagesViewModel = imagesViewModel,
+            comicsViewModel = comicsViewModel,
+            tabsViewModel = koinViewModel<LibraryTabsViewModel>(),
+        )
     }
 }

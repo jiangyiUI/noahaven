@@ -77,7 +77,10 @@ import java.text.DateFormat
 import java.util.Date
 
 @Composable
-fun ImagesScreen(viewModel: ImagesViewModel) {
+fun ImagesScreen(
+    viewModel: ImagesViewModel,
+    tabBar: @Composable () -> Unit = {},
+) {
     val state by viewModel.state.collectAsStateWithLifecycle(
         minActiveState = Lifecycle.State.RESUMED,
     )
@@ -110,6 +113,7 @@ fun ImagesScreen(viewModel: ImagesViewModel) {
     ImagesScreenContent(
         state = state,
         onAction = viewModel::onAction,
+        tabBar = tabBar,
         hasStorageAccess = hasStorageAccess,
         onAllFilesAccessGranted = {
             hasStorageAccess = true
@@ -124,6 +128,7 @@ fun ImagesScreen(viewModel: ImagesViewModel) {
 internal fun ImagesScreenContent(
     state: ImagesUiState,
     onAction: (ImagesAction) -> Unit = {},
+    tabBar: @Composable () -> Unit = {},
     hasStorageAccess: Boolean = true,
     onAllFilesAccessGranted: () -> Unit = {},
 ) {
@@ -148,7 +153,7 @@ internal fun ImagesScreenContent(
     if (state.folderPath == null) {
         BindTopLevelFab(
             key = TopLevelFabKey.IMAGES,
-            icon = NextIcons.Play,
+            icon = NextIcons.View,
             onClick = {
                 // 优先继续查看最后一次浏览的图片，没有记录时查看当前第一张
                 val pool = state.images.ifEmpty { state.allImages }
@@ -176,14 +181,18 @@ internal fun ImagesScreenContent(
         topBar = {
             NextTopAppBar(
                 title = {
-                    val titleText = (state.folderName ?: stringResource(R.string.images))
-                        .takeIf { !selectionManager.isInSelectionMode }.orEmpty()
-                    Text(
-                        text = titleText,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        fontWeight = FontWeight.Bold.takeIf { state.folderName == null },
-                    )
+                    if (state.folderPath == null && !selectionManager.isInSelectionMode) {
+                        tabBar()
+                    } else {
+                        val titleText = (state.folderName ?: stringResource(R.string.images))
+                            .takeIf { !selectionManager.isInSelectionMode }.orEmpty()
+                        Text(
+                            text = titleText,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            fontWeight = FontWeight.Bold.takeIf { state.folderName == null },
+                        )
+                    }
                 },
                 navigationIcon = {
                     if (selectionManager.isInSelectionMode) {

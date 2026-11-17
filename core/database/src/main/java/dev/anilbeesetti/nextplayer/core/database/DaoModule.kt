@@ -18,6 +18,12 @@ class DaoModule {
     fun provideImageFileIndexDao(db: MediaDatabase) = db.imageFileIndexDao()
 
     @Factory
+    fun provideComicFileIndexDao(db: MediaDatabase) = db.comicFileIndexDao()
+
+    @Factory
+    fun provideComicProgressDao(db: MediaDatabase) = db.comicProgressDao()
+
+    @Factory
     fun provideHiddenVideoDao(db: MediaDatabase) = db.hiddenVideoDao()
 
     @Factory

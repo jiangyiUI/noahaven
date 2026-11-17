@@ -162,6 +162,33 @@ data class Sort(val by: By, val order: Order) {
         }
     }
 
+    fun comicComparator(): Comparator<ComicFile> {
+        val titleComparator = Comparator<ComicFile> { first, second ->
+            stringComparator.compare(
+                first.displayName.lowercase(),
+                second.displayName.lowercase(),
+            )
+        }
+        val comparator = when (by) {
+            By.TITLE, By.LENGTH -> titleComparator
+
+            By.PATH -> Comparator { first, second ->
+                stringComparator.compare(
+                    first.path.lowercase(),
+                    second.path.lowercase(),
+                )
+            }
+
+            By.SIZE -> compareBy<ComicFile> { it.size }.then(titleComparator)
+
+            By.DATE -> compareBy<ComicFile> { it.dateModified }.then(titleComparator)
+        }
+        return when (order) {
+            Order.ASCENDING -> comparator
+            Order.DESCENDING -> comparator.reversedCompat()
+        }
+    }
+
     fun folderComparator(): Comparator<Folder> {
         val folderNameComparator: Comparator<Folder> = Comparator { folder1, folder2 ->
             return@Comparator stringComparator.compare(

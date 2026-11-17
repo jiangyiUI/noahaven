@@ -8,13 +8,16 @@ import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import dev.anilbeesetti.nextplayer.feature.player.PlayerActivity
 import dev.anilbeesetti.nextplayer.feature.player.utils.PlayerApi
+import dev.anilbeesetti.nextplayer.feature.videopicker.navigation.PendingComicFolder
 import dev.anilbeesetti.nextplayer.feature.videopicker.navigation.PendingImageFolder
 import dev.anilbeesetti.nextplayer.feature.videopicker.navigation.PendingMusicFolder
+import dev.anilbeesetti.nextplayer.feature.videopicker.navigation.comicSearchEntry
 import dev.anilbeesetti.nextplayer.feature.videopicker.navigation.imageSearchEntry
 import dev.anilbeesetti.nextplayer.feature.videopicker.navigation.imagesEntry
 import dev.anilbeesetti.nextplayer.feature.videopicker.navigation.mediaPickerEntry
 import dev.anilbeesetti.nextplayer.feature.videopicker.navigation.musicEntry
 import dev.anilbeesetti.nextplayer.feature.videopicker.navigation.musicSearchEntry
+import dev.anilbeesetti.nextplayer.feature.videopicker.navigation.navigateToComicSearch
 import dev.anilbeesetti.nextplayer.feature.videopicker.navigation.navigateToImageSearch
 import dev.anilbeesetti.nextplayer.feature.videopicker.navigation.navigateToMediaPickerScreen
 import dev.anilbeesetti.nextplayer.feature.videopicker.navigation.navigateToMusicSearch
@@ -73,6 +76,7 @@ fun EntryProviderScope<NavKey>.imagesNavGraph(backStack: NavBackStack<NavKey>) {
     imagesEntry(
         onSettingsClick = backStack::navigateToSettings,
         onSearchClick = backStack::navigateToImageSearch,
+        onComicSearchClick = backStack::navigateToComicSearch,
     )
 
     imageSearchEntry(
@@ -80,6 +84,15 @@ fun EntryProviderScope<NavKey>.imagesNavGraph(backStack: NavBackStack<NavKey>) {
         onOpenFolder = { folderPath ->
             // 记录目标文件夹，返回图片库后由页面消费并进入该目录
             PendingImageFolder.request(folderPath = folderPath)
+            backStack.removeLastIfNotRoot()
+        },
+    )
+
+    comicSearchEntry(
+        onNavigateUp = { backStack.removeLastIfNotRoot() },
+        onOpenFolder = { folderPath ->
+            // 记录目标文件夹，返回漫画库后由页面消费并进入该目录
+            PendingComicFolder.request(folderPath = folderPath)
             backStack.removeLastIfNotRoot()
         },
     )

@@ -3,7 +3,10 @@ package dev.anilbeesetti.nextplayer.feature.more.screens.more
 import androidx.lifecycle.viewModelScope
 import dev.anilbeesetti.nextplayer.core.data.repository.MediaRepository
 import dev.anilbeesetti.nextplayer.core.data.repository.PreferencesRepository
+import dev.anilbeesetti.nextplayer.core.media.index.ComicFileIndex
 import dev.anilbeesetti.nextplayer.core.model.ApplicationPreferences
+import dev.anilbeesetti.nextplayer.core.model.ComicFile
+import dev.anilbeesetti.nextplayer.core.model.ComicProgress
 import dev.anilbeesetti.nextplayer.core.model.Video
 import dev.anilbeesetti.nextplayer.core.ui.base.DataState
 import dev.anilbeesetti.nextplayer.core.ui.base.MviViewModel
@@ -20,6 +23,7 @@ import org.koin.core.annotation.KoinViewModel
 class MoreViewModel(
     private val mediaRepository: MediaRepository,
     private val preferencesRepository: PreferencesRepository,
+    private val comicFileIndex: ComicFileIndex,
     @InjectedParam internal var output: Output,
 ) : MviViewModel<MoreUiState, MoreAction>() {
 
@@ -36,6 +40,21 @@ class MoreViewModel(
                     stateInternal.update { it.copy(history = DataState.Success(value = history)) }
                 }
         }
+        // 漫画阅读记录和视频历史混排展示：进度表按最近阅读时间倒序
+        viewModelScope.launch {
+            comicFileIndex.observeProgress()
+                .catch {
+                    stateInternal.update { it.copy(comicHistory = emptyList()) }
+                }
+                .collect { progresses ->
+                    val entries = progresses.mapNotNull { progress ->
+                        comicFileIndex.find(progress.path)?.let { comic ->
+                            ComicHistoryEntry(comic = comic, progress = progress)
+                        }
+                    }
+                    stateInternal.update { it.copy(comicHistory = entries) }
+                }
+        }
         viewModelScope.launch {
             preferencesRepository.applicationPreferences.collect { preferences ->
                 stateInternal.update { it.copy(preferences = preferences) }
@@ -49,6 +68,8 @@ class MoreViewModel(
 
             is MoreAction.PlayUri -> output.playUri(action.uri)
 
+            is MoreAction.OpenComic -> output.openComic(action.path)
+
             is MoreAction.OpenSettings -> output.openSettings()
 
             is MoreAction.OpenTrash -> output.openTrash()
@@ -59,11 +80,12 @@ class MoreViewModel(
 
             is MoreAction.OpenNetwork -> output.openNetwork()
 
-            is MoreAction.ToggleSelection -> toggleSelection(uriString = action.uriString)
+            is MoreAction.ToggleSelection -> toggleSelection(key = action.key)
 
             is MoreAction.SelectAll -> stateInternal.update { state ->
                 state.copy(
-                    selectedUris = state.history.result.orEmpty().map { it.uriString }.toSet(),
+                    selectedUris = state.history.result.orEmpty().map { it.uriString }.toSet() +
+                        state.comicHistory.map { it.comic.path },
                 )
             }
 
@@ -77,14 +99,14 @@ class MoreViewModel(
         }
     }
 
-    private fun toggleSelection(uriString: String) {
+    private fun toggleSelection(key: String) {
         stateInternal.update { state ->
             val selected = state.selectedUris
             state.copy(
-                selectedUris = if (uriString in selected) {
-                    selected - uriString
+                selectedUris = if (key in selected) {
+                    selected - key
                 } else {
-                    selected + uriString
+                    selected + key
                 },
             )
         }
@@ -92,21 +114,32 @@ class MoreViewModel(
 
     // 只删除选中的历史记录，不动文件
     private fun deleteSelected() {
-        val uris = stateInternal.value.selectedUris.toList()
-        if (uris.isEmpty()) return
+        val state = stateInternal.value
+        val selected = state.selectedUris
+        if (selected.isEmpty()) return
+        val comicPaths = state.comicHistory.mapTo(HashSet()) { it.comic.path }
+        val comicSelection = selected.filter { it in comicPaths }
+        val videoSelection = selected.filter { it !in comicPaths }
         viewModelScope.launch {
-            mediaRepository.removePlaybackHistory(uris = uris)
+            if (videoSelection.isNotEmpty()) {
+                mediaRepository.removePlaybackHistory(uris = videoSelection)
+            }
+            comicSelection.forEach { comicFileIndex.deleteProgress(it) }
             stateInternal.update { it.copy(selectedUris = emptySet()) }
         }
     }
 
     private fun clearHistory() {
-        viewModelScope.launch { mediaRepository.clearPlaybackHistory() }
+        viewModelScope.launch {
+            mediaRepository.clearPlaybackHistory()
+            comicFileIndex.clearProgress()
+        }
     }
 
     data class Output(
         val playVideo: (Video) -> Unit,
         val playUri: (String) -> Unit,
+        val openComic: (String) -> Unit,
         val openSettings: () -> Unit,
         val openTrash: () -> Unit,
         val openVault: () -> Unit,
@@ -117,20 +150,31 @@ class MoreViewModel(
 
 data class MoreUiState(
     val history: DataState<List<Video>> = DataState.Loading,
+    val comicHistory: List<ComicHistoryEntry> = emptyList(),
     val preferences: ApplicationPreferences = ApplicationPreferences(),
     val selectedUris: Set<String> = emptySet(),
+) {
+    /** 历史记录总条数（视频/音频 + 漫画）。 */
+    val historySize: Int get() = history.result.orEmpty().size + comicHistory.size
+}
+
+/** 「更多」页历史列表里的一条漫画阅读记录。 */
+data class ComicHistoryEntry(
+    val comic: ComicFile,
+    val progress: ComicProgress,
 )
 
 sealed interface MoreAction {
     data class PlayVideo(val video: Video) : MoreAction
     data class PlayUri(val uri: String) : MoreAction
+    data class OpenComic(val path: String) : MoreAction
     data object OpenSettings : MoreAction
     data object OpenTrash : MoreAction
     data object OpenVault : MoreAction
     data object OpenPlaylists : MoreAction
     data object OpenNetwork : MoreAction
 
-    data class ToggleSelection(val uriString: String) : MoreAction
+    data class ToggleSelection(val key: String) : MoreAction
     data object SelectAll : MoreAction
     data object ClearSelection : MoreAction
     data object DeleteSelected : MoreAction

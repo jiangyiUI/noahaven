@@ -25,6 +25,7 @@ class MediaLibraryPreferencesViewModel(
         val openFolders: () -> Unit,
         val openAudioFolders: () -> Unit,
         val openImageFolders: () -> Unit,
+        val openComicFolders: () -> Unit,
         val openThumbnails: () -> Unit,
     )
 
@@ -48,6 +49,8 @@ class MediaLibraryPreferencesViewModel(
             is MediaLibraryPreferencesUiEvent.OpenAudioFolders -> output.openAudioFolders()
 
             is MediaLibraryPreferencesUiEvent.OpenImageFolders -> output.openImageFolders()
+
+            is MediaLibraryPreferencesUiEvent.OpenComicFolders -> output.openComicFolders()
 
             is MediaLibraryPreferencesUiEvent.OpenThumbnails -> output.openThumbnails()
 
@@ -126,6 +129,7 @@ sealed interface MediaLibraryPreferencesUiEvent {
     data object OpenFolders : MediaLibraryPreferencesUiEvent
     data object OpenAudioFolders : MediaLibraryPreferencesUiEvent
     data object OpenImageFolders : MediaLibraryPreferencesUiEvent
+    data object OpenComicFolders : MediaLibraryPreferencesUiEvent
     data object OpenThumbnails : MediaLibraryPreferencesUiEvent
 
     data object ToggleMarkLastPlayedMedia : MediaLibraryPreferencesUiEvent
