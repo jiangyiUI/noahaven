@@ -10,11 +10,12 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -48,6 +49,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -255,7 +257,8 @@ fun AboutApp(
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Button(
                 onClick = onGithubClick,
@@ -266,9 +269,8 @@ fun AboutApp(
                     disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = .12f),
                 ),
                 shape = RoundedCornerShape(8.dp),
-                modifier = Modifier
-                    .weight(1f)
-                    .height(52.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                modifier = Modifier.heightIn(min = 56.dp),
             ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_github),
@@ -278,7 +280,7 @@ fun AboutApp(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = stringResource(R.string.github),
-                    maxLines = 1,
+                    maxLines = 2,
                 )
             }
             Button(
@@ -290,9 +292,10 @@ fun AboutApp(
                     disabledContainerColor = MaterialTheme.colorScheme.tertiary.copy(alpha = .12f),
                 ),
                 shape = RoundedCornerShape(8.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp),
                 modifier = Modifier
-                    .weight(1f)
-                    .height(52.dp),
+                    .weight(1f, fill = false)
+                    .heightIn(min = 56.dp),
             ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_github),
@@ -302,8 +305,8 @@ fun AboutApp(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = stringResource(R.string.based_on_nextplayer),
-                    maxLines = 1,
-                    fontSize = 13.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
