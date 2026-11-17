@@ -17,7 +17,7 @@ Noa Player 是一个 Android 原生本地媒体播放器，基于 [Next Player](
 - Android TV 支持
 - 网络存储（SMB / FTP / SFTP / WebDAV）
 - 支持忽略 .nomedia
-  
+
 ## 构建
 
 需要 JDK 17 和 Android SDK。
