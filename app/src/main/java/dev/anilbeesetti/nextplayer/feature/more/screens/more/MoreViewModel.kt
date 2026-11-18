@@ -72,8 +72,6 @@ class MoreViewModel(
 
             is MoreAction.OpenSettings -> output.openSettings()
 
-            is MoreAction.OpenTrash -> output.openTrash()
-
             is MoreAction.OpenVault -> output.openVault()
 
             is MoreAction.OpenPlaylists -> output.openPlaylists()
@@ -141,7 +139,6 @@ class MoreViewModel(
         val playUri: (String) -> Unit,
         val openComic: (String) -> Unit,
         val openSettings: () -> Unit,
-        val openTrash: () -> Unit,
         val openVault: () -> Unit,
         val openPlaylists: () -> Unit,
         val openNetwork: () -> Unit,
@@ -169,7 +166,6 @@ sealed interface MoreAction {
     data class PlayUri(val uri: String) : MoreAction
     data class OpenComic(val path: String) : MoreAction
     data object OpenSettings : MoreAction
-    data object OpenTrash : MoreAction
     data object OpenVault : MoreAction
     data object OpenPlaylists : MoreAction
     data object OpenNetwork : MoreAction

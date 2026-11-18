@@ -7,8 +7,6 @@ import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import dev.anilbeesetti.nextplayer.core.model.Video
 import dev.anilbeesetti.nextplayer.feature.more.navigation.moreEntry
-import dev.anilbeesetti.nextplayer.feature.more.navigation.navigateToTrash
-import dev.anilbeesetti.nextplayer.feature.more.navigation.trashEntry
 import dev.anilbeesetti.nextplayer.feature.network.navigation.navigateToNetwork
 import dev.anilbeesetti.nextplayer.feature.playlist.navigation.PlaylistListRoute
 import dev.anilbeesetti.nextplayer.feature.videopicker.navigation.ComicViewerRoute
@@ -23,7 +21,6 @@ fun EntryProviderScope<NavKey>.moreNavGraph(context: Context, backStack: NavBack
         onPlayUri = { context.startPlayback(it.toUri()) },
         onOpenComic = { path -> backStack.add(ComicViewerRoute(path = path)) },
         onSettingsClick = backStack::navigateToSettings,
-        onTrashClick = backStack::navigateToTrash,
         onVaultClick = backStack::navigateToVault,
         onPlaylistsClick = { backStack.add(PlaylistListRoute) },
         onNetworkClick = backStack::navigateToNetwork,
@@ -31,11 +28,6 @@ fun EntryProviderScope<NavKey>.moreNavGraph(context: Context, backStack: NavBack
 
     comicViewerEntry(
         onNavigateUp = { backStack.removeLastIfNotRoot() },
-    )
-
-    trashEntry(
-        onNavigateUp = { backStack.removeLastIfNotRoot() },
-        onPlayVideo = { context.startPlayback(it.toUri()) },
     )
 
     vaultEntry(

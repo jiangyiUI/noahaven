@@ -36,7 +36,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.ZeroCornerSize
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
@@ -85,7 +84,6 @@ import dev.anilbeesetti.nextplayer.core.common.extensions.hasAllFilesAccess
 import dev.anilbeesetti.nextplayer.core.common.extensions.isTelevision
 import dev.anilbeesetti.nextplayer.core.common.extensions.openAllFilesAccessSettings
 import dev.anilbeesetti.nextplayer.core.domain.MediaHolder
-import dev.anilbeesetti.nextplayer.core.media.services.MediaOperationsService
 import dev.anilbeesetti.nextplayer.core.media.services.TransferMode
 import dev.anilbeesetti.nextplayer.core.media.services.TransferProgress
 import dev.anilbeesetti.nextplayer.core.model.ApplicationPreferences
@@ -545,15 +543,8 @@ internal fun MediaPickerScreenContent(
     if (showDeleteVideosConfirmation) {
         DeleteConfirmationDialog(
             selectionItems = selectionManager.selectionItems,
-            trashSupported = MediaOperationsService.supportsTrash() &&
-                selectionManager.selectionItems.none { item -> item.isFileSystemItem },
-            onConfirm = { permanently ->
-                onAction(
-                    MediaPickerAction.DeleteSelectedItems(
-                        selectionManager.selectionItems,
-                        permanently = permanently,
-                    ),
-                )
+            onConfirm = {
+                onAction(MediaPickerAction.DeleteSelectedItems(selectionManager.selectionItems))
                 selectionManager.exitSelectionMode()
                 showDeleteVideosConfirmation = false
             },
@@ -704,14 +695,12 @@ private fun ProgressSection(label: String, fraction: Float?) {
 internal fun DeleteConfirmationDialog(
     modifier: Modifier = Modifier,
     selectionItems: Set<SelectionItem>,
-    trashSupported: Boolean,
     isAudio: Boolean = false,
-    onConfirm: (Boolean) -> Unit,
+    onConfirm: () -> Unit,
     onCancel: () -> Unit,
 ) {
     val selectedVideos = selectionItems.filterIsInstance<SelectionItem.Video>()
     val selectedFolders = selectionItems.filterIsInstance<SelectionItem.Folder>()
-    var permanently by rememberSaveable { mutableStateOf(value = false) }
 
     NextDialog(
         onDismissRequest = onCancel,
@@ -755,44 +744,23 @@ internal fun DeleteConfirmationDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onConfirm(permanently || !trashSupported) },
+                onClick = onConfirm,
                 modifier = modifier,
             ) {
-                Text(
-                    text = stringResource(
-                        id = if (permanently || !trashSupported) {
-                            R.string.delete
-                        } else {
-                            R.string.move_to_trash
-                        },
-                    ),
-                )
+                Text(text = stringResource(R.string.delete))
             }
         },
         dismissButton = { CancelButton(onClick = onCancel) },
         modifier = modifier,
         content = {
             Text(
-                text = if (permanently || !trashSupported) {
-                    if ((selectedFolders.size + selectedVideos.size) == 1) {
-                        stringResource(R.string.delete_item_info)
-                    } else {
-                        stringResource(R.string.delete_items_info)
-                    }
+                text = if ((selectedFolders.size + selectedVideos.size) == 1) {
+                    stringResource(R.string.delete_item_info)
                 } else {
-                    stringResource(R.string.move_to_trash_info)
+                    stringResource(R.string.delete_items_info)
                 },
                 style = MaterialTheme.typography.titleSmall,
             )
-            if (trashSupported) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = permanently,
-                        onCheckedChange = { permanently = it },
-                    )
-                    Text(text = stringResource(R.string.delete_permanently))
-                }
-            }
         },
     )
 }

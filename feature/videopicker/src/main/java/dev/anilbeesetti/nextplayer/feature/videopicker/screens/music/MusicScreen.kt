@@ -45,7 +45,6 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.anilbeesetti.nextplayer.core.common.extensions.hasAllFilesAccess
 import dev.anilbeesetti.nextplayer.core.common.extensions.openAllFilesAccessSettings
-import dev.anilbeesetti.nextplayer.core.media.services.MediaOperationsService
 import dev.anilbeesetti.nextplayer.core.model.AudioFile
 import dev.anilbeesetti.nextplayer.core.model.PlaylistSummary
 import dev.anilbeesetti.nextplayer.core.ui.R
@@ -473,16 +472,9 @@ internal fun MusicScreenContent(
     if (showDeleteConfirmation) {
         DeleteConfirmationDialog(
             selectionItems = selectionManager.selectionItems,
-            trashSupported = MediaOperationsService.supportsTrash() &&
-                selectionManager.selectionItems.none { item -> item.isFileSystemItem },
             isAudio = true,
-            onConfirm = { permanently ->
-                onAction(
-                    MusicAction.DeleteSelected(
-                        items = selectionManager.selectionItems,
-                        permanently = permanently,
-                    ),
-                )
+            onConfirm = {
+                onAction(MusicAction.DeleteSelected(items = selectionManager.selectionItems))
                 selectionManager.exitSelectionMode()
                 showDeleteConfirmation = false
             },

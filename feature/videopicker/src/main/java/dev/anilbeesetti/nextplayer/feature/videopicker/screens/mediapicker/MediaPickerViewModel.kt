@@ -141,10 +141,7 @@ class MediaPickerViewModel(
 
             is MediaPickerAction.PlaySelectedItems -> playSelectedItems(action.selectionItems)
 
-            is MediaPickerAction.DeleteSelectedItems -> deleteSelectedItems(
-                action.selectionItems,
-                action.permanently,
-            )
+            is MediaPickerAction.DeleteSelectedItems -> deleteSelectedItems(action.selectionItems)
 
             is MediaPickerAction.ShareSelectedItems -> shareSelectedItems(action.selectionItems)
 
@@ -367,12 +364,12 @@ class MediaPickerViewModel(
         }
     }
 
-    private fun deleteSelectedItems(selectedItems: Set<SelectionItem>, permanently: Boolean) {
+    private fun deleteSelectedItems(selectedItems: Set<SelectionItem>) {
         viewModelScope.launch {
             val videoUris = selectedItems.toVideoUris()
             val deleted = mediaOperationsService.deleteMedia(
                 uris = videoUris,
-                permanently = permanently,
+                permanently = true,
             )
             // 文件删除成功后同步清掉它的播放历史，避免历史里残留无法播放的条目
             if (deleted) {
@@ -661,7 +658,6 @@ sealed interface MediaPickerAction {
     data class PlaySelectedItems(val selectionItems: Set<SelectionItem>) : MediaPickerAction
     data class DeleteSelectedItems(
         val selectionItems: Set<SelectionItem>,
-        val permanently: Boolean = false,
     ) : MediaPickerAction
     data class ShareSelectedItems(val selectionItems: Set<SelectionItem>) : MediaPickerAction
     data class CopySelectedItems(val selectionItems: Set<SelectionItem>) : MediaPickerAction

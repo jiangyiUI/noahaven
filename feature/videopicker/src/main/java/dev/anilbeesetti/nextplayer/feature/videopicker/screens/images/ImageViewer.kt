@@ -31,7 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
@@ -89,7 +88,7 @@ fun ImageViewer(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black),
+                .background(MaterialTheme.colorScheme.background),
         ) {
             HorizontalPager(
                 state = pagerState,
@@ -226,7 +225,7 @@ fun ImageViewer(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.TopCenter)
-                        .background(Color.Black.copy(alpha = 0.55f))
+                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.55f))
                         .statusBarsPadding()
                         // 左 0dp + IconButton 内部 12dp 让关闭图标落在约 16dp，和底部页码对齐；
                         // 右 16dp 让标题省略号不越过底部内容的右边缘。
@@ -237,12 +236,12 @@ fun ImageViewer(
                             Icon(
                                 imageVector = NextIcons.Close,
                                 contentDescription = stringResource(R.string.navigate_up),
-                                tint = Color.White,
+                                tint = MaterialTheme.colorScheme.onBackground,
                             )
                         }
                         Text(
                             text = currentImage.nameWithExtension,
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onBackground,
                             style = MaterialTheme.typography.titleMedium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -252,13 +251,13 @@ fun ImageViewer(
                 }
                 Text(
                     text = "${pagerState.currentPage + 1} / ${images.size}",
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onBackground,
                     style = MaterialTheme.typography.labelLarge,
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.55f))
+                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.55f))
                         .navigationBarsPadding()
                         .padding(16.dp),
                 )

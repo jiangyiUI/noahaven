@@ -247,7 +247,6 @@ class MoreViewModelTest {
         playVideo = onPlayVideo,
         playUri = {},
         openSettings = {},
-        openTrash = {},
         openVault = {},
         openPlaylists = {},
         openNetwork = {},

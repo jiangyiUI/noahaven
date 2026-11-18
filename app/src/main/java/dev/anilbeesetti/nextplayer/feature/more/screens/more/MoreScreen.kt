@@ -47,7 +47,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dev.anilbeesetti.nextplayer.core.media.services.MediaOperationsService
 import dev.anilbeesetti.nextplayer.core.model.Video
 import dev.anilbeesetti.nextplayer.core.ui.R
 import dev.anilbeesetti.nextplayer.core.ui.base.DataState
@@ -282,22 +281,6 @@ internal fun MoreScreenContent(state: MoreUiState, onAction: (MoreAction) -> Uni
                             )
                             Spacer(modifier = Modifier.size(8.dp))
                             Text(text = stringResource(R.string.pick_file))
-                        }
-                        if (MediaOperationsService.supportsTrash()) {
-                            FilledTonalButton(
-                                modifier = Modifier.weight(weight = 1f).tvFocusRing(),
-                                onClick = { onAction(MoreAction.OpenTrash) },
-                            ) {
-                                Icon(
-                                    imageVector = NextIcons.Delete,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                                Spacer(modifier = Modifier.size(8.dp))
-                                Text(text = stringResource(R.string.trash))
-                            }
-                        } else {
-                            Spacer(modifier = Modifier.weight(weight = 1f))
                         }
                     }
                     Text(

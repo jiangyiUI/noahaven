@@ -234,10 +234,7 @@ class MusicViewModel(
                 to = action.to,
             )
 
-            is MusicAction.DeleteSelected -> deleteSelected(
-                items = action.items,
-                permanently = action.permanently,
-            )
+            is MusicAction.DeleteSelected -> deleteSelected(items = action.items)
 
             is MusicAction.ShowAddToPlaylist -> {
                 pendingSelection = action.items
@@ -364,13 +361,13 @@ class MusicViewModel(
         }
     }
 
-    private fun deleteSelected(items: Set<SelectionItem>, permanently: Boolean) {
+    private fun deleteSelected(items: Set<SelectionItem>) {
         val uris = items.toAudioUris()
         if (uris.isEmpty()) return
         viewModelScope.launch {
             val deleted = mediaOperationsService.deleteMedia(
                 uris = uris,
-                permanently = permanently,
+                permanently = true,
             )
             if (deleted) {
                 // 文件删除成功后同步清掉它的播放历史，避免历史里残留无法播放的条目
@@ -670,7 +667,7 @@ sealed interface MusicAction {
     data class CopySelected(val items: Set<SelectionItem>) : MusicAction
     data class MoveSelected(val items: Set<SelectionItem>) : MusicAction
     data class RenameSelected(val uri: Uri, val to: String) : MusicAction
-    data class DeleteSelected(val items: Set<SelectionItem>, val permanently: Boolean) : MusicAction
+    data class DeleteSelected(val items: Set<SelectionItem>) : MusicAction
     data class ShowAddToPlaylist(val items: Set<SelectionItem>) : MusicAction
     data object DismissAddToPlaylist : MusicAction
     data class AddSelectionToPlaylist(val playlistId: Long) : MusicAction

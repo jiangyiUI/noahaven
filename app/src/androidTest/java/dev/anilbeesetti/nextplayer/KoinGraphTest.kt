@@ -16,7 +16,6 @@ import dev.anilbeesetti.nextplayer.core.model.ApplicationPreferences
 import dev.anilbeesetti.nextplayer.core.model.PlayerPreferences
 import dev.anilbeesetti.nextplayer.core.model.SearchHistory
 import dev.anilbeesetti.nextplayer.feature.more.screens.more.MoreViewModel
-import dev.anilbeesetti.nextplayer.feature.more.screens.trash.TrashViewModel
 import dev.anilbeesetti.nextplayer.feature.network.screens.addconnection.AddConnectionViewModel
 import dev.anilbeesetti.nextplayer.feature.network.screens.browse.NetworkBrowseViewModel
 import dev.anilbeesetti.nextplayer.feature.network.screens.list.NetworkViewModel
@@ -118,17 +117,9 @@ class KoinGraphTest {
                         playVideo = {},
                         playUri = {},
                         openSettings = {},
-                        openTrash = {},
                         openVault = {},
                         openPlaylists = {},
                         openNetwork = {},
-                    ),
-                )
-                viewModel<TrashViewModel>(
-                    store = store,
-                    TrashViewModel.Output(
-                        navigateUp = {},
-                        playVideo = {},
                     ),
                 )
                 viewModel<NetworkViewModel>(

@@ -45,8 +45,8 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -128,7 +128,7 @@ fun ComicViewer(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(MaterialTheme.colorScheme.background),
     ) {
         HorizontalPager(
             state = pagerState,
@@ -138,6 +138,9 @@ fun ComicViewer(
             // 布局方向跟随阅读方向：右→左模式下下一页在左侧，切页动画方向与手指滑动一致。
             reverseLayout = readingDirection == ComicReadingDirection.RIGHT_TO_LEFT,
             beyondViewportPageCount = 1,
+            // 用条目名做 key：进度条跨页跳转时，旧页的 composition（含已解码的位图）
+            // 不会因为复用 slot 被错当成新页显示，否则会出现上一张盖住当前页的残影。
+            key = { page -> images.entries[page] },
         ) { page ->
             ComicPage(
                 zipPath = images.zipPath,
@@ -183,7 +186,7 @@ fun ComicViewer(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
-                .background(Color.Black.copy(alpha = 0.55f))
+                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.55f))
                 .statusBarsPadding()
                 .padding(start = 0.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
         ) {
@@ -192,12 +195,12 @@ fun ComicViewer(
                     Icon(
                         imageVector = NextIcons.Close,
                         contentDescription = "返回",
-                        tint = Color.White,
+                        tint = MaterialTheme.colorScheme.onBackground,
                     )
                 }
                 Text(
                     text = images.displayName,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onBackground,
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -211,7 +214,7 @@ fun ComicViewer(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .background(Color.Black.copy(alpha = 0.55f))
+                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.55f))
                 .navigationBarsPadding()
                 .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
         ) {
@@ -229,11 +232,17 @@ fun ComicViewer(
                         pagerJob = scope.launch { pagerState.scrollToPage(target) }
                     }
                 },
+                // 松手后再精确落位一次：拖动过程中可能连续跳页，最后补一次整页对齐，
+                // 避免 Pager 停在两页之间导致上一页残留。
+                onScrubFinished = {
+                    pagerJob?.cancel()
+                    pagerJob = scope.launch { pagerState.scrollToPage(currentIndex) }
+                },
             )
             Box(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = "${currentIndex + 1} / ${images.entries.size}",
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onBackground,
                     style = MaterialTheme.typography.labelLarge,
                     modifier = Modifier.align(Alignment.CenterStart),
                 )
@@ -244,7 +253,7 @@ fun ComicViewer(
                 ) {
                     Text(
                         text = "左",
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onBackground,
                         style = MaterialTheme.typography.labelLarge,
                     )
                     Spacer(modifier = Modifier.width(4.dp))
@@ -262,7 +271,7 @@ fun ComicViewer(
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "右",
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onBackground,
                         style = MaterialTheme.typography.labelLarge,
                     )
                 }
@@ -294,10 +303,12 @@ private fun ComicProgressBar(
     currentPage: Int,
     readingDirection: ComicReadingDirection,
     onScrub: (pageIndex: Int) -> Unit,
+    onScrubFinished: () -> Unit,
 ) {
     if (pageCount <= 1) return
     val hapticFeedback = LocalHapticFeedback.current
     val currentOnScrub by rememberUpdatedState(onScrub)
+    val currentOnScrubFinished by rememberUpdatedState(onScrubFinished)
     val lastIndex = (pageCount - 1).toFloat()
     val fraction = (currentPage / lastIndex).coerceIn(0f, 1f)
     CompositionLocalProvider(
@@ -320,6 +331,7 @@ private fun ComicProgressBar(
                     currentOnScrub(index)
                 }
             },
+            onValueChangeFinished = { currentOnScrubFinished() },
             modifier = Modifier
                 .fillMaxWidth()
                 // 加大触摸区域：轨道还是 4dp，但整块可拖动的范围是 48dp 高
@@ -332,7 +344,7 @@ private fun ComicProgressBar(
                             elevation = 4.dp,
                             shape = CircleShape,
                         )
-                        .background(Color.White),
+                        .background(MaterialTheme.colorScheme.onBackground),
                 )
             },
             track = {
@@ -341,7 +353,7 @@ private fun ComicProgressBar(
                         .fillMaxWidth()
                         .height(4.dp)
                         .clip(MaterialTheme.shapes.extraSmall)
-                        .background(Color.White.copy(alpha = 0.5f)),
+                        .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)),
                 ) {
                     Box(
                         modifier = Modifier
@@ -381,6 +393,9 @@ private fun ComicPage(
 
     LaunchedEffect(zipPath, entryName) {
         loading = true
+        // 先清掉上一张的位图：进度条跨页跳转时 composition 可能被复用，
+        // 不清空就会有一帧（或更久）继续画着旧页面。
+        bitmap = null
         bitmap = withContext(Dispatchers.IO) {
             ComicArchiveReader.decodeEntryBitmap(zipPath, entryName)
         }
@@ -405,19 +420,22 @@ private fun ComicPage(
         ) {
             Text(
                 text = "无法读取图片",
-                color = Color.White.copy(alpha = 0.7f),
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
             )
         }
         return
     }
 
     // 画面基准：宽度 = 屏幕宽度（FIT_WIDTH），所以 scale=1 就是「宽度适应屏幕」。
-    // 宽图（比屏幕更宽）默认放大到图片宽度的一半等于屏幕宽度，即 2 倍。
+    // 只有横向跨页才算宽图：按宽度铺满后，图片高度还不到屏幕高度的一半，
+    // 说明它是一张很扁的跨页图，这时默认放大到图片宽度的一半等于屏幕宽度（2 倍）。
+    // 普通竖版页面按宽度铺满后能一屏看全，保持 1 倍。
     val defaultScale = remember(bmp, viewport) {
-        if (viewport.width > 0 && bmp.width * viewport.height > bmp.height * viewport.width) {
-            2f
-        } else {
+        if (viewport.width <= 0) {
             1f
+        } else {
+            val fittedHeight = bmp.height.toFloat() * viewport.width / bmp.width
+            if (fittedHeight < viewport.height * WIDE_IMAGE_HEIGHT_FRACTION) 2f else 1f
         }
     }
     // 宽图默认只显示一半：判断先看左半还是右半。
@@ -453,6 +471,8 @@ private fun ComicPage(
     Box(
         modifier = modifier
             .fillMaxSize()
+            // 放大/平移后的图片严格限制在本页范围内，绝不画到相邻页面上
+            .clipToBounds()
             .onSizeChanged { viewport = it }
             // 双击缩放：默认大小 -> 放大；已放大 -> 回到默认大小
             .pointerInput(entryName, defaultScale, arrivalOffsetX) {
@@ -607,6 +627,13 @@ private fun ComicPage(
 
 /** 缩放上限 */
 private const val MAX_SCALE = 5f
+
+/**
+ * 宽图判定阈值：按屏幕宽度铺满后，图片高度小于屏幕高度的这个比例才算「宽图」。
+ * 取 0.5 的意义：放大 2 倍后高度最多正好铺满屏幕，纵向绝不会被裁掉。
+ * 普通竖版页面铺满后约占屏幕高度的 60%~100%，横向跨页只有 25%~45%。
+ */
+private const val WIDE_IMAGE_HEIGHT_FRACTION = 0.5f
 
 /**
  * 单指平移增益。1f = 画面位移严格等于手指位移（跟手）；
