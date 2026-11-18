@@ -168,23 +168,42 @@ class LocalMediaOperationsService(
     }
 
     override suspend fun renameMedia(uri: Uri, to: String): Boolean = withContext(Dispatchers.IO) {
+        // 各库的输入框只显示不带后缀的名字，用户删掉后缀时统一补回原后缀
+        val targetName = originalDisplayName(uri = uri)?.let { to.withPreservedExtension(it) } ?: to
         return@withContext when {
             uri.scheme == "file" -> renameFileMedia(
                 uri = uri,
-                to = to,
+                to = targetName,
             )
 
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> renameMediaR(
                 uri = uri,
-                to = to,
+                to = targetName,
             )
 
             else -> renameMediaBelowR(
                 uri = uri,
-                to = to,
+                to = targetName,
             )
         }
     }
+
+    /** 取文件当前的名字（含后缀），用于重命名时补回后缀；取不到就返回 null。 */
+    private fun originalDisplayName(uri: Uri): String? = runCatching {
+        if (uri.scheme == "file") {
+            uri.path?.let { File(it).name }
+        } else {
+            contentResolver.query(
+                uri,
+                arrayOf(MediaStore.MediaColumns.DISPLAY_NAME),
+                null,
+                null,
+                null,
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0) else null
+            }
+        }
+    }.getOrNull()
 
     private suspend fun renameFileMedia(uri: Uri, to: String): Boolean = runCatching {
         val oldFile = uri.path?.let(::File) ?: return@runCatching false
@@ -383,6 +402,7 @@ class LocalMediaOperationsService(
         val overallTotal = sizes.sum()
 
         val createdPaths = mutableListOf<String>()
+        val movedFiles = mutableListOf<MovedFile>()
         var originalsNotDeleted = false
         var overallCopied = 0L
         var succeeded = 0
@@ -436,8 +456,18 @@ class LocalMediaOperationsService(
 
             succeeded++
             overallCopied += copied.bytes
-            context.getPath(copied.uri)?.let { createdPaths.add(element = it) }
+            val destinationPath = context.getPath(copied.uri)
+            if (destinationPath != null) createdPaths.add(element = destinationPath)
             if (mode == TransferMode.MOVE) {
+                // 换了实际位置的文件要记下新旧对应关系，调用方据此迁移播放进度和历史
+                if (destinationPath != null) {
+                    movedFiles.add(
+                        MovedFile(
+                            sourceUri = source,
+                            destinationPath = destinationPath,
+                        ),
+                    )
+                }
                 // Finish each committed move even if cancellation arrives after the copy.
                 val deleted = withContext(NonCancellable) {
                     contentResolver.deleteMedia(uri = source)
@@ -456,6 +486,7 @@ class LocalMediaOperationsService(
                     sameFolderSkipped = sameFolder.size,
                     originalsNotDeleted = originalsNotDeleted,
                 ),
+                movedFiles = movedFiles,
             ),
         )
     }.flowOn(Dispatchers.IO)

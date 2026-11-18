@@ -60,6 +60,9 @@ interface MediaRepository {
 
     // 只移除播放历史记录，不影响文件本身
     suspend fun removePlaybackHistory(uris: List<String>)
+
+    /** 重命名/移动换了 uri 后，把播放进度和历史记录迁到新 uri（默认空实现，供测试替身使用）。 */
+    suspend fun movePlaybackState(fromUri: String, toUri: String) {}
     suspend fun updateMediumLastPlayedTime(
         uri: String,
         lastPlayedTime: Long,

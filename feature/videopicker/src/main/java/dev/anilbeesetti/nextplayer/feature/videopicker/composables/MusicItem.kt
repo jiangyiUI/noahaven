@@ -178,13 +178,13 @@ private fun MusicListItem(
             AudioCover(
                 audio = audio,
                 modifier = Modifier.size(size = 52.dp),
-                contentDescription = audio.titleOrDisplayName,
+                contentDescription = audio.displayName,
             )
         },
         content = {
             // 和视频列表一样用 titleMedium，文件名允许换行完整显示
             Text(
-                text = audio.titleOrDisplayName,
+                text = audio.displayName,
                 style = MaterialTheme.typography.titleMedium.copy(lineBreak = LineBreak.Simple),
             )
         },
@@ -294,7 +294,7 @@ private fun MusicGridItem(
                     }
                 }
                 // 标题固定两行高度，单行/双行等高，和视频网格一致
-                val titleText = audio.titleOrDisplayName
+                val titleText = audio.displayName
                 val titleStyle = MaterialTheme.typography.titleMedium.copy(
                     lineBreak = LineBreak.Simple,
                 )

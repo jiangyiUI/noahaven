@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.koin.core.annotation.InjectedParam
@@ -41,8 +42,12 @@ class MoreViewModel(
                 }
         }
         // 漫画阅读记录和视频历史混排展示：进度表按最近阅读时间倒序
+        // 同时跟随索引变化重算，重命名/移动后进度换了路径也能立刻找到对应漫画
         viewModelScope.launch {
-            comicFileIndex.observeProgress()
+            combine(
+                comicFileIndex.observeProgress(),
+                comicFileIndex.entries,
+            ) { progresses, _ -> progresses }
                 .catch {
                     stateInternal.update { it.copy(comicHistory = emptyList()) }
                 }

@@ -1,10 +1,17 @@
 package dev.anilbeesetti.nextplayer.feature.videopicker.screens.comics
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.anilbeesetti.nextplayer.core.common.extensions.prettyName
+import dev.anilbeesetti.nextplayer.core.common.service.system.SystemService
 import dev.anilbeesetti.nextplayer.core.data.repository.PreferencesRepository
 import dev.anilbeesetti.nextplayer.core.media.index.ComicFileIndex
+import dev.anilbeesetti.nextplayer.core.media.services.MediaOperationsService
+import dev.anilbeesetti.nextplayer.core.media.services.TransferEvent
+import dev.anilbeesetti.nextplayer.core.media.services.TransferMode
+import dev.anilbeesetti.nextplayer.core.media.services.TransferProgress
+import dev.anilbeesetti.nextplayer.core.media.services.withPreservedExtension
 import dev.anilbeesetti.nextplayer.core.model.ApplicationPreferences
 import dev.anilbeesetti.nextplayer.core.model.ComicFile
 import dev.anilbeesetti.nextplayer.core.model.ComicProgress
@@ -13,12 +20,15 @@ import dev.anilbeesetti.nextplayer.core.model.Folder
 import dev.anilbeesetti.nextplayer.core.model.ImageLayoutMode
 import dev.anilbeesetti.nextplayer.core.model.MediaViewMode
 import dev.anilbeesetti.nextplayer.core.model.Sort
+import dev.anilbeesetti.nextplayer.feature.videopicker.screens.mediapicker.TransferFlowState
+import dev.anilbeesetti.nextplayer.feature.videopicker.state.SelectionItem
 import java.io.File
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -29,6 +39,8 @@ import org.koin.core.annotation.Factory
 class ComicsViewModel(
     private val comicFileIndex: ComicFileIndex,
     private val preferencesRepository: PreferencesRepository,
+    private val mediaOperationsService: MediaOperationsService,
+    private val systemService: SystemService,
 ) : ViewModel() {
 
     data class Output(
@@ -45,19 +57,31 @@ class ComicsViewModel(
     private val comicsInternal = MutableStateFlow<List<ComicFile>?>(null)
     private val refreshing = MutableStateFlow(false)
 
+    /** 最近阅读过的漫画（按阅读时间倒序取第一条），用于「最近查看」被删掉时继续下一本。 */
+    private val recentComicPath = MutableStateFlow<String?>(null)
+
     /** 进度写库防抖任务：翻页很快时只落最后一次。 */
     private var progressSaveJob: Job? = null
+
+    /** 复制/移动的进度状态，与音乐库共用同一套 TransferFlowState。 */
+    private val transferFlowState = MutableStateFlow<TransferFlowState>(TransferFlowState.Idle)
+    private var transferJob: Job? = null
 
     val state: StateFlow<ComicsUiState> = combine(
         folderPath,
         comicsInternal,
         preferencesRepository.applicationPreferences,
         refreshing,
-    ) { path, comics, preferences, isRefreshing ->
+        combine(transferFlowState, recentComicPath) { transferFlow, recentPath ->
+            transferFlow to recentPath
+        },
+    ) { path, comics, preferences, isRefreshing, transfer ->
         comics.toUiState(
             path = path,
             preferences = preferences,
             refreshing = isRefreshing,
+            transferFlow = transfer.first,
+            recentComicPath = transfer.second,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -72,6 +96,11 @@ class ComicsViewModel(
         refresh()
         viewModelScope.launch {
             comicFileIndex.entries.collect { comicsInternal.value = it }
+        }
+        viewModelScope.launch {
+            comicFileIndex.observeProgress().collect { progresses ->
+                recentComicPath.value = progresses.firstOrNull()?.path
+            }
         }
         viewModelScope.launch {
             preferencesRepository.applicationPreferences.collect { preferences ->
@@ -120,6 +149,170 @@ class ComicsViewModel(
     fun openSettings() = output.openSettings()
 
     fun openSearch() = output.openSearch()
+
+    /** 长按进入选择模式后的操作入口，与音乐库的 onAction 保持一致。 */
+    fun onAction(action: ComicsAction) {
+        when (action) {
+            is ComicsAction.DeleteSelected -> deleteSelected(items = action.items)
+            is ComicsAction.RenameSelected -> renameComic(item = action.item, to = action.to)
+            is ComicsAction.ShareSelected -> shareSelected(items = action.items)
+            is ComicsAction.CopySelected -> transferSelected(
+                items = action.items,
+                mode = TransferMode.COPY,
+            )
+
+            is ComicsAction.MoveSelected -> transferSelected(
+                items = action.items,
+                mode = TransferMode.MOVE,
+            )
+
+            ComicsAction.CancelTransfer -> {
+                transferJob?.cancel()
+                transferJob = null
+                transferFlowState.value = TransferFlowState.Idle
+            }
+        }
+    }
+
+    /** 删除选中的压缩包，文件夹只删其中的 zip，自底向上清掉空目录。 */
+    private fun deleteSelected(items: Set<SelectionItem>) {
+        if (items.isEmpty()) return
+        viewModelScope.launch {
+            val paths = items.toComicPaths()
+            if (paths.isNotEmpty()) {
+                mediaOperationsService.deleteMedia(
+                    uris = paths.map { Uri.fromFile(File(it)) },
+                    permanently = true,
+                )
+                paths.forEach { path -> comicFileIndex.deleteProgress(path) }
+            }
+            val protectedRoots = preferencesRepository.applicationPreferences.value.comicFolders
+                .map(::normalizePath)
+            items.filterIsInstance<SelectionItem.Folder>()
+                .forEach { folder -> deleteEmptyDirectories(File(folder.path), protectedRoots) }
+            refreshIndex()
+        }
+    }
+
+    /** 重命名单个漫画压缩包，成功后强制重扫当前目录。 */
+    private fun renameComic(item: SelectionItem.Video, to: String) {
+        viewModelScope.launch {
+            // 用户把后缀删掉时补回原后缀，否则重命名后文件会从漫画索引里消失
+            val newName = to.withPreservedExtension(File(item.path).name)
+            val renamed = mediaOperationsService.renameMedia(
+                uri = Uri.parse(item.uriString),
+                to = newName,
+            )
+            // 阅读进度按路径存，改名成功后要跟着挪，否则「更多」页的记录会失效
+            if (renamed) {
+                val newPath = File(File(item.path).parentFile, newName).path
+                comicFileIndex.moveProgress(fromPath = item.path, toPath = newPath)
+                // 「最近查看」高亮存的是路径，也要改成新路径
+                if (preferencesRepository.applicationPreferences.value.lastViewedComicPath == item.path) {
+                    preferencesRepository.updateApplicationPreferences {
+                        it.copy(lastViewedComicPath = newPath)
+                    }
+                }
+            }
+            refreshIndex()
+        }
+    }
+
+    private fun shareSelected(items: Set<SelectionItem>) {
+        val uris = items.toComicPaths().map { Uri.fromFile(File(it)) }
+        if (uris.isEmpty()) return
+        viewModelScope.launch {
+            mediaOperationsService.shareMedia(uris = uris, mimeType = COMIC_MIME_TYPE)
+        }
+    }
+
+    /** 复制/移动：先让用户选目标目录，再收集转移进度，结束后刷新漫画索引。 */
+    private fun transferSelected(items: Set<SelectionItem>, mode: TransferMode) {
+        val uris = items.toComicPaths().map { Uri.fromFile(File(it)) }
+        if (uris.isEmpty()) return
+        viewModelScope.launch {
+            val targetFolder = systemService.pickFolder() ?: return@launch
+            transferJob?.cancel()
+            transferFlowState.value = TransferFlowState.Processing(
+                mode = mode,
+                progress = TransferProgress(totalFiles = uris.size),
+            )
+            transferJob = viewModelScope.launch {
+                mediaOperationsService.transferMedia(
+                    uris = uris,
+                    folderUri = targetFolder,
+                    mode = mode,
+                )
+                    .catch { transferFlowState.value = TransferFlowState.Idle }
+                    .collect { event ->
+                        when (event) {
+                            is TransferEvent.Progress -> {
+                                transferFlowState.value = TransferFlowState.Processing(
+                                    mode = mode,
+                                    progress = event.progress,
+                                )
+                            }
+
+                            is TransferEvent.Completed -> {
+                                // 移动换了路径，阅读进度按路径跟随到新位置
+                                event.movedFiles.forEach { moved ->
+                                    val fromPath = moved.sourceUri.path ?: return@forEach
+                                    comicFileIndex.moveProgress(
+                                        fromPath = fromPath,
+                                        toPath = moved.destinationPath,
+                                    )
+                                    // 「最近查看」高亮同样按路径，跟着移动后的位置走
+                                    if (preferencesRepository.applicationPreferences.value.lastViewedComicPath == fromPath) {
+                                        preferencesRepository.updateApplicationPreferences {
+                                            it.copy(lastViewedComicPath = moved.destinationPath)
+                                        }
+                                    }
+                                }
+                                transferFlowState.value = TransferFlowState.Idle
+                                transferJob = null
+                                refreshIndex()
+                            }
+                        }
+                    }
+            }
+        }
+    }
+
+    /** 把选择项换算成磁盘上的 zip 路径；文件夹展开成其下所有已索引的漫画。 */
+    private fun Set<SelectionItem>.toComicPaths(): List<String> {
+        val all = comicFileIndex.entries.value.orEmpty()
+        return flatMap { item ->
+            when (item) {
+                is SelectionItem.Video -> listOf(item.path)
+
+                is SelectionItem.Folder -> {
+                    val prefix = item.path.trimEnd('/') + PATH_SEPARATOR
+                    all.filter { it.path.startsWith(prefix) }.map { it.path }
+                }
+            }
+        }.distinct()
+    }
+
+    /** 自底向上删除空目录；还有内容的目录保持原样。 */
+    private fun deleteEmptyDirectories(directory: File, protectedRoots: List<String>) {
+        val children = directory.listFiles() ?: return
+        children.filter { it.isDirectory }.forEach { deleteEmptyDirectories(it, protectedRoots) }
+        if (directory.listFiles().isNullOrEmpty()) {
+            // 白名单根目录及它们的上级不能删
+            val dirPath = normalizePath(directory.path)
+            val isProtected = dirPath in protectedRoots ||
+                protectedRoots.any { it.startsWith("$dirPath/") }
+            if (!isProtected) directory.delete()
+        }
+    }
+
+    private fun refreshIndex() {
+        comicFileIndex.requestRefresh(
+            whitelistRoots = preferencesRepository.applicationPreferences.value.comicFolders,
+            folderPath = folderPath.value,
+            force = true,
+        )
+    }
 
     /** 快捷设置写回漫画自己的布局/排序偏好，不影响图片库。 */
     fun updatePreferences(preferences: ApplicationPreferences) {
@@ -197,6 +390,8 @@ class ComicsViewModel(
         path: String?,
         preferences: ApplicationPreferences,
         refreshing: Boolean,
+        transferFlow: TransferFlowState,
+        recentComicPath: String?,
     ): ComicsUiState {
         val comicPreferences = preferences.toComicPreferences()
         val roots = preferences.comicFolders.map(::normalizePath).toSet()
@@ -235,6 +430,8 @@ class ComicsViewModel(
             readingDirection = preferences.comicReadingDirection,
             isLoading = this == null,
             refreshing = refreshing,
+            transferFlow = transferFlow,
+            recentComicPath = recentComicPath,
         )
     }
 
@@ -307,6 +504,7 @@ class ComicsViewModel(
     private companion object {
         const val PATH_SEPARATOR = "/"
         const val PROGRESS_SAVE_DELAY_MS = 300L
+        const val COMIC_MIME_TYPE = "application/zip"
     }
 }
 
@@ -323,7 +521,20 @@ data class ComicsUiState(
     val readingDirection: ComicReadingDirection = ComicReadingDirection.RIGHT_TO_LEFT,
     val isLoading: Boolean = false,
     val refreshing: Boolean = false,
+    val transferFlow: TransferFlowState = TransferFlowState.Idle,
+    /** 最近阅读过的漫画路径，用于「最近查看」失效时兜底。 */
+    val recentComicPath: String? = null,
 )
+
+/** 漫画库选择模式下的操作，与音乐库的 MusicAction 对应。 */
+sealed interface ComicsAction {
+    data class DeleteSelected(val items: Set<SelectionItem>) : ComicsAction
+    data class RenameSelected(val item: SelectionItem.Video, val to: String) : ComicsAction
+    data class ShareSelected(val items: Set<SelectionItem>) : ComicsAction
+    data class CopySelected(val items: Set<SelectionItem>) : ComicsAction
+    data class MoveSelected(val items: Set<SelectionItem>) : ComicsAction
+    data object CancelTransfer : ComicsAction
+}
 
 private data class ComicsTree(val folders: List<Folder>, val directComics: List<ComicFile>)
 

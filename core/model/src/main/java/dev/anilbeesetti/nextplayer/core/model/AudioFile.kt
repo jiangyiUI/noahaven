@@ -25,7 +25,4 @@ data class AudioFile(
 ) : Serializable {
 
     val displayName: String = nameWithExtension.substringBeforeLast(delimiter = ".")
-
-    /** 展示用名称：优先用元数据里的标题，没有标题时退回文件名。 */
-    val titleOrDisplayName: String get() = title.ifBlank { displayName }
 }

@@ -31,7 +31,15 @@ enum class TransferMode { COPY, MOVE }
 
 sealed interface TransferEvent {
     data class Progress(val progress: TransferProgress) : TransferEvent
-    data class Completed(val result: TransferResult) : TransferEvent
+
+    /**
+     * @param movedFiles 仅 MOVE 时位置真的变了的文件（旧 uri → 新路径），
+     * 调用方据此把播放进度和历史记录迁移到新位置。
+     */
+    data class Completed(
+        val result: TransferResult,
+        val movedFiles: List<MovedFile> = emptyList(),
+    ) : TransferEvent
 }
 
 data class TransferProgress(
@@ -75,3 +83,16 @@ data class TransferResult(
     val sameFolderSkipped: Int = 0,
     val originalsNotDeleted: Boolean = false,
 )
+
+/** 一次移动里换了位置的文件：旧 uri 与磁盘上的新路径。 */
+data class MovedFile(val sourceUri: Uri, val destinationPath: String)
+
+/**
+ * 重命名输入框只显示不带后缀的名字，用户把后缀删掉时补回原后缀，
+ * 避免文件变成无扩展名；已经带相同后缀（不分大小写）则原样返回。
+ */
+fun String.withPreservedExtension(originalName: String): String {
+    val extension = originalName.substringAfterLast('.', missingDelimiterValue = "")
+    if (extension.isEmpty()) return this
+    return if (endsWith(".$extension", ignoreCase = true)) this else "$this.$extension"
+}

@@ -17,6 +17,7 @@ import dev.anilbeesetti.nextplayer.core.media.services.MediaOperationsService
 import dev.anilbeesetti.nextplayer.core.media.services.TransferEvent
 import dev.anilbeesetti.nextplayer.core.media.services.TransferMode
 import dev.anilbeesetti.nextplayer.core.media.services.TransferProgress
+import dev.anilbeesetti.nextplayer.core.media.services.withPreservedExtension
 import dev.anilbeesetti.nextplayer.core.media.sync.MediaSynchronizer
 import dev.anilbeesetti.nextplayer.core.model.ApplicationPreferences
 import dev.anilbeesetti.nextplayer.core.model.AudioFile
@@ -139,8 +140,10 @@ class MusicViewModel(
         viewModelScope.launch(defaultDispatcher) {
             mediaRepository.observePlaybackHistory().collect { history ->
                 playbackHistory.value = history
+                // 文件被删掉（应用内或外部）后直接跳过，继续找下一个最近播放且仍存在的音频
                 recentlyPlayedAudio.value = history
                     .filter { it.isAudio && it.lastPlayedAt != null }
+                    .filter { File(it.path).exists() }
                     .maxByOrNull { it.lastPlayedAt!!.time }
             }
         }
@@ -333,6 +336,18 @@ class MusicViewModel(
                             }
 
                             is TransferEvent.Completed -> {
+                                // 移动后 uri/路径变了，把播放进度和历史记录迁到新位置
+                                event.movedFiles.forEach { moved ->
+                                    val newUri = audioMediaService
+                                        .fetchAudios(folderPath = File(moved.destinationPath).parent)
+                                        .firstOrNull { it.path == moved.destinationPath }
+                                        ?.uriString
+                                        ?: Uri.fromFile(File(moved.destinationPath)).toString()
+                                    mediaRepository.movePlaybackState(
+                                        fromUri = moved.sourceUri.toString(),
+                                        toUri = newUri,
+                                    )
+                                }
                                 transferFlowState.value = TransferFlowState.Idle
                                 transferJob = null
                                 audioMediaService.requestRefresh(
@@ -349,10 +364,26 @@ class MusicViewModel(
 
     private fun renameAudio(uri: Uri, to: String) {
         viewModelScope.launch {
-            mediaOperationsService.renameMedia(
+            val renamed = mediaOperationsService.renameMedia(
                 uri = uri,
                 to = to,
             )
+            // MediaStore 条目重命名后 uri 不变；file:// 的路径会变，进度和历史要跟过去
+            if (renamed && uri.scheme == "file") {
+                val oldPath = uri.path ?: return@launch
+                // 服务层会补回后缀，这里用同样的最终文件名算新路径
+                val newName = to.withPreservedExtension(File(oldPath).name)
+                val newPath = File(File(oldPath).parentFile, newName).path
+                val newUri = audioMediaService
+                    .fetchAudios(folderPath = File(newPath).parent)
+                    .firstOrNull { it.path == newPath }
+                    ?.uriString
+                    ?: Uri.fromFile(File(newPath)).toString()
+                mediaRepository.movePlaybackState(
+                    fromUri = uri.toString(),
+                    toUri = newUri,
+                )
+            }
             audioMediaService.requestRefresh(
                 folderPath = folderPath.value,
                 force = true,

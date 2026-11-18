@@ -179,6 +179,7 @@ class HistoryViewModelTest {
                     openFolders = {},
                     openAudioFolders = {},
                     openImageFolders = {},
+                    openComicFolders = {},
                     openThumbnails = {},
                 ),
             )

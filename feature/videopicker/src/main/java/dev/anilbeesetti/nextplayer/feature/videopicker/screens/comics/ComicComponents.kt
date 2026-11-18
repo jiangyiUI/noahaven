@@ -2,6 +2,7 @@ package dev.anilbeesetti.nextplayer.feature.videopicker.screens.comics
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -78,8 +79,11 @@ fun ComicLibraryView(
     contentPadding: PaddingValues = PaddingValues(),
     lazyGridState: LazyGridState = rememberLazyGridState(),
     modifier: Modifier = Modifier,
+    selectedIds: Set<String> = emptySet(),
     onFolderClick: (String) -> Unit,
     onComicClick: (ComicFile) -> Unit,
+    onFolderLongClick: (Folder) -> Unit = {},
+    onComicLongClick: (ComicFile) -> Unit = {},
 ) {
     val isTv = LocalContext.current.isTelevision
     val layoutDirection = LocalLayoutDirection.current
@@ -140,7 +144,9 @@ fun ComicLibraryView(
                     preferences = preferences,
                     isFirstItem = index == 0,
                     isLastItem = index == folders.lastIndex,
+                    selected = folder.path in selectedIds,
                     onClick = { onFolderClick(folder.path) },
+                    onLongClick = { onFolderLongClick(folder) },
                     mediaCountLabel = comicsLabel,
                 )
             }
@@ -166,7 +172,10 @@ fun ComicLibraryView(
                     isLastViewed = comic.path == lastViewedPath,
                     isFirstItem = index == 0,
                     isLastItem = index == comics.lastIndex,
+                    // 选择项的 id 是 file:// uri，与 SelectionManager 保持一致
+                    selected = Uri.fromFile(File(comic.path)).toString() in selectedIds,
                     onClick = { onComicClick(comic) },
+                    onLongClick = { onComicLongClick(comic) },
                 )
             }
         }
@@ -214,7 +223,9 @@ fun ComicItem(
     isLastViewed: Boolean = false,
     isFirstItem: Boolean = false,
     isLastItem: Boolean = false,
+    selected: Boolean = false,
     onClick: () -> Unit = {},
+    onLongClick: (() -> Unit)? = null,
 ) {
     when (layoutMode) {
         ImageLayoutMode.LIST -> ComicListItem(
@@ -224,7 +235,9 @@ fun ComicItem(
             isLastViewed = isLastViewed,
             isFirstItem = isFirstItem,
             isLastItem = isLastItem,
+            selected = selected,
             onClick = onClick,
+            onLongClick = onLongClick,
         )
 
         ImageLayoutMode.GRID -> ComicGridItem(
@@ -234,7 +247,9 @@ fun ComicItem(
             isLastViewed = isLastViewed,
             isFirstItem = isFirstItem,
             isLastItem = isLastItem,
+            selected = selected,
             onClick = onClick,
+            onLongClick = onLongClick,
         )
 
         // 九宫格只显示封面
@@ -245,7 +260,9 @@ fun ComicItem(
             isLastViewed = isLastViewed,
             isFirstItem = isFirstItem,
             isLastItem = isLastItem,
+            selected = selected,
             onClick = onClick,
+            onLongClick = onLongClick,
             showFields = false,
         )
     }
@@ -290,12 +307,15 @@ private fun ComicListItem(
     isLastViewed: Boolean,
     isFirstItem: Boolean,
     isLastItem: Boolean,
+    selected: Boolean,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)?,
 ) {
     val highlight = isLastViewed && preferences.markLastPlayedMedia
     val details = comicDetails(comic, preferences)
     NextSegmentedListItem(
         modifier = modifier,
+        selected = selected,
         contentPadding = PaddingValues(8.dp),
         colors = ListItemDefaults.segmentedColors(
             contentColor = if (highlight) {
@@ -313,6 +333,7 @@ private fun ComicListItem(
         isFirstItem = isFirstItem,
         isLastItem = isLastItem,
         onClick = onClick,
+        onLongClick = onLongClick,
         leadingContent = {
             if (preferences.showThumbnailField) {
                 ComicThumbnail(
@@ -361,11 +382,14 @@ private fun ComicGridItem(
     isLastViewed: Boolean,
     isFirstItem: Boolean,
     isLastItem: Boolean,
+    selected: Boolean,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)?,
     showFields: Boolean = true,
 ) {
     NextSegmentedListItem(
         modifier = modifier.fillMaxWidth(),
+        selected = selected,
         contentPadding = PaddingValues(8.dp),
         colors = ListItemDefaults.segmentedColors(
             selectedContainerColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f),
@@ -373,6 +397,7 @@ private fun ComicGridItem(
         isFirstItem = isFirstItem,
         isLastItem = isLastItem,
         onClick = onClick,
+        onLongClick = onLongClick,
         content = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -418,6 +443,18 @@ private fun ComicGridItem(
                             backgroundColor = Color.Black.copy(alpha = 0.6f),
                             contentColor = Color.White,
                             shape = MaterialTheme.shapes.extraSmall,
+                        )
+                    }
+                    // 选择模式下在封面右上角显示勾选标记，与图片库一致
+                    if (selected) {
+                        Icon(
+                            imageVector = NextIcons.Check,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(5.dp)
+                                .size(20.dp),
+                            tint = MaterialTheme.colorScheme.primary,
                         )
                     }
                 }

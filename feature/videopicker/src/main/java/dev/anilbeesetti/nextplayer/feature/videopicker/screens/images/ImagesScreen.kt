@@ -71,6 +71,8 @@ import dev.anilbeesetti.nextplayer.feature.videopicker.composables.QuickSettings
 import dev.anilbeesetti.nextplayer.feature.videopicker.composables.RenameDialog
 import dev.anilbeesetti.nextplayer.feature.videopicker.navigation.PendingImageFolder
 import dev.anilbeesetti.nextplayer.feature.videopicker.screens.mediapicker.SelectionActionsSheet
+import dev.anilbeesetti.nextplayer.feature.videopicker.screens.mediapicker.TransferFlowState
+import dev.anilbeesetti.nextplayer.feature.videopicker.screens.mediapicker.TransferProgressDialog
 import dev.anilbeesetti.nextplayer.feature.videopicker.state.SelectionItem
 import dev.anilbeesetti.nextplayer.feature.videopicker.state.rememberSelectionManager
 import java.text.DateFormat
@@ -176,6 +178,8 @@ internal fun ImagesScreenContent(
         .singleOrNull()
         ?.takeIf { it is SelectionItem.Video }
         ?.let { item -> state.images.firstOrNull { it.uriString == item.id } }
+    // 菜单项按选择类型区分：文件夹只保留删除/复制/移动，图片额外提供重命名/分享/信息
+    val hasImageSelection = selectionManager.selectionItems.any { it is SelectionItem.Video }
 
     Scaffold(
         topBar = {
@@ -298,20 +302,26 @@ internal fun ImagesScreenContent(
                 showRenameAction = singleSelectedImage != null,
                 showInfoAction = singleSelectedImage != null,
                 showHideAction = false,
-                showMoveAction = false,
+                showMoveAction = true,
                 showDeleteAction = true,
                 showPlayAction = false,
                 showAddToPlaylistAction = false,
-                showShareAction = true,
-                showCopyAction = false,
+                showShareAction = hasImageSelection,
+                showCopyAction = true,
                 onPlayAction = {},
                 onAddToPlaylistAction = {},
                 onRenameAction = { renameImageUri = singleSelectedImage?.uriString },
                 onShareAction = {
                     onAction(ImagesAction.ShareSelected(selectionManager.selectionItems))
                 },
-                onCopyAction = {},
-                onMoveAction = {},
+                onCopyAction = {
+                    onAction(ImagesAction.CopySelected(selectionManager.selectionItems))
+                    selectionManager.exitSelectionMode()
+                },
+                onMoveAction = {
+                    onAction(ImagesAction.MoveSelected(selectionManager.selectionItems))
+                    selectionManager.exitSelectionMode()
+                },
                 onInfoAction = {
                     infoImagePath = singleSelectedImage?.path
                     selectionManager.exitSelectionMode()
@@ -417,10 +427,19 @@ internal fun ImagesScreenContent(
         )
     }
 
+    (state.transferFlow as? TransferFlowState.Processing)?.let { transfer ->
+        TransferProgressDialog(
+            mode = transfer.mode,
+            progress = transfer.progress,
+            onCancel = { onAction(ImagesAction.CancelTransfer) },
+        )
+    }
+
     renameImageUri?.let { uri ->
         state.images.firstOrNull { it.uriString == uri }?.let { image ->
             RenameDialog(
-                name = image.nameWithExtension,
+                // 和视频/音乐一致：输入框只显示不带后缀的名字，后缀由重命名逻辑自动补回
+                name = image.displayName,
                 onDismiss = { renameImageUri = null },
                 onDone = {
                     onAction(

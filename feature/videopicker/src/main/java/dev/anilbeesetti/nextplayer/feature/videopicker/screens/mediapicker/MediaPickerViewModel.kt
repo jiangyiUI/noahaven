@@ -23,6 +23,7 @@ import dev.anilbeesetti.nextplayer.core.media.services.TransferEvent
 import dev.anilbeesetti.nextplayer.core.media.services.TransferMode
 import dev.anilbeesetti.nextplayer.core.media.services.TransferProgress
 import dev.anilbeesetti.nextplayer.core.media.services.TransferResult
+import dev.anilbeesetti.nextplayer.core.media.services.withPreservedExtension
 import dev.anilbeesetti.nextplayer.core.media.sync.MediaSynchronizer
 import dev.anilbeesetti.nextplayer.core.model.ApplicationPreferences
 import dev.anilbeesetti.nextplayer.core.model.Folder
@@ -106,8 +107,10 @@ class MediaPickerViewModel(
     private fun collectGlobalRecentlyPlayedVideo() {
         viewModelScope.launch {
             mediaRepository.observePlaybackHistory().collect { history ->
+                // 文件被删掉（应用内或外部）后直接跳过，继续找下一个最近播放且仍存在的视频
                 val recentVideo = history
                     .filter { video -> !video.isAudio && video.lastPlayedAt != null }
+                    .filter { video -> video.path.isNotBlank() && File(video.path).exists() }
                     .maxByOrNull { video -> video.lastPlayedAt?.time ?: 0L }
                 stateInternal.update { it.copy(globalRecentlyPlayedVideo = recentVideo) }
             }
@@ -431,6 +434,18 @@ class MediaPickerViewModel(
                     }
 
                     is TransferEvent.Completed -> {
+                        // 移动后 uri/路径变了，把播放进度和历史记录迁到新位置
+                        event.movedFiles.forEach { moved ->
+                            val newUri = mediaRepository
+                                .fetchVideos(folderPath = File(moved.destinationPath).parent)
+                                .firstOrNull { it.path == moved.destinationPath }
+                                ?.uriString
+                                ?: Uri.fromFile(File(moved.destinationPath)).toString()
+                            mediaRepository.movePlaybackState(
+                                fromUri = moved.sourceUri.toString(),
+                                toUri = newUri,
+                            )
+                        }
                         stateInternal.update { it.copy(transferFlow = TransferFlowState.Idle) }
                         showTransferCompleteToast(
                             mode = mode,
@@ -498,10 +513,26 @@ class MediaPickerViewModel(
 
     private fun renameVideo(uri: Uri, to: String) {
         viewModelScope.launch {
-            mediaOperationsService.renameMedia(
+            val renamed = mediaOperationsService.renameMedia(
                 uri = uri,
                 to = to,
             )
+            // MediaStore 条目重命名后 uri 不变；file:// 的路径会变，进度和历史要跟过去
+            if (renamed && uri.scheme == "file") {
+                val oldPath = uri.path ?: return@launch
+                // 服务层会补回后缀，这里用同样的最终文件名算新路径
+                val newName = to.withPreservedExtension(File(oldPath).name)
+                val newPath = File(File(oldPath).parentFile, newName).path
+                val newUri = mediaRepository
+                    .fetchVideos(folderPath = File(newPath).parent)
+                    .firstOrNull { it.path == newPath }
+                    ?.uriString
+                    ?: Uri.fromFile(File(newPath)).toString()
+                mediaRepository.movePlaybackState(
+                    fromUri = uri.toString(),
+                    toUri = newUri,
+                )
+            }
         }
     }
 

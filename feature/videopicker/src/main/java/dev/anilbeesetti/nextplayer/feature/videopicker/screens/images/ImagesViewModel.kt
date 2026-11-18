@@ -8,24 +8,32 @@ import androidx.lifecycle.viewModelScope
 import dev.anilbeesetti.nextplayer.core.common.di.DiQualifiers
 import dev.anilbeesetti.nextplayer.core.common.extensions.hasAllFilesAccess
 import dev.anilbeesetti.nextplayer.core.common.extensions.prettyName
+import dev.anilbeesetti.nextplayer.core.common.service.system.SystemService
 import dev.anilbeesetti.nextplayer.core.data.repository.PreferencesRepository
 import dev.anilbeesetti.nextplayer.core.media.index.ImageFileIndex
 import dev.anilbeesetti.nextplayer.core.media.services.MediaOperationsService
+import dev.anilbeesetti.nextplayer.core.media.services.TransferEvent
+import dev.anilbeesetti.nextplayer.core.media.services.TransferMode
+import dev.anilbeesetti.nextplayer.core.media.services.TransferProgress
 import dev.anilbeesetti.nextplayer.core.model.ApplicationPreferences
 import dev.anilbeesetti.nextplayer.core.model.Folder
 import dev.anilbeesetti.nextplayer.core.model.ImageFile
 import dev.anilbeesetti.nextplayer.core.model.MediaViewMode
 import dev.anilbeesetti.nextplayer.core.model.Sort
+import dev.anilbeesetti.nextplayer.feature.videopicker.screens.mediapicker.TransferFlowState
 import dev.anilbeesetti.nextplayer.feature.videopicker.state.SelectionItem
 import java.io.File
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.core.annotation.KoinViewModel
 import org.koin.core.annotation.Named
 
@@ -34,6 +42,7 @@ class ImagesViewModel(
     private val imageFileIndex: ImageFileIndex,
     private val preferencesRepository: PreferencesRepository,
     private val mediaOperationsService: MediaOperationsService,
+    private val systemService: SystemService,
     private val context: Context,
     @Named(DiQualifiers.DEFAULT_DISPATCHER) private val defaultDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
@@ -51,17 +60,22 @@ class ImagesViewModel(
     private val folderHistory = mutableListOf<String?>()
     private val imagesInternal = MutableStateFlow<List<ImageFile>?>(null)
     private val refreshing = MutableStateFlow(false)
+    private val transferFlowState = MutableStateFlow<TransferFlowState>(TransferFlowState.Idle)
+
+    private var transferJob: Job? = null
 
     val state: StateFlow<ImagesUiState> = combine(
         folderPath,
         imagesInternal,
         preferencesRepository.applicationPreferences,
         refreshing,
-    ) { path, images, preferences, isRefreshing ->
+        transferFlowState,
+    ) { path, images, preferences, isRefreshing, transferFlow ->
         images.toUiState(
             path = path,
             preferences = preferences,
             refreshing = isRefreshing,
+            transferFlow = transferFlow,
         )
     }
         .flowOn(defaultDispatcher)
@@ -129,6 +143,22 @@ class ImagesViewModel(
             )
 
             is ImagesAction.DeleteSelected -> deleteSelected(action.items)
+
+            is ImagesAction.CopySelected -> transferSelected(
+                action.items,
+                mode = TransferMode.COPY,
+            )
+
+            is ImagesAction.MoveSelected -> transferSelected(
+                action.items,
+                mode = TransferMode.MOVE,
+            )
+
+            ImagesAction.CancelTransfer -> {
+                transferJob?.cancel()
+                transferJob = null
+                transferFlowState.value = TransferFlowState.Idle
+            }
         }
     }
 
@@ -216,13 +246,77 @@ class ImagesViewModel(
 
     private fun deleteSelected(items: Set<SelectionItem>) {
         val images = items.toImageFiles()
-        if (images.isEmpty()) return
+        // 文件夹选中时，图片删完后还要把这些目录下的空目录清理掉
+        val folderPaths = items.filterIsInstance<SelectionItem.Folder>().map { it.path }
+        if (images.isEmpty() && folderPaths.isEmpty()) return
         viewModelScope.launch {
-            val deleted = mediaOperationsService.deleteMedia(
-                uris = images.map { it.uriString.toUri() },
-                permanently = true,
+            if (images.isNotEmpty()) {
+                val deleted = mediaOperationsService.deleteMedia(
+                    uris = images.map { it.uriString.toUri() },
+                    permanently = true,
+                )
+                if (deleted) imageFileIndex.removePaths(images.map { it.path })
+            }
+            deleteEmptyDirectories(folderPaths)
+            if (folderPaths.isNotEmpty()) refresh(force = true)
+        }
+    }
+
+    private suspend fun deleteEmptyDirectories(paths: List<String>) {
+        if (paths.isEmpty()) return
+        // 白名单根目录本身及它们的上级不能删，否则下次扫描会少一个入口
+        val protectedRoots = preferencesRepository.applicationPreferences.value.imageFolders
+            .map(::normalizePath)
+        withContext(defaultDispatcher) {
+            paths.forEach { path ->
+                // 自底向上按路径长度倒序清理：只删空目录，非空目录和普通文件保持原样
+                File(path).walkBottomUp()
+                    .filter { it.isDirectory }
+                    .sortedByDescending { it.path.length }
+                    .forEach { dir ->
+                        val dirPath = normalizePath(dir.path)
+                        if (dirPath in protectedRoots) return@forEach
+                        if (protectedRoots.any { it.startsWith("$dirPath/") }) return@forEach
+                        if (dir.listFiles()?.isEmpty() == true) dir.delete()
+                    }
+            }
+        }
+    }
+
+    private fun transferSelected(items: Set<SelectionItem>, mode: TransferMode) {
+        val uris = items.toImageUris()
+        if (uris.isEmpty()) return
+        viewModelScope.launch {
+            val targetFolder = systemService.pickFolder() ?: return@launch
+            transferJob?.cancel()
+            transferFlowState.value = TransferFlowState.Processing(
+                mode = mode,
+                progress = TransferProgress(totalFiles = uris.size),
             )
-            if (deleted) imageFileIndex.removePaths(images.map { it.path })
+            transferJob = viewModelScope.launch {
+                mediaOperationsService.transferMedia(
+                    uris,
+                    targetFolder,
+                    mode,
+                )
+                    .catch { transferFlowState.value = TransferFlowState.Idle }
+                    .collect { event ->
+                        when (event) {
+                            is TransferEvent.Progress -> {
+                                transferFlowState.value = TransferFlowState.Processing(
+                                    mode = mode,
+                                    progress = event.progress,
+                                )
+                            }
+
+                            is TransferEvent.Completed -> {
+                                transferFlowState.value = TransferFlowState.Idle
+                                transferJob = null
+                                refresh(force = true)
+                            }
+                        }
+                    }
+            }
         }
     }
 
@@ -267,6 +361,7 @@ class ImagesViewModel(
         path: String?,
         preferences: ApplicationPreferences,
         refreshing: Boolean,
+        transferFlow: TransferFlowState,
     ): ImagesUiState {
         val imagePreferences = preferences.toImagePreferences()
         val roots = preferences.imageFolders.map(::normalizePath).toSet()
@@ -316,6 +411,7 @@ class ImagesViewModel(
             isLoading = this == null,
             hasAllFilesAccess = context.hasAllFilesAccess(),
             refreshing = refreshing,
+            transferFlow = transferFlow,
         )
     }
 
@@ -420,6 +516,7 @@ data class ImagesUiState(
     val isLoading: Boolean = false,
     val hasAllFilesAccess: Boolean = true,
     val refreshing: Boolean = false,
+    val transferFlow: TransferFlowState = TransferFlowState.Idle,
 )
 
 private data class ImagesTree(val folders: List<Folder>, val directImages: List<ImageFile>)
@@ -437,6 +534,9 @@ sealed interface ImagesAction {
     data class ShareSelected(val items: Set<SelectionItem>) : ImagesAction
     data class RenameSelected(val uri: Uri, val to: String) : ImagesAction
     data class DeleteSelected(val items: Set<SelectionItem>) : ImagesAction
+    data class CopySelected(val items: Set<SelectionItem>) : ImagesAction
+    data class MoveSelected(val items: Set<SelectionItem>) : ImagesAction
+    data object CancelTransfer : ImagesAction
     data object Refresh : ImagesAction
 }
 

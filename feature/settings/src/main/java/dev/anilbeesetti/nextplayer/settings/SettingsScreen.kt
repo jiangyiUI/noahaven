@@ -14,12 +14,14 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.anilbeesetti.nextplayer.core.ui.R
 import dev.anilbeesetti.nextplayer.core.ui.components.ClickablePreferenceItem
 import dev.anilbeesetti.nextplayer.core.ui.components.NextTopAppBar
@@ -28,22 +30,44 @@ import dev.anilbeesetti.nextplayer.core.ui.components.restorableFocusGroup
 import dev.anilbeesetti.nextplayer.core.ui.components.restorableFocusItem
 import dev.anilbeesetti.nextplayer.core.ui.components.tvFocusDown
 import dev.anilbeesetti.nextplayer.core.ui.designsystem.NextIcons
+import dev.anilbeesetti.nextplayer.settings.update.UpdateDialogs
+import dev.anilbeesetti.nextplayer.settings.update.UpdateViewModel
+import org.koin.compose.viewmodel.koinViewModel
 
 data class SettingsOutput(val navigateUp: () -> Unit, val openSetting: (Setting) -> Unit)
 
 private sealed interface SettingsAction {
     data object NavigateUp : SettingsAction
     data class OpenSetting(val setting: Setting) : SettingsAction
+    data object CheckForUpdates : SettingsAction
 }
 
 @Composable
-fun SettingsScreen(output: SettingsOutput) {
+fun SettingsScreen(
+    output: SettingsOutput,
+    updateViewModel: UpdateViewModel = koinViewModel(),
+) {
+    val updateState by updateViewModel.state.collectAsStateWithLifecycle()
+
     SettingsScreenContent { action ->
         when (action) {
             is SettingsAction.NavigateUp -> output.navigateUp()
             is SettingsAction.OpenSetting -> output.openSetting(action.setting)
+            is SettingsAction.CheckForUpdates -> updateViewModel.checkForUpdates()
         }
     }
+
+    UpdateDialogs(
+        state = updateState,
+        mirrors = updateViewModel.mirrors,
+        lastMirrorId = updateViewModel.lastMirrorId,
+        lastCustomPrefix = updateViewModel.lastCustomPrefix,
+        onDismiss = updateViewModel::dismiss,
+        onChooseMirror = updateViewModel::chooseMirror,
+        onDownload = updateViewModel::download,
+        onCancelDownload = updateViewModel::cancelDownload,
+        onInstall = updateViewModel::install,
+    )
 }
 
 @OptIn(
@@ -94,7 +118,14 @@ private fun SettingsScreenContent(onAction: (SettingsAction) -> Unit) {
                         title = stringResource(id = row.titleResId),
                         description = stringResource(id = row.descriptionResId),
                         icon = row.icon,
-                        onClick = { onAction(SettingsAction.OpenSetting(row.setting)) },
+                        onClick = {
+                            val setting = row.setting
+                            if (setting != null) {
+                                onAction(SettingsAction.OpenSetting(setting))
+                            } else {
+                                onAction(SettingsAction.CheckForUpdates)
+                            }
+                        },
                         isFirstItem = index == 0,
                         isLastItem = index == settingRows.lastIndex,
                     )
@@ -119,7 +150,8 @@ private enum class SettingRow(
     val titleResId: Int,
     val descriptionResId: Int,
     val icon: ImageVector,
-    val setting: Setting,
+    /** null 表示这一行不跳转页面，而是直接执行检查更新。 */
+    val setting: Setting?,
 ) {
     APPEARANCE(
         titleResId = R.string.appearance_name,
@@ -162,6 +194,12 @@ private enum class SettingRow(
         descriptionResId = R.string.general_description,
         icon = NextIcons.ExtraSettings,
         setting = Setting.GENERAL,
+    ),
+    UPDATE(
+        titleResId = R.string.check_update_name,
+        descriptionResId = R.string.check_update_description,
+        icon = NextIcons.Update,
+        setting = null,
     ),
     ABOUT(
         titleResId = R.string.about_name,

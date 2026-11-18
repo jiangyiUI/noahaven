@@ -29,6 +29,9 @@ interface ComicFileIndex {
     /** 删除单本漫画的阅读进度。 */
     suspend fun deleteProgress(path: String)
 
+    /** 压缩包重命名/移动后，把阅读进度挪到新路径。 */
+    suspend fun moveProgress(fromPath: String, toPath: String)
+
     /** 清空全部漫画阅读进度。 */
     suspend fun clearProgress()
 }

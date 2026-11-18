@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -96,10 +97,28 @@ class RoomComicFileIndex(
     }
 
     override fun observeProgress(): Flow<List<ComicProgress>> =
-        progressDao.observeAll().map { entities -> entities.map { it.toModel() } }
+        progressDao.observeAll()
+            // 应用外部删除文件后，清掉失效进度，避免历史记录里留下看不到内容的残行
+            .onStart { pruneMissingProgress() }
+            .map { entities -> entities.map { it.toModel() } }
+
+    /** 磁盘上已经不存在的漫画，对应进度直接删除。 */
+    private suspend fun pruneMissingProgress() = withContext(Dispatchers.IO) {
+        val states = runCatching { progressDao.getAll() }.getOrNull().orEmpty()
+        val missing = states
+            .filterNot { File(it.path).exists() }
+            .map { it.path }
+        if (missing.isEmpty()) return@withContext
+        runCatching { missing.forEach { path -> progressDao.delete(path) } }
+    }
 
     override suspend fun deleteProgress(path: String) {
         withContext(Dispatchers.IO) { progressDao.delete(path) }
+    }
+
+    override suspend fun moveProgress(fromPath: String, toPath: String) {
+        if (fromPath == toPath) return
+        withContext(Dispatchers.IO) { progressDao.move(fromPath = fromPath, toPath = toPath) }
     }
 
     override suspend fun clearProgress() {

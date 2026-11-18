@@ -21,6 +21,15 @@ interface MediumStateDao {
         upsert(mediumState = transform(get(uri = uri) ?: MediumStateEntity(uriString = uri)))
     }
 
+    /** 文件重命名/移动导致 uri 变化时，把播放进度与历史整条搬到新 uri。 */
+    @Transaction
+    suspend fun move(fromUri: String, toUri: String) {
+        if (fromUri == toUri) return
+        val state = get(uri = fromUri) ?: return
+        upsert(mediumState = state.copy(uriString = toUri))
+        delete(uris = listOf(fromUri))
+    }
+
     @Query("SELECT * FROM media_state WHERE uri = :uri")
     suspend fun get(uri: String): MediumStateEntity?
 

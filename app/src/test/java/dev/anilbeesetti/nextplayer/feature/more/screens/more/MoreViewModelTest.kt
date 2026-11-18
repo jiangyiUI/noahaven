@@ -4,6 +4,9 @@ import androidx.lifecycle.viewModelScope
 import dev.anilbeesetti.nextplayer.core.data.repository.MediaRepository
 import dev.anilbeesetti.nextplayer.core.data.repository.fake.FakeMediaRepository
 import dev.anilbeesetti.nextplayer.core.data.repository.fake.FakePreferencesRepository
+import dev.anilbeesetti.nextplayer.core.media.index.ComicFileIndex
+import dev.anilbeesetti.nextplayer.core.model.ComicFile
+import dev.anilbeesetti.nextplayer.core.model.ComicProgress
 import dev.anilbeesetti.nextplayer.core.model.Video
 import dev.anilbeesetti.nextplayer.core.ui.base.DataState
 import dev.anilbeesetti.nextplayer.settings.screens.medialibrary.MediaLibraryPreferencesUiEvent
@@ -11,8 +14,10 @@ import dev.anilbeesetti.nextplayer.settings.screens.medialibrary.MediaLibraryPre
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
@@ -53,6 +58,7 @@ class MoreViewModelTest {
         viewModel = MoreViewModel(
             mediaRepository = repository,
             preferencesRepository = preferences,
+            comicFileIndex = FakeComicFileIndex(),
             output = defaultOutput(),
         )
     }
@@ -97,6 +103,7 @@ class MoreViewModelTest {
                     override fun observePlaybackHistory() = pendingHistory
                 },
                 preferencesRepository = preferences,
+                comicFileIndex = FakeComicFileIndex(),
                 output = defaultOutput(),
             )
             preferences.updateApplicationPreferences { it.copy(showExtensionField = true) }
@@ -155,6 +162,7 @@ class MoreViewModelTest {
                     openFolders = {},
                     openAudioFolders = {},
                     openImageFolders = {},
+                    openComicFolders = {},
                     openThumbnails = {},
                 ),
             )
@@ -246,9 +254,34 @@ class MoreViewModelTest {
     private fun defaultOutput(onPlayVideo: (Video) -> Unit = {}) = MoreViewModel.Output(
         playVideo = onPlayVideo,
         playUri = {},
+        openComic = {},
         openSettings = {},
         openVault = {},
         openPlaylists = {},
         openNetwork = {},
     )
+}
+
+private class FakeComicFileIndex : ComicFileIndex {
+    override val entries = MutableStateFlow<List<ComicFile>?>(value = null)
+
+    override fun requestRefresh(
+        whitelistRoots: Collection<String>,
+        folderPath: String?,
+        force: Boolean,
+    ) = Unit
+
+    override suspend fun find(path: String): ComicFile? = null
+
+    override suspend fun getProgress(path: String): ComicProgress? = null
+
+    override suspend fun saveProgress(progress: ComicProgress) = Unit
+
+    override fun observeProgress(): Flow<List<ComicProgress>> = flowOf(emptyList())
+
+    override suspend fun deleteProgress(path: String) = Unit
+
+    override suspend fun moveProgress(fromPath: String, toPath: String) = Unit
+
+    override suspend fun clearProgress() = Unit
 }

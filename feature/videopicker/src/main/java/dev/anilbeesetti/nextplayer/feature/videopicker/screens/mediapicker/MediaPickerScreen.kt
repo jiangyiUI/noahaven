@@ -210,7 +210,8 @@ internal fun MediaPickerScreenContent(
         val globalRecentVideo = state.globalRecentlyPlayedVideo
             ?.takeIf { video -> File(video.path).exists() }
         val selectedItem = globalRecentVideo?.toSelectedVideo()
-            ?: state.recentlyPlayedVideo?.toSelectedVideo()
+            ?: state.recentlyPlayedVideo?.takeIf { video -> File(video.path).exists() }
+                ?.toSelectedVideo()
             ?: if (state.folderName == null) {
                 mediaHolder?.folders?.firstOrNull()?.toSelectedFolder()
                     ?: mediaHolder?.videos?.firstOrNull()?.toSelectedVideo()
@@ -696,6 +697,7 @@ internal fun DeleteConfirmationDialog(
     modifier: Modifier = Modifier,
     selectionItems: Set<SelectionItem>,
     isAudio: Boolean = false,
+    comicMode: Boolean = false,
     onConfirm: () -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -707,6 +709,11 @@ internal fun DeleteConfirmationDialog(
         title = {
             Text(
                 text = when {
+                    comicMode -> stringResource(
+                        R.string.delete_items,
+                        selectionItems.size,
+                    )
+
                     isAudio -> when (selectionItems.size) {
                         1 -> stringResource(R.string.delete_one_audio)
 

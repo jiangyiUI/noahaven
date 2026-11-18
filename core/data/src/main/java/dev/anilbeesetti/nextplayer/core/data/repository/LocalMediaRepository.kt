@@ -200,6 +200,13 @@ class LocalMediaRepository(
         mediumStateDao.clearLastPlayedTimes(uris = uris)
     }
 
+    override suspend fun movePlaybackState(fromUri: String, toUri: String) {
+        if (fromUri == toUri) return
+        withContext(Dispatchers.IO) {
+            mediumStateDao.move(fromUri = fromUri, toUri = toUri)
+        }
+    }
+
     override suspend fun updateMediumLastPlayedTime(
         uri: String,
         lastPlayedTime: Long,

@@ -46,6 +46,7 @@ dependencies {
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.okhttp)
 
     // Compose
     implementation(platform(libs.androidx.compose.bom))
