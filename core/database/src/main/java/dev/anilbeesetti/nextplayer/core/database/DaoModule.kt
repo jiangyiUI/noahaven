@@ -24,6 +24,9 @@ class DaoModule {
     fun provideComicProgressDao(db: MediaDatabase) = db.comicProgressDao()
 
     @Factory
+    fun provideComicPasswordDao(db: MediaDatabase) = db.comicPasswordDao()
+
+    @Factory
     fun provideHiddenVideoDao(db: MediaDatabase) = db.hiddenVideoDao()
 
     @Factory

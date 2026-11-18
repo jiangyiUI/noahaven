@@ -82,6 +82,8 @@ data class ComicImageList(
     val zipPath: String,
     val entries: List<String>,
     val readingDirection: ComicReadingDirection,
+    /** 加密压缩包/PDF 的解压密码，普通漫画为 null。 */
+    val password: String? = null,
 ) {
     val displayName: String get() = zipPath.substringAfterLast('/').substringBeforeLast('.')
 }
@@ -145,6 +147,7 @@ fun ComicViewer(
             ComicPage(
                 zipPath = images.zipPath,
                 entryName = images.entries[page],
+                password = images.password,
                 readingDirection = readingDirection,
                 isCurrentPage = page == currentIndex,
                 arrivedBackward = arrivedBackward,
@@ -371,6 +374,7 @@ private fun ComicProgressBar(
 private fun ComicPage(
     zipPath: String,
     entryName: String,
+    password: String?,
     readingDirection: ComicReadingDirection,
     isCurrentPage: Boolean,
     // 是否是从「下一张」往回翻到达本页：往回翻时先显示默认半边的另一边
@@ -391,13 +395,13 @@ private fun ComicPage(
     // 松手惯性滑动
     var inertiaJob by remember { mutableStateOf<Job?>(null) }
 
-    LaunchedEffect(zipPath, entryName) {
+    LaunchedEffect(zipPath, entryName, password) {
         loading = true
         // 先清掉上一张的位图：进度条跨页跳转时 composition 可能被复用，
         // 不清空就会有一帧（或更久）继续画着旧页面。
         bitmap = null
         bitmap = withContext(Dispatchers.IO) {
-            ComicArchiveReader.decodeEntryBitmap(zipPath, entryName)
+            ComicArchiveReader.decodeEntryBitmap(zipPath, entryName, password)
         }
         loading = false
     }

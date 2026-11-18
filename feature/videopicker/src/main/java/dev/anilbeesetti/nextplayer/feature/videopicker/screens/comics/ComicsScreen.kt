@@ -50,6 +50,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.anilbeesetti.nextplayer.core.common.extensions.hasAllFilesAccess
 import dev.anilbeesetti.nextplayer.core.common.extensions.openAllFilesAccessSettings
 import dev.anilbeesetti.nextplayer.core.media.index.ComicArchiveReader
+import dev.anilbeesetti.nextplayer.core.media.index.ComicOpenResult
 import dev.anilbeesetti.nextplayer.core.model.ComicFile
 import dev.anilbeesetti.nextplayer.core.model.ComicReadingDirection
 import dev.anilbeesetti.nextplayer.core.ui.R
@@ -61,6 +62,8 @@ import dev.anilbeesetti.nextplayer.core.ui.components.TopLevelFabKey
 import dev.anilbeesetti.nextplayer.core.ui.composables.AllFilesAccessView
 import dev.anilbeesetti.nextplayer.core.ui.designsystem.NextIcons
 import dev.anilbeesetti.nextplayer.feature.videopicker.composables.CenterCircularProgressBar
+import dev.anilbeesetti.nextplayer.feature.videopicker.composables.ComicPasswordDialog
+import dev.anilbeesetti.nextplayer.feature.videopicker.composables.ComicPasswordUnsupportedDialog
 import dev.anilbeesetti.nextplayer.feature.videopicker.composables.QuickSettingsDialog
 import dev.anilbeesetti.nextplayer.feature.videopicker.composables.RenameDialog
 import dev.anilbeesetti.nextplayer.feature.videopicker.navigation.PendingComicFolder
@@ -136,21 +139,44 @@ internal fun ComicsScreenContent(
     var renameComicPath by rememberSaveable { mutableStateOf<String?>(null) }
     var viewerSession by remember { mutableStateOf<ViewerSession?>(null) }
     var viewerPage by remember { mutableIntStateOf(0) }
+    var passwordPrompt by remember { mutableStateOf<ComicPasswordPrompt?>(null) }
+    var showUnsupportedPassword by remember { mutableStateOf(false) }
 
-    fun openComic(comic: ComicFile) {
+    fun openComic(comic: ComicFile, password: String? = null) {
         if (viewerSession != null) return
         scope.launch {
-            val entries = ComicArchiveReader.listImageEntryNames(comic.path)
-            if (entries.isEmpty()) return@launch
-            val progress = viewModel.loadProgress(comic.path)
-            viewerPage = progress.lastPage.coerceIn(0, entries.lastIndex)
-            viewerSession = ViewerSession(
-                comicPath = comic.path,
-                entries = entries,
-                initialIndex = viewerPage,
-                direction = progress.readingDirection,
-            )
-            viewModel.recordViewedComic(comic.path)
+            // 优先用本次输入的密码，其次用之前保存过的
+            val effectivePassword = password ?: viewModel.getComicPassword(comic.path)
+            when (val result = ComicArchiveReader.openComic(comic.path, effectivePassword)) {
+                is ComicOpenResult.Success -> {
+                    if (password != null) viewModel.saveComicPassword(comic.path, password)
+                    passwordPrompt = null
+                    val progress = viewModel.loadProgress(comic.path)
+                    viewerPage = progress.lastPage.coerceIn(0, result.entries.lastIndex)
+                    viewerSession = ViewerSession(
+                        comicPath = comic.path,
+                        entries = result.entries,
+                        initialIndex = viewerPage,
+                        direction = progress.readingDirection,
+                        password = effectivePassword,
+                    )
+                    viewModel.recordViewedComic(comic.path)
+                }
+
+                ComicOpenResult.PasswordRequired -> {
+                    passwordPrompt = ComicPasswordPrompt(comic, wrongPassword = false)
+                }
+
+                ComicOpenResult.WrongPassword -> {
+                    // 记录的旧密码失效就清掉，避免每次都先用它碰一次壁
+                    if (effectivePassword != null) viewModel.clearComicPassword(comic.path)
+                    passwordPrompt = ComicPasswordPrompt(comic, wrongPassword = password != null)
+                }
+
+                ComicOpenResult.UnsupportedEncrypted -> showUnsupportedPassword = true
+
+                ComicOpenResult.Failed -> Unit
+            }
         }
     }
 
@@ -511,6 +537,19 @@ internal fun ComicsScreenContent(
         )
     }
 
+    passwordPrompt?.let { prompt ->
+        ComicPasswordDialog(
+            fileName = prompt.comic.displayName,
+            wrongPassword = prompt.wrongPassword,
+            onDismiss = { passwordPrompt = null },
+            onSubmit = { password -> openComic(prompt.comic, password) },
+        )
+    }
+
+    if (showUnsupportedPassword) {
+        ComicPasswordUnsupportedDialog(onDismiss = { showUnsupportedPassword = false })
+    }
+
     viewerSession?.let { session ->
         BackHandler(enabled = true) { viewerSession = null }
         ComicViewer(
@@ -518,6 +557,7 @@ internal fun ComicsScreenContent(
                 zipPath = session.comicPath,
                 entries = session.entries,
                 readingDirection = session.direction,
+                password = session.password,
             ),
             initialIndex = session.initialIndex,
             readingDirection = session.direction,
@@ -539,6 +579,13 @@ private data class ViewerSession(
     val entries: List<String>,
     val initialIndex: Int,
     val direction: ComicReadingDirection,
+    val password: String? = null,
+)
+
+/** 加密漫画的密码输入弹窗状态。 */
+private data class ComicPasswordPrompt(
+    val comic: ComicFile,
+    val wrongPassword: Boolean,
 )
 
 /** 漫画压缩包在选择模式里按视频项处理，id 用 file:// uri。 */

@@ -16,9 +16,12 @@ import androidx.lifecycle.viewModelScope
 import dev.anilbeesetti.nextplayer.core.data.repository.PreferencesRepository
 import dev.anilbeesetti.nextplayer.core.media.index.ComicArchiveReader
 import dev.anilbeesetti.nextplayer.core.media.index.ComicFileIndex
+import dev.anilbeesetti.nextplayer.core.media.index.ComicOpenResult
 import dev.anilbeesetti.nextplayer.core.model.ComicProgress
 import dev.anilbeesetti.nextplayer.core.model.ComicReadingDirection
 import dev.anilbeesetti.nextplayer.core.ui.components.BindTopLevelBottomBarVisible
+import dev.anilbeesetti.nextplayer.feature.videopicker.composables.ComicPasswordDialog
+import dev.anilbeesetti.nextplayer.feature.videopicker.composables.ComicPasswordUnsupportedDialog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,6 +47,13 @@ class ComicHistoryViewerViewModel(
         val entries: List<String> = emptyList(),
         val initialIndex: Int = 0,
         val direction: ComicReadingDirection = ComicReadingDirection.RIGHT_TO_LEFT,
+        val password: String? = null,
+        /** 加密漫画等待用户输入密码。 */
+        val needsPassword: Boolean = false,
+        /** 上一次输入的密码错误。 */
+        val wrongPassword: Boolean = false,
+        /** 加密 PDF 但系统版本不支持。 */
+        val unsupported: Boolean = false,
     )
 
     private val stateInternal = MutableStateFlow(UiState(path = path))
@@ -53,21 +63,61 @@ class ComicHistoryViewerViewModel(
 
     init {
         viewModelScope.launch {
-            val entries = ComicArchiveReader.listImageEntryNames(path)
-            val progress = comicFileIndex.getProgress(path)
-            lastPage = progress?.lastPage?.coerceIn(0, maxOf(entries.lastIndex, 0)) ?: 0
-            stateInternal.update {
-                it.copy(
-                    loading = false,
-                    entries = entries,
-                    initialIndex = lastPage,
-                    direction = progress?.readingDirection
-                        ?: ComicReadingDirection.RIGHT_TO_LEFT,
-                )
+            val saved = comicFileIndex.getPassword(path)
+            openWith(password = saved, isUserInput = false)
+        }
+    }
+
+    /** 用户提交密码。 */
+    fun submitPassword(password: String) {
+        viewModelScope.launch { openWith(password = password, isUserInput = true) }
+    }
+
+    private suspend fun openWith(password: String?, isUserInput: Boolean) {
+        when (val result = ComicArchiveReader.openComic(path, password)) {
+            is ComicOpenResult.Success -> {
+                if (isUserInput && password != null) comicFileIndex.savePassword(path, password)
+                val progress = comicFileIndex.getProgress(path)
+                lastPage = progress?.lastPage
+                    ?.coerceIn(0, maxOf(result.entries.lastIndex, 0)) ?: 0
+                stateInternal.update {
+                    it.copy(
+                        loading = false,
+                        entries = result.entries,
+                        initialIndex = lastPage,
+                        direction = progress?.readingDirection
+                            ?: ComicReadingDirection.RIGHT_TO_LEFT,
+                        password = password,
+                        needsPassword = false,
+                        wrongPassword = false,
+                    )
+                }
+                preferencesRepository.updateApplicationPreferences { preferences ->
+                    preferences.copy(lastViewedComicPath = path)
+                }
             }
-            preferencesRepository.updateApplicationPreferences { preferences ->
-                preferences.copy(lastViewedComicPath = path)
+
+            ComicOpenResult.PasswordRequired -> stateInternal.update {
+                it.copy(loading = false, needsPassword = true, wrongPassword = false)
             }
+
+            ComicOpenResult.WrongPassword -> {
+                // 失效的旧密码直接清掉
+                if (!isUserInput && password != null) comicFileIndex.deletePassword(path)
+                stateInternal.update {
+                    it.copy(
+                        loading = false,
+                        needsPassword = true,
+                        wrongPassword = isUserInput,
+                    )
+                }
+            }
+
+            ComicOpenResult.UnsupportedEncrypted -> stateInternal.update {
+                it.copy(loading = false, unsupported = true)
+            }
+
+            ComicOpenResult.Failed -> stateInternal.update { it.copy(loading = false) }
         }
     }
 
@@ -103,8 +153,11 @@ fun ComicHistoryViewerScreen(
 
     BindTopLevelBottomBarVisible(visible = false)
 
-    LaunchedEffect(state.loading, state.entries.isEmpty()) {
-        if (!state.loading && state.entries.isEmpty()) onBack()
+    // 只有真正打不开（损坏/无图片）才退回；等密码、系统不支持都停留在本页
+    LaunchedEffect(state.loading, state.entries.isEmpty(), state.needsPassword, state.unsupported) {
+        if (!state.loading && state.entries.isEmpty() && !state.needsPassword && !state.unsupported) {
+            onBack()
+        }
     }
 
     if (state.loading) {
@@ -122,6 +175,7 @@ fun ComicHistoryViewerScreen(
                 zipPath = state.path,
                 entries = state.entries,
                 readingDirection = state.direction,
+                password = state.password,
             ),
             initialIndex = state.initialIndex,
             readingDirection = state.direction,
@@ -129,5 +183,18 @@ fun ComicHistoryViewerScreen(
             onDirectionChange = viewModel::onDirectionChange,
             onBack = onBack,
         )
+    }
+
+    if (state.needsPassword) {
+        ComicPasswordDialog(
+            fileName = state.path.substringAfterLast('/'),
+            wrongPassword = state.wrongPassword,
+            onDismiss = onBack,
+            onSubmit = viewModel::submitPassword,
+        )
+    }
+
+    if (state.unsupported) {
+        ComicPasswordUnsupportedDialog(onDismiss = onBack)
     }
 }

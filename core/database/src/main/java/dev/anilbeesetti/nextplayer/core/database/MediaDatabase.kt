@@ -6,6 +6,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import dev.anilbeesetti.nextplayer.core.database.dao.AudioFileIndexDao
 import dev.anilbeesetti.nextplayer.core.database.dao.ComicFileIndexDao
+import dev.anilbeesetti.nextplayer.core.database.dao.ComicPasswordDao
 import dev.anilbeesetti.nextplayer.core.database.dao.ComicProgressDao
 import dev.anilbeesetti.nextplayer.core.database.dao.HiddenVideoDao
 import dev.anilbeesetti.nextplayer.core.database.dao.ImageFileIndexDao
@@ -15,6 +16,7 @@ import dev.anilbeesetti.nextplayer.core.database.dao.NetworkConnectionDao
 import dev.anilbeesetti.nextplayer.core.database.dao.PlaylistDao
 import dev.anilbeesetti.nextplayer.core.database.entities.AudioFileIndexEntity
 import dev.anilbeesetti.nextplayer.core.database.entities.ComicFileIndexEntity
+import dev.anilbeesetti.nextplayer.core.database.entities.ComicPasswordEntity
 import dev.anilbeesetti.nextplayer.core.database.entities.ComicProgressEntity
 import dev.anilbeesetti.nextplayer.core.database.entities.HiddenVideoEntity
 import dev.anilbeesetti.nextplayer.core.database.entities.ImageFileIndexEntity
@@ -36,8 +38,9 @@ import dev.anilbeesetti.nextplayer.core.database.entities.PlaylistItemEntity
         ImageFileIndexEntity::class,
         ComicFileIndexEntity::class,
         ComicProgressEntity::class,
+        ComicPasswordEntity::class,
     ],
-    version = 20,
+    version = 21,
     exportSchema = true,
 )
 abstract class MediaDatabase : RoomDatabase() {
@@ -53,6 +56,8 @@ abstract class MediaDatabase : RoomDatabase() {
     abstract fun comicFileIndexDao(): ComicFileIndexDao
 
     abstract fun comicProgressDao(): ComicProgressDao
+
+    abstract fun comicPasswordDao(): ComicPasswordDao
 
     abstract fun hiddenVideoDao(): HiddenVideoDao
 
@@ -590,6 +595,24 @@ abstract class MediaDatabase : RoomDatabase() {
                     sql = """
                     ALTER TABLE `comic_progress`
                     ADD COLUMN `updated_at` INTEGER NOT NULL DEFAULT 0
+                    """,
+                )
+            }
+        }
+
+        /** 加密漫画密码表，纯新增表，不触碰任何已有数据。 */
+        val MIGRATION_20_21 = object : Migration(
+            20,
+            21,
+        ) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    sql = """
+                    CREATE TABLE IF NOT EXISTS `comic_password` (
+                        `path` TEXT NOT NULL,
+                        `password` TEXT NOT NULL,
+                        PRIMARY KEY(`path`)
+                    )
                     """,
                 )
             }

@@ -184,7 +184,10 @@ class ComicsViewModel(
                     uris = paths.map { Uri.fromFile(File(it)) },
                     permanently = true,
                 )
-                paths.forEach { path -> comicFileIndex.deleteProgress(path) }
+                paths.forEach { path ->
+                    comicFileIndex.deleteProgress(path)
+                    comicFileIndex.deletePassword(path)
+                }
             }
             val protectedRoots = preferencesRepository.applicationPreferences.value.comicFolders
                 .map(::normalizePath)
@@ -207,6 +210,8 @@ class ComicsViewModel(
             if (renamed) {
                 val newPath = File(File(item.path).parentFile, newName).path
                 comicFileIndex.moveProgress(fromPath = item.path, toPath = newPath)
+                // 密码记录同样按路径存，跟着改名后的位置走
+                comicFileIndex.movePassword(fromPath = item.path, toPath = newPath)
                 // 「最近查看」高亮存的是路径，也要改成新路径
                 if (preferencesRepository.applicationPreferences.value.lastViewedComicPath == item.path) {
                     preferencesRepository.updateApplicationPreferences {
@@ -266,6 +271,10 @@ class ComicsViewModel(
                                 event.movedFiles.forEach { moved ->
                                     val fromPath = moved.sourceUri.path ?: return@forEach
                                     comicFileIndex.moveProgress(
+                                        fromPath = fromPath,
+                                        toPath = moved.destinationPath,
+                                    )
+                                    comicFileIndex.movePassword(
                                         fromPath = fromPath,
                                         toPath = moved.destinationPath,
                                     )
@@ -341,6 +350,21 @@ class ComicsViewModel(
                 )
             }
         }
+    }
+
+    /** 打开加密漫画前取已保存的密码。 */
+    suspend fun getComicPassword(path: String): String? = comicFileIndex.getPassword(path)
+
+    /** 密码校验成功后保存，之后可直接打开。 */
+    suspend fun saveComicPassword(path: String, password: String) {
+        comicFileIndex.savePassword(path = path, password = password)
+        // 有了密码才能数出页数、生成封面，强制重扫一次
+        refresh(force = true)
+    }
+
+    /** 已保存的密码失效时清掉，让用户重新输入。 */
+    suspend fun clearComicPassword(path: String) {
+        comicFileIndex.deletePassword(path)
     }
 
     fun recordViewedComic(path: String) {

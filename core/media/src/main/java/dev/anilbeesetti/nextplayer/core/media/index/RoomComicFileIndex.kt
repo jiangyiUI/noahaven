@@ -3,8 +3,10 @@ package dev.anilbeesetti.nextplayer.core.media.index
 import android.content.Context
 import dev.anilbeesetti.nextplayer.core.common.di.DiQualifiers
 import dev.anilbeesetti.nextplayer.core.database.dao.ComicFileIndexDao
+import dev.anilbeesetti.nextplayer.core.database.dao.ComicPasswordDao
 import dev.anilbeesetti.nextplayer.core.database.dao.ComicProgressDao
 import dev.anilbeesetti.nextplayer.core.database.entities.ComicFileIndexEntity
+import dev.anilbeesetti.nextplayer.core.database.entities.ComicPasswordEntity
 import dev.anilbeesetti.nextplayer.core.database.entities.ComicProgressEntity
 import dev.anilbeesetti.nextplayer.core.model.ComicFile
 import dev.anilbeesetti.nextplayer.core.model.ComicProgress
@@ -34,6 +36,7 @@ import org.koin.core.annotation.Single
 class RoomComicFileIndex(
     private val dao: ComicFileIndexDao,
     private val progressDao: ComicProgressDao,
+    private val passwordDao: ComicPasswordDao,
     private val context: Context,
     @Named(DiQualifiers.APPLICATION_SCOPE) private val applicationScope: CoroutineScope,
 ) : ComicFileIndex {
@@ -125,6 +128,50 @@ class RoomComicFileIndex(
         withContext(Dispatchers.IO) { progressDao.clear() }
     }
 
+    override suspend fun getPassword(path: String): String? = withContext(Dispatchers.IO) {
+        runCatching { passwordDao.get(path) }.getOrNull()
+    }
+
+    override suspend fun savePassword(path: String, password: String) {
+        if (password.isEmpty()) return
+        withContext(Dispatchers.IO) {
+            runCatching {
+                passwordDao.upsert(ComicPasswordEntity(path = path, password = password))
+            }
+            // 之前没有密码时封面是解不出来的，这里立刻补一次：
+            // 无论从漫画库、搜索页还是历史页输的密码，都能马上看到封面
+            coverCache.remove(path)
+            val entries = if (isPdf(path)) {
+                emptyList()
+            } else {
+                runCatching {
+                    ComicArchiveReader(path).use { it.listImageEntries() }
+                }.getOrDefault(emptyList())
+            }
+            val cover = extractCoverLocked(context, path, entries, password)
+            coverCache[path] = cover
+            if (cover != null) {
+                stateMutex.withLock {
+                    index[path]?.let { existing ->
+                        index[path] = existing.copy(coverCachePath = cover)
+                        publishLocked()
+                    }
+                }
+            }
+        }
+    }
+
+    override suspend fun deletePassword(path: String) {
+        withContext(Dispatchers.IO) { runCatching { passwordDao.delete(path) } }
+    }
+
+    override suspend fun movePassword(fromPath: String, toPath: String) {
+        if (fromPath == toPath) return
+        withContext(Dispatchers.IO) {
+            runCatching { passwordDao.move(fromPath = fromPath, toPath = toPath) }
+        }
+    }
+
     private fun ComicProgressEntity.toModel(): ComicProgress = ComicProgress(
         path = path,
         lastPage = lastPage,
@@ -166,11 +213,16 @@ class RoomComicFileIndex(
 
             val seen = HashSet<String>()
             val upsertBatch = ArrayList<ComicFileIndexEntity>()
+            // 一次性拉全量密码，扫描时用它给加密漫画数页数、出封面
+            val passwordMap = runCatching { passwordDao.getAll() }
+                .getOrDefault(emptyList())
+                .associate { it.path to it.password }
 
             for ((root, target) in targets) {
                 val found = collectComicsInFolder(
-                    target,
-                    root,
+                    folderPath = target,
+                    whitelistRoot = root,
+                    passwordProvider = { path -> passwordMap[path] },
                 )
                 for (scanned in found) {
                     seen.add(scanned.path)
@@ -184,7 +236,10 @@ class RoomComicFileIndex(
                         current.displayName != scanned.displayName ||
                         current.noMediaHidden != scanned.noMediaHidden
 
-                    if (!changed) continue
+                    // 封面缺失也要重建：加密压缩包第一次扫描时还没密码、生不出封面，
+                    // 之后文件本身没变化（changed=false），拿到密码重扫时也必须补上封面
+                    val needsCover = scanned.imageCount > 0 && coverCache[scanned.path] == null
+                    if (!changed && !needsCover) continue
 
                     // 生成封面缓存（zip 第一张图 / pdf 第 0 页）
                     val coverPath = if (scanned.imageCount > 0) {
@@ -200,6 +255,7 @@ class RoomComicFileIndex(
                                 context,
                                 scanned.path,
                                 entries,
+                                passwordMap[scanned.path],
                             )
                             coverCache[scanned.path] = path
                             path
@@ -252,9 +308,10 @@ class RoomComicFileIndex(
         rows.forEach { row ->
             val cover = coverCache[row.path]
                 ?: ComicArchiveReader.extractCover(
-                    context,
-                    row.path,
-                    emptyList(),
+                    context = context,
+                    zipPath = row.path,
+                    imageEntries = emptyList(),
+                    password = runCatching { passwordDao.get(row.path) }.getOrNull(),
                 ).also {
                     coverCache[row.path] = it
                 }

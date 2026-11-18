@@ -284,4 +284,12 @@ private class FakeComicFileIndex : ComicFileIndex {
     override suspend fun moveProgress(fromPath: String, toPath: String) = Unit
 
     override suspend fun clearProgress() = Unit
+
+    override suspend fun getPassword(path: String): String? = null
+
+    override suspend fun savePassword(path: String, password: String) = Unit
+
+    override suspend fun deletePassword(path: String) = Unit
+
+    override suspend fun movePassword(fromPath: String, toPath: String) = Unit
 }

@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.anilbeesetti.nextplayer.core.media.index.ComicArchiveReader
+import dev.anilbeesetti.nextplayer.core.media.index.ComicOpenResult
 import dev.anilbeesetti.nextplayer.core.model.ApplicationPreferences
 import dev.anilbeesetti.nextplayer.core.model.ComicFile
 import dev.anilbeesetti.nextplayer.core.model.Folder
@@ -70,6 +71,8 @@ import dev.anilbeesetti.nextplayer.core.ui.components.tvFocusRing
 import dev.anilbeesetti.nextplayer.core.ui.designsystem.NextIcons
 import dev.anilbeesetti.nextplayer.core.ui.extensions.copy
 import dev.anilbeesetti.nextplayer.core.ui.extensions.plus
+import dev.anilbeesetti.nextplayer.feature.videopicker.composables.ComicPasswordDialog
+import dev.anilbeesetti.nextplayer.feature.videopicker.composables.ComicPasswordUnsupportedDialog
 import dev.anilbeesetti.nextplayer.feature.videopicker.composables.FolderItem
 import kotlinx.coroutines.launch
 
@@ -85,30 +88,56 @@ fun ComicSearchScreen(viewModel: ComicSearchViewModel) {
     val scope = rememberCoroutineScope()
     var currentViewer by remember { mutableStateOf<SearchViewerSession?>(null) }
     var viewerPage by remember { mutableIntStateOf(0) }
+    var passwordComic by remember { mutableStateOf<ComicFile?>(null) }
+    var passwordWrong by remember { mutableStateOf(false) }
+    var showUnsupportedPassword by remember { mutableStateOf(false) }
+
+    fun openComicInSearch(comic: ComicFile, password: String? = null) {
+        if (currentViewer != null) return
+        // 打开查看器时把当前查询写入搜索历史
+        viewModel.onAction(ComicSearchUiEvent.OnSearch(state.query))
+        scope.launch {
+            val effectivePassword = password ?: viewModel.getComicPassword(comic.path)
+            when (val result = ComicArchiveReader.openComic(comic.path, effectivePassword)) {
+                is ComicOpenResult.Success -> {
+                    if (password != null) viewModel.saveComicPassword(comic.path, password)
+                    passwordComic = null
+                    val progress = viewModel.loadProgress(comic.path)
+                    viewerPage = progress.lastPage.coerceIn(0, result.entries.lastIndex)
+                    currentViewer = SearchViewerSession(
+                        images = ComicImageList(
+                            zipPath = comic.path,
+                            entries = result.entries,
+                            readingDirection = progress.readingDirection,
+                            password = effectivePassword,
+                        ),
+                        initialIndex = viewerPage,
+                    )
+                    viewModel.onAction(ComicSearchUiEvent.OnComicViewed(comic.path))
+                }
+
+                ComicOpenResult.PasswordRequired -> {
+                    passwordComic = comic
+                    passwordWrong = false
+                }
+
+                ComicOpenResult.WrongPassword -> {
+                    if (effectivePassword != null) viewModel.clearComicPassword(comic.path)
+                    passwordComic = comic
+                    passwordWrong = password != null
+                }
+
+                ComicOpenResult.UnsupportedEncrypted -> showUnsupportedPassword = true
+
+                ComicOpenResult.Failed -> Unit
+            }
+        }
+    }
 
     ComicSearchScreenContent(
         state = state,
         onAction = viewModel::onAction,
-        onComicClick = { comic ->
-            if (currentViewer != null) return@ComicSearchScreenContent
-            // 打开查看器时把当前查询写入搜索历史
-            viewModel.onAction(ComicSearchUiEvent.OnSearch(state.query))
-            scope.launch {
-                val entries = ComicArchiveReader.listImageEntryNames(comic.path)
-                if (entries.isEmpty()) return@launch
-                val progress = viewModel.loadProgress(comic.path)
-                viewerPage = progress.lastPage.coerceIn(0, entries.lastIndex)
-                currentViewer = SearchViewerSession(
-                    images = ComicImageList(
-                        zipPath = comic.path,
-                        entries = entries,
-                        readingDirection = progress.readingDirection,
-                    ),
-                    initialIndex = viewerPage,
-                )
-                viewModel.onAction(ComicSearchUiEvent.OnComicViewed(comic.path))
-            }
-        },
+        onComicClick = { comic -> openComicInSearch(comic) },
     )
 
     val current = currentViewer
@@ -139,6 +168,19 @@ fun ComicSearchScreen(viewModel: ComicSearchViewModel) {
                 )
             },
         )
+    }
+
+    passwordComic?.let { comic ->
+        ComicPasswordDialog(
+            fileName = comic.displayName,
+            wrongPassword = passwordWrong,
+            onDismiss = { passwordComic = null },
+            onSubmit = { password -> openComicInSearch(comic, password) },
+        )
+    }
+
+    if (showUnsupportedPassword) {
+        ComicPasswordUnsupportedDialog(onDismiss = { showUnsupportedPassword = false })
     }
 }
 

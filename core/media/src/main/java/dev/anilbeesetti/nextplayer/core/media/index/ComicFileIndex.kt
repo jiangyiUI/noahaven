@@ -34,4 +34,16 @@ interface ComicFileIndex {
 
     /** 清空全部漫画阅读进度。 */
     suspend fun clearProgress()
+
+    /** 读取已保存的解压/解密密码；没有记录时返回 null。 */
+    suspend fun getPassword(path: String): String?
+
+    /** 保存密码（打开成功后调用）。 */
+    suspend fun savePassword(path: String, password: String)
+
+    /** 删除单本漫画的密码记录。 */
+    suspend fun deletePassword(path: String)
+
+    /** 重命名/移动后，把密码记录挪到新路径。 */
+    suspend fun movePassword(fromPath: String, toPath: String)
 }

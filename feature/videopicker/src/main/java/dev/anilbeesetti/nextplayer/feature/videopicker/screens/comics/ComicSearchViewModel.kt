@@ -229,6 +229,19 @@ class ComicSearchViewModel(
                 readingDirection = preferencesRepository.applicationPreferences.value.comicReadingDirection,
             )
 
+    /** 加密漫画：读取已保存的密码。 */
+    suspend fun getComicPassword(path: String): String? = comicFileIndex.getPassword(path)
+
+    /** 加密漫画：密码校验成功后保存。 */
+    suspend fun saveComicPassword(path: String, password: String) {
+        comicFileIndex.savePassword(path = path, password = password)
+    }
+
+    /** 加密漫画：已保存的密码失效时清掉。 */
+    suspend fun clearComicPassword(path: String) {
+        comicFileIndex.deletePassword(path)
+    }
+
     /** 保存这本漫画的页码和方向，反复调用时只写最后一次。 */
     fun saveProgress(path: String, page: Int, direction: ComicReadingDirection) {
         progressSaveJob?.cancel()

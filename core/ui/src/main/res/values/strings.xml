@@ -89,6 +89,11 @@
     <string name="comic_reading_direction_ltr">Left to right (Western)</string>
     <string name="comic_reading_direction_rtl">Right to left (Manga)</string>
     <string name="comic_pages">%1$d pages</string>
+    <string name="comic_password_title">Enter password for %1$s</string>
+    <string name="comic_password_wrong">Incorrect password, please try again</string>
+    <string name="comic_password_unsupported_title">Encrypted PDF not supported</string>
+    <string name="comic_password_unsupported_message">This PDF is password protected. Viewing encrypted PDFs requires Android 15 or later.</string>
+    <string name="comic_password_ok">OK</string>
     <string name="add_folder">Add folder</string>
     <string name="open_settings">Open Settings</string>
     <string name="permission_info">The Next Player app needs \"%1$s\" permission to access and play media. Without it, media access and playback won\'t work. To use the app fully, grant the permission.</string>
