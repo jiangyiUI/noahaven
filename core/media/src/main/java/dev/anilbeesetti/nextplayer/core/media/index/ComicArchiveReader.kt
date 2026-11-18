@@ -71,22 +71,41 @@ class ComicArchiveReader(private val zipPath: String) : AutoCloseable {
             "tiff",
         )
 
-        /** UI 层用：拿 zip 内部图片 entry 名列表。 */
+        /**
+         * UI 层用：拿漫画的「页标识」列表。
+         * zip/cbz → 内部图片 entry 名列表；pdf → 页码字符串列表（"0","1",...）。
+         * 这样 ComicViewer 可以用同一套 entries 驱动，不用区分格式。
+         */
         suspend fun listImageEntryNames(zipPath: String): List<String> =
             withContext(Dispatchers.IO) {
-                ComicArchiveReader(zipPath).use { it.listImageEntries().map { e -> e.entryName } }
+                if (isPdf(zipPath)) {
+                    List(PdfComicReader.pageCount(zipPath)) { it.toString() }
+                } else {
+                    ComicArchiveReader(zipPath).use {
+                        it.listImageEntries().map { e -> e.entryName }
+                    }
+                }
             }
 
-        /** UI 层用：解 zip 内部指定 entry 的图片到 Bitmap。 */
+        /**
+         * UI 层用：按「页标识」解一页为 Bitmap。
+         * zip/cbz → entryName 是 zip 内路径；pdf → entryName 是页码字符串。
+         */
         suspend fun decodeEntryBitmap(zipPath: String, entryName: String): Bitmap? =
             withContext(Dispatchers.IO) {
-                runCatching {
-                    ZipFile(zipPath).use { zip ->
-                        zip.getInputStream(zip.getFileHeader(entryName)).use {
-                            BitmapFactory.decodeStream(it)
+                if (isPdf(zipPath)) {
+                    val pageIndex = entryName.toIntOrNull() ?: return@withContext null
+                    // PDF 渲染宽度按 1080 给，够绝大多数屏幕用；宽图在 UI 层再放大
+                    PdfComicReader.renderPage(zipPath, pageIndex, targetWidthPx = 1080)
+                } else {
+                    runCatching {
+                        ZipFile(zipPath).use { zip ->
+                            zip.getInputStream(zip.getFileHeader(entryName)).use {
+                                BitmapFactory.decodeStream(it)
+                            }
                         }
-                    }
-                }.getOrNull()
+                    }.getOrNull()
+                }
             }
 
         /** UI 层用：解 zip 的第一张图片到 Bitmap（封面兜底）。 */
@@ -110,12 +129,13 @@ class ComicArchiveReader(private val zipPath: String) : AutoCloseable {
             }.getOrNull()
         }
 
-        /** 扫描时用：解 zip 的第一张图片到缓存文件，返回缓存路径（或 null 失败）。 */
+        /** 扫描时用：解 zip 的第一张图 / pdf 的第 0 页到缓存文件，返回缓存路径（或 null 失败）。 */
         fun extractCover(
             context: Context,
             zipPath: String,
             imageEntries: List<ImageEntry>,
         ): String? {
+            if (isPdf(zipPath)) return PdfComicReader.extractCover(context, zipPath)
             if (imageEntries.isEmpty()) return null
             val first = imageEntries.first().entryName
             val cacheDir = File(
@@ -191,9 +211,13 @@ private fun walkComicsRecursive(
             )
 
             f.isFile && isComicArchive(f.name) -> {
-                val imageCount = runCatching {
-                    ComicArchiveReader(f.absolutePath).use { it.listImageEntries().size }
-                }.getOrDefault(0)
+                val imageCount = if (isPdf(f.name)) {
+                    PdfComicReader.pageCount(f.absolutePath)
+                } else {
+                    runCatching {
+                        ComicArchiveReader(f.absolutePath).use { it.listImageEntries().size }
+                    }.getOrDefault(0)
+                }
                 out += ScannedComic(
                     path = f.absolutePath,
                     parentPath = f.parentFile?.absolutePath ?: dir.absolutePath,
@@ -216,8 +240,12 @@ private fun isComicArchive(name: String): Boolean {
         '.',
         "",
     ).lowercase()
-    return ext == "zip" || ext == "cbz"
+    return ext == "zip" || ext == "cbz" || ext == "pdf"
 }
+
+/** 按文件后缀判断是不是 PDF 漫画。 */
+internal fun isPdf(path: String): Boolean =
+    path.substringAfterLast('.', "").lowercase() == "pdf"
 
 /** 把 Room entity 转成 model。 */
 internal fun ComicFileIndexEntity.toComicFile(coverCachePath: String?): ComicFile = ComicFile(

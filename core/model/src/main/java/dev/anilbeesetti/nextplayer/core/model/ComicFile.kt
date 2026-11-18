@@ -1,6 +1,24 @@
 package dev.anilbeesetti.nextplayer.core.model
 
-/** 漫画压缩包白名单索引项。一个 zip/cbz 文件 = 一个 ComicFile。 */
+/** 漫画文件格式。从文件后缀推导，不需要入库。 */
+enum class ComicFormat {
+    /** zip / cbz：内部按文件名排序的图片集合 */
+    ZIP,
+
+    /** pdf：每页一张图，用系统 PdfRenderer 渲染 */
+    PDF,
+    ;
+
+    companion object {
+        fun fromPath(path: String): ComicFormat =
+            when (path.substringAfterLast('.', "").lowercase()) {
+                "pdf" -> PDF
+                else -> ZIP
+            }
+    }
+}
+
+/** 漫画压缩包白名单索引项。一个 zip/cbz/pdf 文件 = 一个 ComicFile。 */
 data class ComicFile(
     val path: String,
     val parentPath: String,
@@ -8,11 +26,14 @@ data class ComicFile(
     val displayName: String,
     val size: Long,
     val dateModified: Long,
-    /** zip 内部按文件名排序后的图片条目数。 */
+    /** zip 内部图片数 / pdf 页数。 */
     val imageCount: Int,
-    /** zip 解出的第一张图在缓存目录中的缩略图路径（扫描时生成，可为 null 表示未生成）。 */
+    /** 扫描时生成的缩略图缓存路径（zip 第一张图 / pdf 第 0 页）。 */
     val coverCachePath: String?,
     val formattedFileSize: String,
     /** 该文件所在目录（或任意上级目录）里有 `.nomedia`。 */
     val noMediaHidden: Boolean = false,
-)
+) {
+    /** 从 path 后缀推导，不入库。 */
+    val format: ComicFormat get() = ComicFormat.fromPath(path)
+}

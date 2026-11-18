@@ -186,12 +186,16 @@ class RoomComicFileIndex(
 
                     if (!changed) continue
 
-                    // 生成封面缓存（如果 zip 有效且有图片）
+                    // 生成封面缓存（zip 第一张图 / pdf 第 0 页）
                     val coverPath = if (scanned.imageCount > 0) {
                         coverCache[scanned.path] ?: run {
-                            val entries = runCatching {
-                                ComicArchiveReader(scanned.path).use { it.listImageEntries() }
-                            }.getOrDefault(emptyList())
+                            val entries = if (isPdf(scanned.path)) {
+                                emptyList()
+                            } else {
+                                runCatching {
+                                    ComicArchiveReader(scanned.path).use { it.listImageEntries() }
+                                }.getOrDefault(emptyList())
+                            }
                             val path = extractCoverLocked(
                                 context,
                                 scanned.path,

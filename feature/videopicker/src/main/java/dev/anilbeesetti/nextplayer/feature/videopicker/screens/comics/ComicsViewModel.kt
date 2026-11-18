@@ -219,10 +219,18 @@ class ComicsViewModel(
     }
 
     private fun shareSelected(items: Set<SelectionItem>) {
-        val uris = items.toComicPaths().map { Uri.fromFile(File(it)) }
+        val paths = items.toComicPaths()
+        val uris = paths.map { Uri.fromFile(File(it)) }
         if (uris.isEmpty()) return
+        // 按选中文件的格式决定分享 MIME：全 PDF 用 application/pdf，全 zip/cbz 用 application/zip，
+        // 混选时退到 */* 让接收方自己嗅探
+        val mimeType = when {
+            paths.all { it.endsWith(".pdf", ignoreCase = true) } -> PDF_MIME_TYPE
+            paths.none { it.endsWith(".pdf", ignoreCase = true) } -> COMIC_MIME_TYPE
+            else -> "*/*"
+        }
         viewModelScope.launch {
-            mediaOperationsService.shareMedia(uris = uris, mimeType = COMIC_MIME_TYPE)
+            mediaOperationsService.shareMedia(uris = uris, mimeType = mimeType)
         }
     }
 
@@ -505,6 +513,7 @@ class ComicsViewModel(
         const val PATH_SEPARATOR = "/"
         const val PROGRESS_SAVE_DELAY_MS = 300L
         const val COMIC_MIME_TYPE = "application/zip"
+        const val PDF_MIME_TYPE = "application/pdf"
     }
 }
 
