@@ -398,16 +398,21 @@ class ComicsViewModel(
                     .comicReadingDirection,
             )
 
-    /** 保存这本漫画的页码和方向，反复调用时只写最后一次。 */
+    /** 保存这本漫画的页码和方向，反复调用时只写最后一次。双向判定 watched。 */
     fun saveProgress(path: String, page: Int, direction: ComicReadingDirection) {
         progressSaveJob?.cancel()
         progressSaveJob = viewModelScope.launch {
             delay(PROGRESS_SAVE_DELAY_MS)
+            val prefs = preferencesRepository.applicationPreferences.value
+            val total = comicsInternal.value?.find { it.path == path }?.imageCount ?: 0
+            val watched = prefs.enableWatchedMarks && total > 0 &&
+                page.toFloat() / total >= prefs.comicWatchedThreshold / 100f
             comicFileIndex.saveProgress(
                 ComicProgress(
                     path = path,
                     lastPage = page,
                     readingDirection = direction,
+                    watched = watched,
                 ),
             )
         }

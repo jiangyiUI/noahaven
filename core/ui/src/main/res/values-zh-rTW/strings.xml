@@ -516,4 +516,10 @@
     <plurals name="new_videos_count">
         <item quantity="other">%1$d 部新影片</item>
     </plurals>
+    <string name="watched_marks_section">觀看完成標記</string>
+    <string name="watched_marks_enabled">顯示完成標記</string>
+    <string name="watched_marks_enabled_sub">影片或漫畫達到各自閾值後自動標記為已看完</string>
+    <string name="watched_marks_video_threshold">影片完成閾值</string>
+    <string name="watched_marks_comic_threshold">漫畫完成閾值</string>
+    <string name="watched_badge_content_desc">已看完</string>
 </resources>

@@ -33,6 +33,10 @@ data class ComicFile(
     val formattedFileSize: String,
     /** 该文件所在目录（或任意上级目录）里有 `.nomedia`。 */
     val noMediaHidden: Boolean = false,
+    /** 最近阅读到的页码（从 ComicProgressEntity join 过来），0 表示没看过。 */
+    val lastPage: Int = 0,
+    /** 是否看完（阅读进度达到看过阈值）。双向标记。 */
+    val watched: Boolean = false,
 ) {
     /** 从 path 后缀推导，不入库。 */
     val format: ComicFormat get() = ComicFormat.fromPath(path)

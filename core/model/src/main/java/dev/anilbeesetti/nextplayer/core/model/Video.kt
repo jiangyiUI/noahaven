@@ -25,6 +25,8 @@ data class Video(
     val subtitleStreams: List<SubtitleStreamInfo> = emptyList(),
     /** 该条目实际是音频文件（历史里混排音频时使用：决定占位图与播放方式） */
     val isAudio: Boolean = false,
+    /** 是否看完（播放进度达到看过阈值，双向标记）。 */
+    val watched: Boolean = false,
 ) : Serializable {
 
     val displayName: String = nameWithExtension.substringBeforeLast(delimiter = ".")

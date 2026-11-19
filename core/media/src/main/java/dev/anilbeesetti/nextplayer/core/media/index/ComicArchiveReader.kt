@@ -369,7 +369,7 @@ private fun isComicArchive(name: String): Boolean {
 internal fun isPdf(path: String): Boolean =
     path.substringAfterLast('.', "").lowercase() == "pdf"
 
-/** 把 Room entity 转成 model。 */
+/** 把 Room entity 转成 model。lastPage/watched 是 join ComicProgressEntity 之后才有的，这里给默认值。 */
 internal fun ComicFileIndexEntity.toComicFile(coverCachePath: String?): ComicFile = ComicFile(
     path = path,
     parentPath = parentPath,
@@ -381,6 +381,8 @@ internal fun ComicFileIndexEntity.toComicFile(coverCachePath: String?): ComicFil
     coverCachePath = coverCachePath,
     formattedFileSize = Utils.formatFileSize(size),
     noMediaHidden = noMediaHidden,
+    lastPage = 0,
+    watched = false,
 )
 
 internal fun ComicFile.toEntity(): ComicFileIndexEntity = ComicFileIndexEntity(

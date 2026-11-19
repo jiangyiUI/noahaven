@@ -40,7 +40,7 @@ import dev.anilbeesetti.nextplayer.core.database.entities.PlaylistItemEntity
         ComicProgressEntity::class,
         ComicPasswordEntity::class,
     ],
-    version = 22,
+    version = 23,
     exportSchema = true,
 )
 abstract class MediaDatabase : RoomDatabase() {
@@ -628,6 +628,27 @@ abstract class MediaDatabase : RoomDatabase() {
                     sql = """
                     ALTER TABLE `comic_password`
                     ADD COLUMN `fingerprint` TEXT
+                    """,
+                )
+            }
+        }
+
+        /** 看完标记：video(media_state.watched) 和 comic(comic_progress.watched) 各加一列。 */
+        val MIGRATION_22_23 = object : Migration(
+            22,
+            23,
+        ) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    sql = """
+                    ALTER TABLE `media_state`
+                    ADD COLUMN `watched` INTEGER NOT NULL DEFAULT 0
+                    """,
+                )
+                db.execSQL(
+                    sql = """
+                    ALTER TABLE `comic_progress`
+                    ADD COLUMN `watched` INTEGER NOT NULL DEFAULT 0
                     """,
                 )
             }

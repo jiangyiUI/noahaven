@@ -25,10 +25,12 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
@@ -355,6 +357,11 @@ private fun ComicListItem(
                 style = MaterialTheme.typography.titleMedium.copy(lineBreak = LineBreak.Simple),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                color = when {
+                    comic.watched -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    highlight -> MaterialTheme.colorScheme.primary
+                    else -> ListItemDefaults.segmentedColors().contentColor
+                },
             )
         },
         supportingContent = if (details.isNotEmpty()) {
@@ -456,6 +463,28 @@ private fun ComicGridItem(
                                 .size(20.dp),
                             tint = MaterialTheme.colorScheme.primary,
                         )
+                    } else if (comic.watched) {
+                        // 圆形白底 Check：漫画看完后叠在封面右上角（选择时让位给 selected）
+                        Surface(
+                            modifier = Modifier
+                                .padding(6.dp)
+                                .align(Alignment.TopEnd)
+                                .size(22.dp),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            shadowElevation = 2.dp,
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = NextIcons.Check,
+                                    contentDescription = stringResource(
+                                        R.string.watched_badge_content_desc,
+                                    ),
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                )
+                            }
+                        }
                     }
                 }
                 // 文件名不带后缀，最多两行，样式与视频网格一致
@@ -468,10 +497,11 @@ private fun ComicGridItem(
                     style = MaterialTheme.typography.titleMedium.copy(lineBreak = LineBreak.Simple),
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,
-                    color = if (isLastViewed && preferences.markLastPlayedMedia) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        ListItemDefaults.colors().contentColor
+                    color = when {
+                        comic.watched -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        isLastViewed && preferences.markLastPlayedMedia ->
+                            MaterialTheme.colorScheme.primary
+                        else -> ListItemDefaults.colors().contentColor
                     },
                 )
             }

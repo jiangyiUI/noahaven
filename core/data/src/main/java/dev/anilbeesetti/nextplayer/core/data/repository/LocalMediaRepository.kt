@@ -222,9 +222,20 @@ class LocalMediaRepository(
                     NetworkUri.connectionIdOf(uri = mediaUri) == null
                 )
         mediumStateDao.update(uri = uri) { state ->
+            val newDuration = duration ?: state.duration
+            // 双向看完标记：开关开着且有有效时长，按百分比判定；低于阈值自动取消；开关关了也清除。
+            val watched = if (preferences.enableWatchedMarks &&
+                newDuration != null && newDuration > 0
+            ) {
+                val threshold = preferences.videoWatchedThreshold / 100f
+                state.playbackPosition.toFloat() / newDuration >= threshold
+            } else {
+                false
+            }
             state.copy(
                 lastPlayedTime = if (recordHistory) lastPlayedTime else state.lastPlayedTime,
-                duration = duration ?: state.duration,
+                duration = newDuration,
+                watched = watched,
             )
         }
     }
@@ -306,6 +317,7 @@ private fun AudioFile.toHistoryVideo(mediaState: MediumStateEntity): Video = Vid
     formattedFileSize = formattedFileSize,
     lastPlayedAt = mediaState.lastPlayedTime?.let(block = ::Date),
     isAudio = true,
+    watched = mediaState.watched,
 )
 
 private fun MediumStateEntity.toHistoryVideo(): Video {
@@ -326,5 +338,6 @@ private fun MediumStateEntity.toHistoryVideo(): Video {
         playbackPosition = playbackPosition,
         lastPlayedAt = lastPlayedTime?.let(block = ::Date),
         isAudio = uri.pathSegments.contains(element = "audio"),
+        watched = watched,
     )
 }

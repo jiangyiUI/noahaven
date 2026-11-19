@@ -7,4 +7,6 @@ data class ComicProgress(
     val readingDirection: ComicReadingDirection,
     /** 最近一次阅读时间，用于「更多」页历史记录按时间排序。 */
     val updatedAt: Long = 0L,
+    /** 是否看完（阅读进度达到看过阈值）。双向标记：低于阈值自动取消。 */
+    val watched: Boolean = false,
 )

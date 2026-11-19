@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -167,6 +168,12 @@ fun VideoListItem(
                 maxLines = 2,
                 style = MaterialTheme.typography.titleMedium.copy(lineBreak = LineBreak.Simple),
                 overflow = TextOverflow.Ellipsis,
+                color = when {
+                    video.watched -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    isRecentlyPlayedVideo && preferences.markLastPlayedMedia ->
+                        MaterialTheme.colorScheme.primary
+                    else -> ListItemDefaults.segmentedColors().contentColor
+                },
             )
         },
         supportingContent = if (showPath || showSize || showResolution) {
@@ -258,10 +265,11 @@ fun VideoGridItem(
                     style = textStyle.copy(lineBreak = LineBreak.Simple),
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,
-                    color = if (isRecentlyPlayedVideo && preferences.markLastPlayedMedia) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        ListItemDefaults.colors().contentColor
+                    color = when {
+                        video.watched -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        isRecentlyPlayedVideo && preferences.markLastPlayedMedia ->
+                            MaterialTheme.colorScheme.primary
+                        else -> ListItemDefaults.colors().contentColor
                     },
                 )
             }
@@ -379,6 +387,28 @@ private fun ThumbnailView(
                         .clip(shape = CircleShape)
                         .background(MaterialTheme.colorScheme.primary),
                 )
+            }
+        }
+
+        // 圆形白底 Check 角标：视频看完后叠在缩略图右上角
+        if (video.watched) {
+            Surface(
+                modifier = Modifier
+                    .padding(6.dp)
+                    .align(Alignment.TopEnd)
+                    .size(22.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                shadowElevation = 2.dp,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = NextIcons.Check,
+                        contentDescription = stringResource(R.string.watched_badge_content_desc),
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                }
             }
         }
     }

@@ -82,6 +82,7 @@ import java.util.Date
 fun ImagesScreen(
     viewModel: ImagesViewModel,
     tabBar: @Composable () -> Unit = {},
+    contentModifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle(
         minActiveState = Lifecycle.State.RESUMED,
@@ -116,6 +117,7 @@ fun ImagesScreen(
         state = state,
         onAction = viewModel::onAction,
         tabBar = tabBar,
+        contentModifier = contentModifier,
         hasStorageAccess = hasStorageAccess,
         onAllFilesAccessGranted = {
             hasStorageAccess = true
@@ -131,6 +133,7 @@ internal fun ImagesScreenContent(
     state: ImagesUiState,
     onAction: (ImagesAction) -> Unit = {},
     tabBar: @Composable () -> Unit = {},
+    contentModifier: Modifier = Modifier,
     hasStorageAccess: Boolean = true,
     onAllFilesAccessGranted: () -> Unit = {},
 ) {
@@ -342,7 +345,9 @@ internal fun ImagesScreenContent(
                         topEnd = 24.dp,
                     ),
                 )
-                .background(MaterialTheme.colorScheme.background),
+                .background(MaterialTheme.colorScheme.background)
+                // 放在 background 之后，白色卡片保持不动，只有里面的内容滑动
+                .then(contentModifier),
         ) {
             if (!hasStorageAccess) {
                 AllFilesAccessView(onGranted = onAllFilesAccessGranted)

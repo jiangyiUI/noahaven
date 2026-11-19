@@ -110,6 +110,7 @@ class RoomComicFileIndex(
                     lastPage = progress.lastPage,
                     readingDirection = progress.readingDirection.name,
                     updatedAt = System.currentTimeMillis(),
+                    watched = progress.watched,
                 ),
             )
         }
@@ -269,6 +270,7 @@ class RoomComicFileIndex(
             ComicReadingDirection.valueOf(readingDirection)
         }.getOrDefault(ComicReadingDirection.RIGHT_TO_LEFT),
         updatedAt = updatedAt,
+        watched = watched,
     )
 
     private suspend fun refresh(
@@ -366,6 +368,8 @@ class RoomComicFileIndex(
                         formattedFileSize = dev.anilbeesetti.nextplayer.core.common.Utils
                             .formatFileSize(scanned.size),
                         noMediaHidden = scanned.noMediaHidden,
+                        lastPage = 0,
+                        watched = false,
                     )
                     stateMutex.withLock {
                         index[scanned.path] = comic
@@ -423,6 +427,10 @@ class RoomComicFileIndex(
     private suspend fun loadLocked() {
         if (loaded) return
         val rows = runCatching { dao.getAll() }.getOrElse { emptyList() }
+        // 一次性把进度读进来做内存 join，给每条 ComicFile 带上 lastPage + watched
+        val progressMap = runCatching { progressDao.getAll() }
+            .getOrDefault(emptyList())
+            .associateBy { it.path }
         rows.forEach { row ->
             val cover = coverCache[row.path]
                 ?: ComicArchiveReader.extractCover(
@@ -433,7 +441,12 @@ class RoomComicFileIndex(
                 ).also {
                     coverCache[row.path] = it
                 }
-            index[row.path] = row.toComicFile(cover)
+            val base = row.toComicFile(cover)
+            val p = progressMap[row.path]
+            index[row.path] = base.copy(
+                lastPage = p?.lastPage ?: 0,
+                watched = p?.watched == true,
+            )
         }
         loaded = true
         publishLocked()

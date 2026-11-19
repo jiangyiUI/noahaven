@@ -620,4 +620,10 @@
     <string name="github_sponsors">GitHub Sponsors</string>
     <string name="reset_subtitle_position">重置字幕位置</string>
     <string name="reset_subtitle_position_desc">播放时上下拖动字幕可移动它们</string>
+    <string name="watched_marks_section">观看完成标记</string>
+    <string name="watched_marks_enabled">显示完成标记</string>
+    <string name="watched_marks_enabled_sub">视频或漫画达到各自阈值后自动标记为已看完</string>
+    <string name="watched_marks_video_threshold">视频完成阈值</string>
+    <string name="watched_marks_comic_threshold">漫画完成阈值</string>
+    <string name="watched_badge_content_desc">已看完</string>
 </resources>

@@ -142,6 +142,71 @@ private fun MediaLibraryPreferencesScreenContent(
                 )
             }
 
+            ListSectionTitle(text = stringResource(id = R.string.watched_marks_section))
+            Column(
+                verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+            ) {
+                PreferenceSwitch(
+                    modifier = Modifier.restorableFocusItem(
+                        state = focusState,
+                        key = "enable_watched_marks",
+                    ),
+                    title = stringResource(id = R.string.watched_marks_enabled),
+                    description = stringResource(id = R.string.watched_marks_enabled_sub),
+                    icon = NextIcons.Check,
+                    isChecked = preferences.enableWatchedMarks,
+                    onClick = {
+                        onAction(MediaLibraryPreferencesUiEvent.ToggleEnableWatchedMarks)
+                    },
+                    isFirstItem = true,
+                    isLastItem = false,
+                )
+                PreferenceSlider(
+                    modifier = Modifier.restorableFocusItem(
+                        state = focusState,
+                        key = "video_watched_threshold",
+                    ),
+                    title = stringResource(id = R.string.watched_marks_video_threshold),
+                    description = "${preferences.videoWatchedThreshold}%",
+                    icon = NextIcons.Video,
+                    value = preferences.videoWatchedThreshold.toFloat(),
+                    valueRange = 50f..100f,
+                    steps = 49,
+                    enabled = preferences.enableWatchedMarks,
+                    onValueChange = {
+                        onAction(
+                            MediaLibraryPreferencesUiEvent.UpdateVideoWatchedThreshold(
+                                it.roundToInt(),
+                            ),
+                        )
+                    },
+                    isFirstItem = false,
+                    isLastItem = false,
+                )
+                PreferenceSlider(
+                    modifier = Modifier.restorableFocusItem(
+                        state = focusState,
+                        key = "comic_watched_threshold",
+                    ),
+                    title = stringResource(id = R.string.watched_marks_comic_threshold),
+                    description = "${preferences.comicWatchedThreshold}%",
+                    icon = NextIcons.Comic,
+                    value = preferences.comicWatchedThreshold.toFloat(),
+                    valueRange = 50f..100f,
+                    steps = 49,
+                    enabled = preferences.enableWatchedMarks,
+                    onValueChange = {
+                        onAction(
+                            MediaLibraryPreferencesUiEvent.UpdateComicWatchedThreshold(
+                                it.roundToInt(),
+                            ),
+                        )
+                    },
+                    isFirstItem = false,
+                    isLastItem = true,
+                )
+            }
+
             ListSectionTitle(text = stringResource(id = R.string.scan))
             Column(
                 verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),

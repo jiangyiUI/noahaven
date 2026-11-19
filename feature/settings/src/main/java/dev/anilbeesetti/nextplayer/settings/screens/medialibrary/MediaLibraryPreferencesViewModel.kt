@@ -70,6 +70,15 @@ class MediaLibraryPreferencesViewModel(
             is MediaLibraryPreferencesUiEvent.UpdateNewVideoThreshold -> updateNewVideoThreshold(
                 action.days,
             )
+
+            is MediaLibraryPreferencesUiEvent.ToggleEnableWatchedMarks ->
+                toggleEnableWatchedMarks()
+
+            is MediaLibraryPreferencesUiEvent.UpdateVideoWatchedThreshold ->
+                updateVideoWatchedThreshold(action.threshold)
+
+            is MediaLibraryPreferencesUiEvent.UpdateComicWatchedThreshold ->
+                updateComicWatchedThreshold(action.threshold)
         }
     }
 
@@ -118,6 +127,30 @@ class MediaLibraryPreferencesViewModel(
             }
         }
     }
+
+    private fun toggleEnableWatchedMarks() {
+        viewModelScope.launch {
+            preferencesRepository.updateApplicationPreferences {
+                it.copy(enableWatchedMarks = !it.enableWatchedMarks)
+            }
+        }
+    }
+
+    private fun updateVideoWatchedThreshold(threshold: Int) {
+        viewModelScope.launch {
+            preferencesRepository.updateApplicationPreferences {
+                it.copy(videoWatchedThreshold = threshold.coerceIn(50, 100))
+            }
+        }
+    }
+
+    private fun updateComicWatchedThreshold(threshold: Int) {
+        viewModelScope.launch {
+            preferencesRepository.updateApplicationPreferences {
+                it.copy(comicWatchedThreshold = threshold.coerceIn(50, 100))
+            }
+        }
+    }
 }
 
 data class MediaLibraryPreferencesUiState(
@@ -137,4 +170,7 @@ sealed interface MediaLibraryPreferencesUiEvent {
     data class SetWatchHistoryEnabled(val enabled: Boolean) : MediaLibraryPreferencesUiEvent
     data object ToggleIncludeNetworkWatchHistory : MediaLibraryPreferencesUiEvent
     data class UpdateNewVideoThreshold(val days: Int) : MediaLibraryPreferencesUiEvent
+    data object ToggleEnableWatchedMarks : MediaLibraryPreferencesUiEvent
+    data class UpdateVideoWatchedThreshold(val threshold: Int) : MediaLibraryPreferencesUiEvent
+    data class UpdateComicWatchedThreshold(val threshold: Int) : MediaLibraryPreferencesUiEvent
 }

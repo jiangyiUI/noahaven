@@ -81,6 +81,7 @@ import kotlinx.coroutines.launch
 fun ComicsScreen(
     viewModel: ComicsViewModel,
     tabBar: @Composable () -> Unit = {},
+    contentModifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle(
         minActiveState = Lifecycle.State.RESUMED,
@@ -109,6 +110,7 @@ fun ComicsScreen(
         state = state,
         viewModel = viewModel,
         tabBar = tabBar,
+        contentModifier = contentModifier,
         hasStorageAccess = hasStorageAccess,
         onAllFilesAccessGranted = {
             hasStorageAccess = true
@@ -123,6 +125,7 @@ internal fun ComicsScreenContent(
     state: ComicsUiState,
     viewModel: ComicsViewModel,
     tabBar: @Composable () -> Unit = {},
+    contentModifier: Modifier = Modifier,
     hasStorageAccess: Boolean = true,
     onAllFilesAccessGranted: () -> Unit = {},
 ) {
@@ -372,7 +375,9 @@ internal fun ComicsScreenContent(
                         topEnd = 24.dp,
                     ),
                 )
-                .background(MaterialTheme.colorScheme.background),
+                .background(MaterialTheme.colorScheme.background)
+                // 放在 background 之后，白色卡片保持不动，只有里面的内容滑动
+                .then(contentModifier),
         ) {
             if (!hasStorageAccess) {
                 AllFilesAccessView(onGranted = onAllFilesAccessGranted)

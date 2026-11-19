@@ -41,4 +41,7 @@ data class MediumStateEntity(
     val subtitleDelayMilliseconds: Long = 0,
     @ColumnInfo(name = "subtitle_speed")
     val subtitleSpeed: Float = 1f,
+    /** 视频/音频是否已看完（播放进度达到看过阈值）。双向标记：低于阈值自动取消。 */
+    @ColumnInfo(name = "watched", defaultValue = "0")
+    val watched: Boolean = false,
 )

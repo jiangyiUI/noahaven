@@ -72,6 +72,13 @@ data class ApplicationPreferences(
 
     val newVideoThresholdDays: Int = 7,
 
+    /** 看完标记总开关：开启后视频/漫画达到各自阈值会自动打上标记。 */
+    val enableWatchedMarks: Boolean = true,
+    /** 视频看完阈值（百分比，0-100）。默认 90，范围 50-100。 */
+    val videoWatchedThreshold: Int = 90,
+    /** 漫画看完阈值（百分比，0-100）。默认 95，范围 50-100。 */
+    val comicWatchedThreshold: Int = 95,
+
     // Thumbnail generation
     val thumbnailGenerationStrategy: ThumbnailGenerationStrategy =
         ThumbnailGenerationStrategy.FRAME_AT_PERCENTAGE,

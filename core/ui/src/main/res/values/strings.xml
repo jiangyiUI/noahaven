@@ -641,4 +641,12 @@
         <item quantity="one">%1$d day</item>
         <item quantity="other">%1$d days</item>
     </plurals>
+
+    <!-- Watched marks -->
+    <string name="watched_marks_section">Playback completion</string>
+    <string name="watched_marks_enabled">Show completion badges</string>
+    <string name="watched_marks_enabled_sub">Mark videos and comics as watched when reaching their thresholds</string>
+    <string name="watched_marks_video_threshold">Video completion threshold</string>
+    <string name="watched_marks_comic_threshold">Comic completion threshold</string>
+    <string name="watched_badge_content_desc">Watched</string>
 </resources>
