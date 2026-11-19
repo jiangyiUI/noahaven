@@ -18,6 +18,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.koin.core.annotation.Named
 import org.koin.core.annotation.Single
 
@@ -65,6 +66,16 @@ class RoomImageFileIndex(
                     folderPath == null -> FULL_REFRESH_INTERVAL_MS
                     else -> FOLDER_REFRESH_INTERVAL_MS
                 },
+            )
+        }
+    }
+
+    override suspend fun refreshNow(whitelistRoots: Collection<String>, folderPath: String?) {
+        withContext(Dispatchers.IO) {
+            refresh(
+                whitelistRoots = whitelistRoots,
+                folderPath = folderPath,
+                minIntervalMillis = 0L,
             )
         }
     }

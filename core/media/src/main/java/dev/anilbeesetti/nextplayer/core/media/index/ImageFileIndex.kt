@@ -20,6 +20,9 @@ interface ImageFileIndex {
         force: Boolean = false,
     )
 
+    /** 立即刷新并挂起直到本次扫描完成：下拉刷新用，不受自动刷新的节流间隔限制。 */
+    suspend fun refreshNow(whitelistRoots: Collection<String>, folderPath: String?)
+
     fun removePaths(paths: Collection<String>)
 
     /** 删除已移除根目录的索引，并保留仍被 retainedRoots 覆盖的嵌套目录图片。 */

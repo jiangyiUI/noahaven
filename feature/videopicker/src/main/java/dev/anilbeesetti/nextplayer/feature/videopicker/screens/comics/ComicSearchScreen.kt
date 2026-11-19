@@ -97,7 +97,7 @@ fun ComicSearchScreen(viewModel: ComicSearchViewModel) {
         // 打开查看器时把当前查询写入搜索历史
         viewModel.onAction(ComicSearchUiEvent.OnSearch(state.query))
         scope.launch {
-            val effectivePassword = password ?: viewModel.getComicPassword(comic.path)
+            val effectivePassword = password ?: viewModel.resolveComicPassword(comic.path)
             when (val result = ComicArchiveReader.openComic(comic.path, effectivePassword)) {
                 is ComicOpenResult.Success -> {
                     if (password != null) viewModel.saveComicPassword(comic.path, password)

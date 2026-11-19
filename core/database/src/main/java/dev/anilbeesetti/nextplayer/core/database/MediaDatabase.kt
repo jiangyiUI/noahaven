@@ -40,7 +40,7 @@ import dev.anilbeesetti.nextplayer.core.database.entities.PlaylistItemEntity
         ComicProgressEntity::class,
         ComicPasswordEntity::class,
     ],
-    version = 21,
+    version = 22,
     exportSchema = true,
 )
 abstract class MediaDatabase : RoomDatabase() {
@@ -613,6 +613,21 @@ abstract class MediaDatabase : RoomDatabase() {
                         `password` TEXT NOT NULL,
                         PRIMARY KEY(`path`)
                     )
+                    """,
+                )
+            }
+        }
+
+        /** 密码表补文件指纹列，用于识别在 App 外被移动/改名的同一个加密文件。 */
+        val MIGRATION_21_22 = object : Migration(
+            21,
+            22,
+        ) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    sql = """
+                    ALTER TABLE `comic_password`
+                    ADD COLUMN `fingerprint` TEXT
                     """,
                 )
             }

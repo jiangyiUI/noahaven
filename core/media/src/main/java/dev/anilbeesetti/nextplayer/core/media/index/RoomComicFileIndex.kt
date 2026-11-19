@@ -12,8 +12,10 @@ import dev.anilbeesetti.nextplayer.core.model.ComicFile
 import dev.anilbeesetti.nextplayer.core.model.ComicProgress
 import dev.anilbeesetti.nextplayer.core.model.ComicReadingDirection
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -50,6 +52,10 @@ class RoomComicFileIndex(
     /** 封面缓存路径（zipPath → coverCachePath），进程内缓存。 */
     private val coverCache = HashMap<String, String?>()
 
+    /** 自动适配过密码但都没解开的文件，本进程内不再重试；用户输过新密码后清空，值得再试一轮。 */
+    private val autoPasswordFailed = ConcurrentHashMap.newKeySet<String>()
+    private var autoPasswordJob: Job? = null
+
     private val _entries = MutableStateFlow<List<ComicFile>?>(null)
     override val entries: StateFlow<List<ComicFile>?> = _entries.asStateFlow()
 
@@ -73,6 +79,16 @@ class RoomComicFileIndex(
                     folderPath == null -> FULL_REFRESH_INTERVAL_MS
                     else -> FOLDER_REFRESH_INTERVAL_MS
                 },
+            )
+        }
+    }
+
+    override suspend fun refreshNow(whitelistRoots: Collection<String>, folderPath: String?) {
+        withContext(Dispatchers.IO) {
+            refresh(
+                whitelistRoots = whitelistRoots,
+                folderPath = folderPath,
+                minIntervalMillis = 0L,
             )
         }
     }
@@ -128,18 +144,82 @@ class RoomComicFileIndex(
         withContext(Dispatchers.IO) { progressDao.clear() }
     }
 
-    override suspend fun getPassword(path: String): String? = withContext(Dispatchers.IO) {
-        runCatching { passwordDao.get(path) }.getOrNull()
+    override suspend fun resolvePassword(path: String): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            val direct = passwordDao.getEntity(path)
+            if (direct != null) {
+                // 老数据没有指纹，顺手补上，以后在 App 外移动/改名也能认出这个文件
+                if (direct.fingerprint == null) {
+                    val fp = ComicArchiveReader.fingerprint(path)
+                    if (fp != null) passwordDao.upsert(direct.copy(fingerprint = fp))
+                }
+                // 老索引可能只有密码，页数和封面还空着；再次打开时也要补齐，而不是直接返回
+                val needsMetadata = stateMutex.withLock {
+                    loadLocked()
+                    index[path]?.let { it.imageCount <= 0 || it.coverCachePath == null } == true
+                }
+                if (needsMetadata) persistPassword(path = path, password = direct.password)
+                return@withContext direct.password
+            }
+            val saved = passwordDao.getAll()
+            if (saved.isEmpty()) return@withContext null
+
+            // 先确认这本确实要密码：未加密、损坏、低版本打不开的加密 PDF 都直接交回给 UI 处理，
+            // 免得给未加密漫画白算指纹、甚至错记一个别人的密码。
+            if (ComicArchiveReader.openComic(path, null) !is ComicOpenResult.PasswordRequired) {
+                return@withContext null
+            }
+
+            // 在 App 外被移动/改名：路径变了但内容没变，用指纹认出同一文件，密码记录跟着迁过来
+            val fingerprint = ComicArchiveReader.fingerprint(path)
+            val matched = saved.firstOrNull { it.fingerprint != null && it.fingerprint == fingerprint }
+            if (matched != null) {
+                // 原路径还在就是复制：新旧两份都保留密码；原路径消失才按移动处理
+                if (!File(matched.path).exists()) {
+                    passwordDao.move(fromPath = matched.path, toPath = path)
+                }
+                persistPassword(path = path, password = matched.password)
+                return@withContext matched.password
+            }
+
+            // 不是同一个文件：很多压缩包共用同一个密码，拿已保存的密码去重后逐个试
+            for (candidate in saved.map { it.password }.distinct().take(MAX_REUSED_PASSWORDS)) {
+                when (ComicArchiveReader.openComic(path, candidate)) {
+                    is ComicOpenResult.Success -> {
+                        persistPassword(path = path, password = candidate)
+                        return@withContext candidate
+                    }
+
+                    // 低版本系统打不开的加密 PDF，再试也没意义
+                    ComicOpenResult.UnsupportedEncrypted -> return@withContext null
+                    else -> Unit
+                }
+            }
+            null
+        }.getOrNull()
     }
 
     override suspend fun savePassword(path: String, password: String) {
+        // 用户输出了新密码：之前自动试失败的文件，值得再用新密码试一轮
+        autoPasswordFailed.clear()
+        persistPassword(path = path, password = password)
+    }
+
+    /** 存密码 + 立刻补页数和封面。自动适配密码也走这里，但不会清空失败记录。 */
+    private suspend fun persistPassword(path: String, password: String) {
         if (password.isEmpty()) return
         withContext(Dispatchers.IO) {
             runCatching {
-                passwordDao.upsert(ComicPasswordEntity(path = path, password = password))
+                passwordDao.upsert(
+                    ComicPasswordEntity(
+                        path = path,
+                        password = password,
+                        fingerprint = ComicArchiveReader.fingerprint(path),
+                    ),
+                )
             }
-            // 之前没有密码时封面是解不出来的，这里立刻补一次：
-            // 无论从漫画库、搜索页还是历史页输的密码，都能马上看到封面
+            // 之前没有密码时页数/封面解不出来，这里立刻补一次：
+            // 无论从漫画库、搜索页还是历史页打开，都能马上看到完整信息
             coverCache.remove(path)
             val entries = if (isPdf(path)) {
                 emptyList()
@@ -148,12 +228,22 @@ class RoomComicFileIndex(
                     ComicArchiveReader(path).use { it.listImageEntries() }
                 }.getOrDefault(emptyList())
             }
+            val imageCount = if (isPdf(path)) {
+                PdfComicReader.pageCount(path, password)
+            } else {
+                entries.size
+            }
             val cover = extractCoverLocked(context, path, entries, password)
-            coverCache[path] = cover
-            if (cover != null) {
-                stateMutex.withLock {
-                    index[path]?.let { existing ->
-                        index[path] = existing.copy(coverCachePath = cover)
+            if (cover != null) coverCache[path] = cover
+            stateMutex.withLock {
+                index[path]?.let { existing ->
+                    val updated = existing.copy(
+                        imageCount = imageCount.takeIf { it > 0 } ?: existing.imageCount,
+                        coverCachePath = cover ?: existing.coverCachePath,
+                    )
+                    if (updated != existing) {
+                        index[path] = updated
+                        runCatching { dao.upsertAll(listOf(updated.toEntity())) }
                         publishLocked()
                     }
                 }
@@ -299,6 +389,34 @@ class RoomComicFileIndex(
                 }
                 publishLocked()
             }
+
+            // 扫描完成后，后台给还没存过密码的加密漫画试密码、取出第一页当封面
+            scheduleAutoPasswordResolve()
+        }
+    }
+
+    /**
+     * 进漫画库后，给还没存过密码的加密漫画自动适配密码：
+     * 能按指纹认出同一文件、或其他漫画的密码能解开的，就顺手记住密码并取出第一页当封面，
+     * 用户不用逐个点开输密码。串行后台跑，解不开的本进程内不再反复尝试。
+     */
+    private fun scheduleAutoPasswordResolve() {
+        if (autoPasswordJob?.isActive == true) return
+        autoPasswordJob = applicationScope.launch(Dispatchers.IO) {
+            // 封面或页数还空着的基本就是没密码解不开的（未加密漫画扫描时已经补全）
+            val candidates = stateMutex.withLock {
+                index.values
+                    .filter {
+                        (it.coverCachePath == null || it.imageCount <= 0) &&
+                            it.path !in autoPasswordFailed
+                    }
+                    .map { it.path }
+            }
+            for (path in candidates) {
+                // resolvePassword 内部：已存密码 → 指纹匹配 → 复用其他漫画密码。
+                // 试对会自己存密码并补页数/封面，所以前一本试出来的密码，后面几本也能跟着解开
+                if (resolvePassword(path) == null) autoPasswordFailed += path
+            }
         }
     }
 
@@ -355,6 +473,9 @@ class RoomComicFileIndex(
         const val FOLDER_REFRESH_INTERVAL_MS = 15_000L
         const val FULL_REFRESH_INTERVAL_MS = 60_000L
         const val UPSERT_CHUNK_SIZE = 90
+
+        /** 复用其他漫画密码时最多试几个，避免密码记录很多时打开变慢。 */
+        const val MAX_REUSED_PASSWORDS = 3
     }
 }
 

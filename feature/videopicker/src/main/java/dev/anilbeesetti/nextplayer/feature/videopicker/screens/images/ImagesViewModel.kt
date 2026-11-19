@@ -25,6 +25,7 @@ import dev.anilbeesetti.nextplayer.feature.videopicker.state.SelectionItem
 import java.io.File
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -36,6 +37,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.core.annotation.KoinViewModel
 import org.koin.core.annotation.Named
+
+/** 下拉刷新指示的最短停留时间：扫描太快时也转一下，让用户知道确实刷新过。 */
+private const val MIN_REFRESH_INDICATOR_MS = 500L
 
 @KoinViewModel
 class ImagesViewModel(
@@ -177,12 +181,19 @@ class ImagesViewModel(
         }
         viewModelScope.launch {
             refreshing.value = true
-            imageFileIndex.requestRefresh(
-                whitelistRoots = preferences.imageFolders,
-                folderPath = folderPath.value,
-                force = true,
-            )
-            refreshing.value = false
+            val startedAt = System.currentTimeMillis()
+            try {
+                imageFileIndex.refreshNow(
+                    whitelistRoots = preferences.imageFolders,
+                    folderPath = folderPath.value,
+                )
+            } finally {
+                val elapsed = System.currentTimeMillis() - startedAt
+                if (elapsed < MIN_REFRESH_INDICATOR_MS) {
+                    delay(MIN_REFRESH_INDICATOR_MS - elapsed)
+                }
+                refreshing.value = false
+            }
         }
     }
 

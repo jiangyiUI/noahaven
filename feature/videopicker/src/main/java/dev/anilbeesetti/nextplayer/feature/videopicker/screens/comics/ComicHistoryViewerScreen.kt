@@ -63,7 +63,7 @@ class ComicHistoryViewerViewModel(
 
     init {
         viewModelScope.launch {
-            val saved = comicFileIndex.getPassword(path)
+            val saved = comicFileIndex.resolvePassword(path)
             openWith(password = saved, isUserInput = false)
         }
     }

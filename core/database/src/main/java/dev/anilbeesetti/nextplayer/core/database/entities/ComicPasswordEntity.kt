@@ -16,4 +16,10 @@ data class ComicPasswordEntity(
     val path: String,
     @ColumnInfo(name = "password")
     val password: String,
+    /**
+     * 文件指纹（大小 + 首尾内容哈希）。用户在 App 外移动/改名后路径会变，
+     * 靠它认出同一个文件，把密码记录带过去。老数据为 null，下次打开时补算。
+     */
+    @ColumnInfo(name = "fingerprint")
+    val fingerprint: String? = null,
 )

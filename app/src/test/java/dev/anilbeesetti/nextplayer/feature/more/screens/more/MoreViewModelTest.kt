@@ -271,6 +271,8 @@ private class FakeComicFileIndex : ComicFileIndex {
         force: Boolean,
     ) = Unit
 
+    override suspend fun refreshNow(whitelistRoots: Collection<String>, folderPath: String?) = Unit
+
     override suspend fun find(path: String): ComicFile? = null
 
     override suspend fun getProgress(path: String): ComicProgress? = null
@@ -285,7 +287,7 @@ private class FakeComicFileIndex : ComicFileIndex {
 
     override suspend fun clearProgress() = Unit
 
-    override suspend fun getPassword(path: String): String? = null
+    override suspend fun resolvePassword(path: String): String? = null
 
     override suspend fun savePassword(path: String, password: String) = Unit
 

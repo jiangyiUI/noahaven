@@ -34,6 +34,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.koin.core.annotation.Factory
 
+/** 下拉刷新指示的最短停留时间：扫描太快时也转一下，让用户知道确实刷新过。 */
+private const val MIN_REFRESH_INDICATOR_MS = 500L
+
 /** 漫画库 ViewModel：文件夹树 + 漫画列表，统计方式与图片库保持一致。 */
 @Factory
 class ComicsViewModel(
@@ -125,12 +128,19 @@ class ComicsViewModel(
         }
         viewModelScope.launch {
             refreshing.value = true
-            comicFileIndex.requestRefresh(
-                whitelistRoots = preferencesRepository.applicationPreferences.value.comicFolders,
-                folderPath = folderPath.value,
-                force = true,
-            )
-            refreshing.value = false
+            val startedAt = System.currentTimeMillis()
+            try {
+                comicFileIndex.refreshNow(
+                    whitelistRoots = preferencesRepository.applicationPreferences.value.comicFolders,
+                    folderPath = folderPath.value,
+                )
+            } finally {
+                val elapsed = System.currentTimeMillis() - startedAt
+                if (elapsed < MIN_REFRESH_INDICATOR_MS) {
+                    delay(MIN_REFRESH_INDICATOR_MS - elapsed)
+                }
+                refreshing.value = false
+            }
         }
     }
 
@@ -352,8 +362,8 @@ class ComicsViewModel(
         }
     }
 
-    /** 打开加密漫画前取已保存的密码。 */
-    suspend fun getComicPassword(path: String): String? = comicFileIndex.getPassword(path)
+    /** 打开加密漫画前解析可用密码：已保存的、同文件指纹匹配的、或其他漫画复用来的。 */
+    suspend fun resolveComicPassword(path: String): String? = comicFileIndex.resolvePassword(path)
 
     /** 密码校验成功后保存，之后可直接打开。 */
     suspend fun saveComicPassword(path: String, password: String) {

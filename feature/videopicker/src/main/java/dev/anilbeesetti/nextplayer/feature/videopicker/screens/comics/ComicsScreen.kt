@@ -145,8 +145,8 @@ internal fun ComicsScreenContent(
     fun openComic(comic: ComicFile, password: String? = null) {
         if (viewerSession != null) return
         scope.launch {
-            // 优先用本次输入的密码，其次用之前保存过的
-            val effectivePassword = password ?: viewModel.getComicPassword(comic.path)
+            // 优先用本次输入的密码；否则按路径/文件指纹/复用其他漫画密码来解析
+            val effectivePassword = password ?: viewModel.resolveComicPassword(comic.path)
             when (val result = ComicArchiveReader.openComic(comic.path, effectivePassword)) {
                 is ComicOpenResult.Success -> {
                     if (password != null) viewModel.saveComicPassword(comic.path, password)

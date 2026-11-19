@@ -26,6 +26,8 @@ class NoOpImageFileIndex : ImageFileIndex {
         force: Boolean,
     ) = Unit
 
+    override suspend fun refreshNow(whitelistRoots: Collection<String>, folderPath: String?) = Unit
+
     override fun removePaths(paths: Collection<String>) = Unit
 
     override fun removeRoots(roots: Collection<String>, retainedRoots: Collection<String>) = Unit

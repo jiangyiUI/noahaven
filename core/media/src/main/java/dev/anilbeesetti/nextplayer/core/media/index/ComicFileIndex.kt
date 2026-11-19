@@ -15,6 +15,9 @@ interface ComicFileIndex {
         force: Boolean = false,
     )
 
+    /** 立即刷新并挂起直到本次扫描完成：下拉刷新用，不受自动刷新的节流间隔限制。 */
+    suspend fun refreshNow(whitelistRoots: Collection<String>, folderPath: String?)
+
     suspend fun find(path: String): ComicFile?
 
     /** 读取单本漫画的阅读进度；没有记录时返回 null。 */
@@ -35,8 +38,13 @@ interface ComicFileIndex {
     /** 清空全部漫画阅读进度。 */
     suspend fun clearProgress()
 
-    /** 读取已保存的解压/解密密码；没有记录时返回 null。 */
-    suspend fun getPassword(path: String): String?
+    /**
+     * 打开前解析这本漫画可用的密码，找不到时返回 null（由 UI 弹密码框）：
+     * 1. 路径直接命中已保存的记录；
+     * 2. 文件在 App 外被移动/改名：按文件指纹认出同一文件，把密码记录迁到新路径；
+     * 3. 复用其他加密漫画的密码逐个试（很多压缩包用的是同一个密码），试对就记住。
+     */
+    suspend fun resolvePassword(path: String): String?
 
     /** 保存密码（打开成功后调用）。 */
     suspend fun savePassword(path: String, password: String)

@@ -7,6 +7,7 @@ import dev.anilbeesetti.nextplayer.core.common.Utils
 import dev.anilbeesetti.nextplayer.core.database.entities.ComicFileIndexEntity
 import dev.anilbeesetti.nextplayer.core.model.ComicFile
 import java.io.File
+import java.io.RandomAccessFile
 import java.security.MessageDigest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -73,6 +74,9 @@ class ComicArchiveReader(private val zipPath: String) : AutoCloseable {
     data class ImageEntry(val entryName: String, val size: Long)
 
     companion object {
+        /** 指纹只取文件首尾各 64KB，避免对大压缩包做全量哈希。 */
+        private const val FINGERPRINT_CHUNK_SIZE = 64L * 1024L
+
         private val IMAGE_EXTS = setOf(
             "jpg",
             "jpeg",
@@ -97,6 +101,33 @@ class ComicArchiveReader(private val zipPath: String) : AutoCloseable {
                     else -> emptyList()
                 }
             }
+
+        /**
+         * 文件指纹：大小 + 头部/尾部各 64KB 的 SHA-256。
+         * 不做全量哈希——漫画压缩包常有几百 MB，全量读一遍太慢；
+         * 移动/改名不会改变内容，所以指纹稳定，足以认出同一个文件。
+         */
+        fun fingerprint(path: String): String? = runCatching {
+            val file = File(path)
+            if (!file.isFile) return@runCatching null
+            val size = file.length()
+            val digest = MessageDigest.getInstance("SHA-256")
+            RandomAccessFile(file, "r").use { raf ->
+                val headLength = minOf(FINGERPRINT_CHUNK_SIZE, size).toInt()
+                val head = ByteArray(headLength)
+                raf.seek(0)
+                raf.readFully(head)
+                digest.update(head)
+                if (size > headLength) {
+                    val tailLength = minOf(FINGERPRINT_CHUNK_SIZE, size - headLength).toInt()
+                    val tail = ByteArray(tailLength)
+                    raf.seek(size - tailLength)
+                    raf.readFully(tail)
+                    digest.update(tail)
+                }
+            }
+            size.toString() + ":" + digest.digest().joinToString("") { "%02x".format(it) }
+        }.getOrNull()
 
         /**
          * UI 层用：打开漫画并区分「需要密码 / 密码错误 / 不支持 / 失败」。
