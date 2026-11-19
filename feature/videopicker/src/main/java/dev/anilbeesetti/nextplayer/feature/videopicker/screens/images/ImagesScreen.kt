@@ -359,7 +359,11 @@ internal fun ImagesScreenContent(
                         bottom = scaffoldPadding.calculateBottomPadding() + navigationBottomPadding,
                     )
                     if (state.folders.isEmpty() && state.images.isEmpty()) {
-                        NoImagesFound(contentPadding = contentPadding)
+                        NoImagesFound(
+                            contentPadding = contentPadding,
+                            showFolderSetup = state.preferences.imageFolders.isEmpty(),
+                            onFolderSetupClick = { onAction(ImagesAction.OnAddFoldersClick) },
+                        )
                     } else {
                         val selectedIds = selectionManager.selectionItems.map { it.id }.toSet()
                         ImageView(

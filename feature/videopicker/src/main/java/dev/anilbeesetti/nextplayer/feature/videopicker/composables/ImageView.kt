@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -150,7 +151,11 @@ fun ImageView(
 }
 
 @Composable
-fun NoImagesFound(contentPadding: PaddingValues = PaddingValues()) {
+fun NoImagesFound(
+    contentPadding: PaddingValues = PaddingValues(),
+    showFolderSetup: Boolean = false,
+    onFolderSetupClick: () -> Unit = {},
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -165,11 +170,18 @@ fun NoImagesFound(contentPadding: PaddingValues = PaddingValues()) {
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            text = stringResource(R.string.no_images_found),
+            text = stringResource(
+                if (showFolderSetup) R.string.image_folders_empty else R.string.no_images_found,
+            ),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 12.dp),
         )
+        if (showFolderSetup) {
+            TextButton(onClick = onFolderSetupClick) {
+                Text(text = stringResource(R.string.image_folders_setup))
+            }
+        }
     }
 }

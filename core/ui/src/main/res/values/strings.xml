@@ -75,14 +75,16 @@
     <string name="no_music_found">No music found</string>
     <string name="images">Images</string>
     <string name="no_images_found">No images found. Add an image folder in Settings.</string>
+    <string name="image_folders_empty">No image folders added.</string>
+    <string name="image_folders_setup">Add folders</string>
 
     <!-- Comics -->
     <string name="comics">Comics</string>
     <string name="search_comics">Search comics</string>
     <string name="search_comics_and_folders">Search comics and folders</string>
     <string name="no_comics_found">No comics found. Add a comic folder in Settings.</string>
-    <string name="comic_folders_empty">No comic folders selected.</string>
-    <string name="comic_folders_setup">Go to Settings</string>
+    <string name="comic_folders_empty">No comic folders added.</string>
+    <string name="comic_folders_setup">Add folders</string>
     <string name="manage_comic_folders">Manage comic folders</string>
     <string name="manage_comic_folders_desc">Choose the folders to include in the comic library</string>
     <string name="comic_reading_direction">Reading direction</string>
@@ -224,9 +226,12 @@
     <string name="audio_decoder">Audio decoder</string>
     <string name="decoder_mode_hardware">HW</string>
     <string name="decoder_mode_system_software">SW+</string>
+    <string name="decoder_mode_hardware_plus">HW+</string>
     <string name="decoder_mode_app_software">SW</string>
     <string name="decoder_hardware_description">Hardware MediaCodec decoders only</string>
+    <string name="decoder_system_description">Android system decoders (hardware or software)</string>
     <string name="decoder_system_software_description">Android software MediaCodec decoders only</string>
+    <string name="decoder_hardware_plus_description">FFmpeg container reader with Android system decoders</string>
     <string name="decoder_app_software_description">Bundled FFmpeg software decoder</string>
     <string name="video_decoder_mode_not_supported">%1$s video decoder is not supported</string>
     <string name="audio_decoder_mode_not_supported">%1$s audio decoder is not supported</string>

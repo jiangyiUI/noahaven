@@ -15,8 +15,8 @@ android {
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         applicationId = "dev.jiangyiui.noaplayer"
-        versionCode = 86
-        versionName = "0.22.7"
+        versionCode = 87
+        versionName = "0.22.8"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         testInstrumentationRunnerArguments["clearPackageData"] = "true"
     }
@@ -158,6 +158,8 @@ dependencies {
     androidTestImplementation(libs.androidx.datastore.core)
     androidTestImplementation(libs.androidx.media3.session)
     androidTestImplementation(libs.androidx.media3.ui)
+    androidTestImplementation(libs.androidx.media3.datasource)
+    androidTestImplementation(libs.androidx.media3.exoplayer)
     androidTestImplementation(libs.github.anilbeesetti.nextlib.media3ext)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.test.ext)

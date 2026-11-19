@@ -466,9 +466,12 @@
     <string name="video_decoder">影片解碼器</string>
     <string name="audio_decoder">音訊解碼器</string>
     <string name="decoder_mode_hardware">硬體</string>
+    <string name="decoder_mode_hardware_plus">HW+</string>
     <string name="decoder_mode_system_software">軟體（進階）</string>
     <string name="decoder_mode_app_software">軟體</string>
     <string name="decoder_hardware_description">僅限 MediaCodec 硬體解碼</string>
+    <string name="decoder_system_description">Android 系統解碼器（硬體或軟體）</string>
+    <string name="decoder_hardware_plus_description">FFmpeg 解封裝，使用 Android 系統解碼器</string>
     <string name="decoder_system_software_description">僅限 Android MediaCodec 軟體解碼</string>
     <string name="decoder_app_software_description">附屬 FFmpeg 軟體解碼</string>
     <string name="video_decoder_mode_not_supported">不支援 %1$s 影片解碼器</string>

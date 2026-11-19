@@ -48,6 +48,7 @@ class ComicsViewModel(
 
     data class Output(
         val openSettings: () -> Unit = {},
+        val openComicFolders: () -> Unit = {},
         val openSearch: () -> Unit = {},
     )
 
@@ -157,6 +158,8 @@ class ComicsViewModel(
     }
 
     fun openSettings() = output.openSettings()
+
+    fun openComicFolders() = output.openComicFolders()
 
     fun openSearch() = output.openSearch()
 

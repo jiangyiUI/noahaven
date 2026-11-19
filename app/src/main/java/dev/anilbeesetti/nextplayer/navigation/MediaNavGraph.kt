@@ -24,6 +24,8 @@ import dev.anilbeesetti.nextplayer.feature.videopicker.navigation.navigateToMusi
 import dev.anilbeesetti.nextplayer.feature.videopicker.navigation.navigateToSearch
 import dev.anilbeesetti.nextplayer.feature.videopicker.navigation.navigateToVault
 import dev.anilbeesetti.nextplayer.feature.videopicker.navigation.searchEntry
+import dev.anilbeesetti.nextplayer.settings.navigation.navigateToComicFolderPreferencesScreen
+import dev.anilbeesetti.nextplayer.settings.navigation.navigateToImageFolderPreferencesScreen
 import dev.anilbeesetti.nextplayer.settings.navigation.navigateToSettings
 
 fun EntryProviderScope<NavKey>.mediaNavGraph(context: Context, backStack: NavBackStack<NavKey>) {
@@ -75,6 +77,8 @@ fun EntryProviderScope<NavKey>.musicNavGraph(context: Context, backStack: NavBac
 fun EntryProviderScope<NavKey>.imagesNavGraph(backStack: NavBackStack<NavKey>) {
     imagesEntry(
         onSettingsClick = backStack::navigateToSettings,
+        onImageFoldersClick = backStack::navigateToImageFolderPreferencesScreen,
+        onComicFoldersClick = backStack::navigateToComicFolderPreferencesScreen,
         onSearchClick = backStack::navigateToImageSearch,
         onComicSearchClick = backStack::navigateToComicSearch,
     )

@@ -51,10 +51,15 @@ class ImagesViewModel(
     @Named(DiQualifiers.DEFAULT_DISPATCHER) private val defaultDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
 
-    data class Output(val openSettings: () -> Unit, val openSearch: () -> Unit)
+    data class Output(
+        val openSettings: () -> Unit,
+        val openImageFolders: () -> Unit,
+        val openSearch: () -> Unit,
+    )
 
     internal var output: Output = Output(
         openSettings = {},
+        openImageFolders = {},
         openSearch = {},
     )
 
@@ -130,6 +135,8 @@ class ImagesViewModel(
             ImagesAction.OnSearchClick -> output.openSearch()
 
             ImagesAction.OnSettingsClick -> output.openSettings()
+
+            ImagesAction.OnAddFoldersClick -> output.openImageFolders()
 
             ImagesAction.OnPermissionAccepted -> refresh()
 
@@ -542,6 +549,7 @@ sealed interface ImagesAction {
     data object OnPermissionAccepted : ImagesAction
     data object OnSearchClick : ImagesAction
     data object OnSettingsClick : ImagesAction
+    data object OnAddFoldersClick : ImagesAction
     data class ShareSelected(val items: Set<SelectionItem>) : ImagesAction
     data class RenameSelected(val uri: Uri, val to: String) : ImagesAction
     data class DeleteSelected(val items: Set<SelectionItem>) : ImagesAction

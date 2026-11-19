@@ -15,12 +15,15 @@ data object ImagesRoute : NavKey
 
 fun EntryProviderScope<NavKey>.imagesEntry(
     onSettingsClick: () -> Unit,
+    onImageFoldersClick: () -> Unit,
+    onComicFoldersClick: () -> Unit,
     onSearchClick: () -> Unit,
     onComicSearchClick: () -> Unit,
 ) {
     entry<ImagesRoute> {
         val imagesOutput = ImagesViewModel.Output(
             openSettings = onSettingsClick,
+            openImageFolders = onImageFoldersClick,
             openSearch = onSearchClick,
         )
         val imagesViewModel = koinViewModel<ImagesViewModel>()
@@ -28,6 +31,7 @@ fun EntryProviderScope<NavKey>.imagesEntry(
 
         val comicsOutput = ComicsViewModel.Output(
             openSettings = onSettingsClick,
+            openComicFolders = onComicFoldersClick,
             openSearch = onComicSearchClick,
         )
         val comicsViewModel = koinViewModel<ComicsViewModel>()

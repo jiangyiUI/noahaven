@@ -410,7 +410,7 @@ internal fun ComicsScreenContent(
                                     textAlign = TextAlign.Center,
                                     modifier = Modifier.padding(top = 12.dp),
                                 )
-                                TextButton(onClick = viewModel::openSettings) {
+                                TextButton(onClick = viewModel::openComicFolders) {
                                     Text(text = stringResource(R.string.comic_folders_setup))
                                 }
                             }
