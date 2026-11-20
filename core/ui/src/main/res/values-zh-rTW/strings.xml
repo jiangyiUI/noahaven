@@ -522,4 +522,10 @@
     <string name="watched_marks_video_threshold">影片完成閾值</string>
     <string name="watched_marks_comic_threshold">漫畫完成閾值</string>
     <string name="watched_badge_content_desc">已看完</string>
+    <string name="update_ignore">忽略此版本</string>
+    <string name="update_disable_auto_check">不再提醒</string>
+    <string name="update_up_to_date_short">已是最新版本</string>
+    <string name="update_check_failed_toast">檢查更新失敗</string>
+    <string name="auto_check_update_name">啟動時檢查更新</string>
+    <string name="auto_check_update_desc">有新版本時每次啟動都會提示，忽略後該版本不再彈窗。</string>
 </resources>

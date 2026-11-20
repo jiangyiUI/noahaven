@@ -11,6 +11,7 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import dev.anilbeesetti.nextplayer.core.common.di.DiQualifiers
+import dev.anilbeesetti.nextplayer.core.data.repository.PreferencesRepository
 import dev.anilbeesetti.nextplayer.core.ui.R
 import java.io.File
 import java.security.MessageDigest
@@ -20,9 +21,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -56,7 +59,7 @@ sealed interface UpdateUiState {
 
     data class UpToDate(val currentVersion: String) : UpdateUiState
 
-    data class Available(val release: AppRelease) : UpdateUiState
+    data class Available(val release: AppRelease, val fromAutoCheck: Boolean) : UpdateUiState
 
     data class ChooseMirror(
         val release: AppRelease,
@@ -86,6 +89,7 @@ private class SignatureMismatchException : Exception()
 @Single
 class UpdateManager(
     private val context: Context,
+    private val preferencesRepository: PreferencesRepository,
     @Named(DiQualifiers.APPLICATION_SCOPE) private val applicationScope: CoroutineScope,
 ) {
 
@@ -101,6 +105,9 @@ class UpdateManager(
     private var checkJob: Job? = null
     private var downloadJob: Job? = null
 
+    /** 最近一次 Available 状态是否由自动检测触发（用于 dismiss 恢复）。 */
+    private var lastFromAutoCheck = false
+
     /** 上次用过的线路，仅内存记忆，用于下载弹窗默认选中。 */
     var lastMirrorId: String? = null
         private set
@@ -108,7 +115,23 @@ class UpdateManager(
     var lastCustomPrefix: String = ""
         private set
 
-    fun checkForUpdates() {
+    init {
+        // App 启动后延迟几秒自动检测（不卡启动画面）
+        applicationScope.launch {
+            delay(3_000)
+            val prefs = runCatching { preferencesRepository.applicationPreferences.first() }
+                .getOrNull()
+            if (prefs?.autoCheckUpdate == true) {
+                checkForUpdates(force = false)
+            }
+        }
+    }
+
+    /**
+     * 检查更新。
+     * @param force true 表示手动触发（忽略已忽略的版本过滤）；false 表示自动检测（静默跳过已忽略版本）。
+     */
+    fun checkForUpdates(force: Boolean = true) {
         if (_state.value is UpdateUiState.Checking) return
         checkJob?.cancel()
         _state.value = UpdateUiState.Checking
@@ -117,20 +140,62 @@ class UpdateManager(
                 val latest = withContext(Dispatchers.IO) { fetchLatestRelease(client) }
                 val current = context.currentVersionName()
                 if (isNewerVersion(remote = latest.tagName, current = current)) {
-                    release = latest
-                    _state.value = UpdateUiState.Available(latest)
+                    val prefs = runCatching {
+                        preferencesRepository.applicationPreferences.first()
+                    }.getOrNull()
+                    // 非强制模式下，已忽略过相同版本就静默跳过
+                    if (!force && prefs?.ignoredUpdateVersion == latest.tagName) {
+                        _state.value = UpdateUiState.Idle
+                    } else {
+                        release = latest
+                        lastFromAutoCheck = !force
+                        _state.value = UpdateUiState.Available(latest, fromAutoCheck = !force)
+                    }
                 } else {
-                    _state.value = UpdateUiState.UpToDate(currentVersion = current)
+                    // 最新版本：手动→Toast；自动→静默
+                    if (force) {
+                        withContext(Dispatchers.Main.immediate) {
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.update_up_to_date_short),
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                    }
+                    _state.value = UpdateUiState.Idle
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.value = UpdateUiState.Message(
-                    title = context.getString(R.string.update_check_failed_title),
-                    text = e.message ?: context.getString(R.string.update_unknown_error),
-                )
+                if (force) {
+                    // 手动检查失败：Toast
+                    withContext(Dispatchers.Main.immediate) {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.update_check_failed_toast),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                }
+                // 自动检测失败静默，不打扰用户
+                _state.value = UpdateUiState.Idle
             }
         }
+    }
+
+    /** 用户主动忽略当前 Available 的版本；之后自动检测到相同版本会静默跳过。 */
+    fun ignoreCurrentRelease() {
+        val current = when (val s = _state.value) {
+            is UpdateUiState.Available -> s.release.tagName
+            is UpdateUiState.ChooseMirror -> s.release.tagName
+            else -> null
+        } ?: return
+        applicationScope.launch {
+            preferencesRepository.updateApplicationPreferences {
+                it.copy(ignoredUpdateVersion = current)
+            }
+        }
+        _state.value = UpdateUiState.Idle
     }
 
     /** 从「发现新版本」进入线路选择。 */
@@ -151,7 +216,10 @@ class UpdateManager(
             }
 
             is UpdateUiState.ChooseMirror -> {
-                _state.value = UpdateUiState.Available(release = current.release)
+                _state.value = UpdateUiState.Available(
+                    release = current.release,
+                    fromAutoCheck = lastFromAutoCheck,
+                )
             }
 
             is UpdateUiState.Downloading -> cancelDownload()

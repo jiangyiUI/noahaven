@@ -47,6 +47,12 @@
     <string name="update_download_failed">Download failed: %1$s</string>
     <string name="update_install_open_failed">Could not open the installer.</string>
     <string name="update_unknown_error">Unknown error</string>
+    <string name="update_ignore">Ignore this version</string>
+    <string name="update_disable_auto_check">Don\'t remind again</string>
+    <string name="update_up_to_date_short">You\'re on the latest version</string>
+    <string name="update_check_failed_toast">Couldn\'t check for updates</string>
+    <string name="auto_check_update_name">Check for updates on launch</string>
+    <string name="auto_check_update_desc">You\'ll be notified when a new version is available. Once ignored, this version won\'t prompt again.</string>
     <string name="appearance_description">Adjust the app to your liking</string>
     <string name="appearance_name">Appearance</string>
     <string name="ascending">Ascending</string>

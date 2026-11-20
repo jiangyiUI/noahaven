@@ -100,6 +100,12 @@
     <string name="update_download_failed">下载失败：%1$s</string>
     <string name="update_install_open_failed">无法打开安装器。</string>
     <string name="update_unknown_error">未知错误</string>
+    <string name="update_ignore">忽略此版本</string>
+    <string name="update_disable_auto_check">不再提醒</string>
+    <string name="update_up_to_date_short">已是最新版本</string>
+    <string name="update_check_failed_toast">检查更新失败</string>
+    <string name="auto_check_update_name">启动时检查更新</string>
+    <string name="auto_check_update_desc">有新版本时每次启动都会提示，忽略后该版本不再弹窗。</string>
     <string name="fast_seek">快速跳转</string>
     <string name="grant_permission">授予权限</string>
     <string name="duration">时长</string>

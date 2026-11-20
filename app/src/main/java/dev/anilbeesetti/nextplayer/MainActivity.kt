@@ -86,8 +86,11 @@ import dev.anilbeesetti.nextplayer.navigation.openPlaylist
 import dev.anilbeesetti.nextplayer.navigation.playlistNavGraph
 import dev.anilbeesetti.nextplayer.navigation.rememberTopLevelNavState
 import dev.anilbeesetti.nextplayer.navigation.settingsNavGraph
+import dev.anilbeesetti.nextplayer.settings.update.UpdateDialogs
+import dev.anilbeesetti.nextplayer.settings.update.UpdateViewModel
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
+import org.koin.compose.viewmodel.koinViewModel
 
 class MainActivity : FragmentActivity() {
 
@@ -158,7 +161,11 @@ class MainActivity : FragmentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.surfaceContainer,
                 ) {
-                    val navState = rememberTopLevelNavState()
+                    val updateViewModel: UpdateViewModel = koinViewModel()
+                    val updateState by updateViewModel.state.collectAsStateWithLifecycle()
+
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        val navState = rememberTopLevelNavState()
 
                     LaunchedEffect(key1 = pendingPlaylistId) {
                         pendingPlaylistId?.let { playlistId ->
@@ -268,6 +275,21 @@ class MainActivity : FragmentActivity() {
                                 },
                             )
                         }
+                    }
+
+                    UpdateDialogs(
+                        state = updateState,
+                        mirrors = updateViewModel.mirrors,
+                        lastMirrorId = updateViewModel.lastMirrorId,
+                        lastCustomPrefix = updateViewModel.lastCustomPrefix,
+                        onDismiss = updateViewModel::dismiss,
+                        onChooseMirror = updateViewModel::chooseMirror,
+                        onIgnore = updateViewModel::ignoreCurrent,
+                        onTurnOffAutoCheck = updateViewModel::turnOffAutoCheck,
+                        onDownload = updateViewModel::download,
+                        onCancelDownload = updateViewModel::cancelDownload,
+                        onInstall = updateViewModel::install,
+                    )
                     }
                 }
             }

@@ -60,6 +60,12 @@ data class ApplicationPreferences(
     val comicSortBy: Sort.By = Sort.By.TITLE,
     val comicSortOrder: Sort.Order = Sort.Order.ASCENDING,
 
+    // Update
+    /** 启动时自动检查更新开关。 */
+    val autoCheckUpdate: Boolean = true,
+    /** 已手动忽略的版本号（tagName），自动检测到相同版本时静默跳过。 */
+    val ignoredUpdateVersion: String? = null,
+
     // Fields
     val showDurationField: Boolean = true,
     val showFolderDurationField: Boolean = true,

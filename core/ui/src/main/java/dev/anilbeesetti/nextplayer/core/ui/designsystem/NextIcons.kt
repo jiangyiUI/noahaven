@@ -8,7 +8,8 @@ import androidx.compose.material.icons.automirrored.rounded.DriveFileMove
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
-import androidx.compose.material.icons.filled.ArrowCircleUp
+import androidx.compose.material.icons.rounded.Sync
+import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AppSettingsAlt
@@ -164,7 +165,8 @@ object NextIcons {
     val Tap = Icons.Rounded.TouchApp
     val Timer = Icons.Rounded.Timer
     val Title = Icons.Rounded.Title
-    val Update = Icons.Filled.ArrowCircleUp
+    val Update = Icons.Rounded.Sync
+    val AutoCheck = Icons.Rounded.Notifications
     val Video = Icons.Rounded.Movie
     val View = Icons.Rounded.Visibility
     val VolumeUp = Icons.AutoMirrored.Rounded.VolumeUp

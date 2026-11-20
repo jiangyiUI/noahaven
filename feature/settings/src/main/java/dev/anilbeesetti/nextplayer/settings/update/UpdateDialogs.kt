@@ -42,6 +42,8 @@ fun UpdateDialogs(
     lastCustomPrefix: String,
     onDismiss: () -> Unit,
     onChooseMirror: () -> Unit,
+    onIgnore: () -> Unit,
+    onTurnOffAutoCheck: () -> Unit,
     onDownload: (DownloadMirror, String?) -> Unit,
     onCancelDownload: () -> Unit,
     onInstall: () -> Unit,
@@ -49,7 +51,7 @@ fun UpdateDialogs(
     when (state) {
         is UpdateUiState.Idle -> Unit
 
-        is UpdateUiState.Checking -> CheckingDialog(onCancel = onDismiss)
+        is UpdateUiState.Checking -> Unit // 静默检查，不弹窗
 
         is UpdateUiState.UpToDate -> MessageDialog(
             title = stringResource(R.string.check_update_name),
@@ -61,6 +63,8 @@ fun UpdateDialogs(
         is UpdateUiState.Available -> AvailableDialog(
             state = state,
             onDownload = onChooseMirror,
+            onIgnore = onIgnore,
+            onTurnOffAutoCheck = onTurnOffAutoCheck,
             onDismiss = onDismiss,
         )
 
@@ -122,6 +126,8 @@ private fun CheckingDialog(onCancel: () -> Unit) {
 private fun AvailableDialog(
     state: UpdateUiState.Available,
     onDownload: () -> Unit,
+    onIgnore: () -> Unit,
+    onTurnOffAutoCheck: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -144,13 +150,23 @@ private fun AvailableDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDownload) {
-                Text(stringResource(R.string.update_download))
+            Row(
+                horizontalArrangement = Arrangement.End,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                TextButton(onClick = onIgnore) {
+                    Text(stringResource(R.string.update_ignore))
+                }
+                TextButton(onClick = onDownload) {
+                    Text(stringResource(R.string.update_download))
+                }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.update_later))
+            if (state.fromAutoCheck) {
+                TextButton(onClick = onTurnOffAutoCheck) {
+                    Text(stringResource(R.string.update_disable_auto_check))
+                }
             }
         },
     )

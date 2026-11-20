@@ -46,6 +46,7 @@ fun EntryProviderScope<NavKey>.settingsNavGraph(backStack: NavBackStack<NavKey>)
                 Setting.SUBTITLE -> backStack.navigateToSubtitlePreferences()
                 Setting.GENERAL -> backStack.navigateToGeneralPreferences()
                 Setting.ABOUT -> backStack.navigateToAboutPreferences()
+                Setting.UPDATE -> Unit // 检查更新在 SettingsScreen 内直接触发，不导航页面
             }
         },
     )
