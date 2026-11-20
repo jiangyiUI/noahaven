@@ -14,8 +14,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -275,6 +277,7 @@ private fun ComicThumbnail(
     comic: ComicFile,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
+    showProgress: Boolean = false,
 ) {
     val cover = rememberComicCover(comic)
     Box(
@@ -296,6 +299,33 @@ private fun ComicThumbnail(
                 contentScale = contentScale,
                 modifier = Modifier.fillMaxSize(),
             )
+        }
+        // 阅读进度条：样式与视频库一致（贴底 4dp，底色 secondaryContainer，进度色 primary）
+        if (showProgress && comic.imageCount > 0 && (comic.lastPage > 0 || comic.watched)) {
+            val fraction = if (comic.watched) {
+                1f
+            } else {
+                (comic.lastPage.toFloat() / comic.imageCount.toFloat()).coerceIn(0f, 1f)
+            }
+            Box(
+                modifier = Modifier
+                    .height(4.dp)
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.secondaryContainer),
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(fraction = fraction)
+                        .fillMaxHeight()
+                        .clip(shape = CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                )
+            }
         }
     }
 }
@@ -341,6 +371,7 @@ private fun ComicListItem(
                 ComicThumbnail(
                     comic = comic,
                     modifier = Modifier.size(52.dp),
+                    showProgress = preferences.showPlayedProgress,
                 )
             } else {
                 Icon(
@@ -419,6 +450,7 @@ private fun ComicGridItem(
                         ComicThumbnail(
                             comic = comic,
                             modifier = Modifier.fillMaxSize(),
+                            showProgress = preferences.showPlayedProgress,
                         )
                     } else {
                         Icon(

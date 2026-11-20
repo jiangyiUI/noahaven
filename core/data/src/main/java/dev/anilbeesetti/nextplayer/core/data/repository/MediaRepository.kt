@@ -6,6 +6,7 @@ import dev.anilbeesetti.nextplayer.core.model.Folder
 import dev.anilbeesetti.nextplayer.core.model.MediaInfo
 import dev.anilbeesetti.nextplayer.core.model.Video
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 /**
  * Repository for accessing media (videos and folders) and managing video playback state.
@@ -36,6 +37,12 @@ interface MediaRepository {
 
     fun observePlaybackHistory(): Flow<List<Video>>
     fun observeTrashVideos(): Flow<List<Video>>
+
+    /**
+     * 观察所有媒体的播放位置（含音频），uri -> playbackPosition。
+     * 音乐库用它给封面画进度条；不支持实现时返回空表即可。
+     */
+    fun observePlaybackPositions(): Flow<Map<String, Long>> = emptyFlow()
 
     /**
      * Fetches all unique folders containing videos under the given path (one-shot).

@@ -95,6 +95,11 @@ class LocalMediaRepository(
         }
     }
 
+    override fun observePlaybackPositions(): Flow<Map<String, Long>> =
+        mediumStateDao.getAll().map { states ->
+            states.associate { it.uriString to it.playbackPosition }
+        }
+
     override fun observePlaybackHistory(): Flow<List<Video>> = combine(
         mediaService.observeVideos(),
         mediumStateDao.getAll(),

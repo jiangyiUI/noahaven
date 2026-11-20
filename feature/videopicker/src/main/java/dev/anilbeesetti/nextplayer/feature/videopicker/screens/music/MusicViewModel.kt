@@ -81,6 +81,16 @@ class MusicViewModel(
     // 完整播放历史，用于在当前目录内标记上次播放的音频
     private val playbackHistory = MutableStateFlow(value = emptyList<Video>())
 
+    // uri -> 播放位置，用于在封面底部画进度条（样式与视频库一致）
+    private val playbackPositions = MutableStateFlow<Map<String, Long>>(value = emptyMap())
+
+    // 把播放位置贴到音频上：同一目录下每首歌各自带自己的进度
+    private val audiosWithProgress = combine(audiosInternal, playbackPositions) { result, positions ->
+        result?.map { audios ->
+            audios.map { audio -> audio.copy(playbackPosition = positions[audio.uriString]) }
+        }
+    }
+
     val playlists: StateFlow<List<PlaylistSummary>> = playlistRepository.observePlaylists()
         .stateIn(
             scope = viewModelScope,
@@ -96,7 +106,7 @@ class MusicViewModel(
 
     val state: StateFlow<MusicUiState> = combine(
         folderPath,
-        audiosInternal,
+        audiosWithProgress,
         preferencesRepository.applicationPreferences,
         refreshing,
         playbackHistory,
@@ -145,6 +155,12 @@ class MusicViewModel(
                     .filter { it.isAudio && it.lastPlayedAt != null }
                     .filter { File(it.path).exists() }
                     .maxByOrNull { it.lastPlayedAt!!.time }
+            }
+        }
+        // 播放位置变化（正在播放、拖动进度、换曲）时刷新封面进度条
+        viewModelScope.launch(defaultDispatcher) {
+            mediaRepository.observePlaybackPositions().collect { positions ->
+                playbackPositions.value = positions
             }
         }
     }

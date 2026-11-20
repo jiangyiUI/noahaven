@@ -8,11 +8,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -45,12 +47,16 @@ import dev.anilbeesetti.nextplayer.core.ui.designsystem.NextIcons
 /**
  * 音频文件的封面：优先使用文件内嵌封面，没有时显示缺省图。
  * 不联网获取封面。
+ *
+ * 播放进度条与视频库样式完全一致：贴底 4dp，底色 secondaryContainer，进度色 primary。
  */
 @Composable
 fun AudioCover(
     audio: AudioFile,
     modifier: Modifier = Modifier,
     contentDescription: String? = null,
+    playedPercentage: Float? = null,
+    showProgress: Boolean = false,
 ) {
     val context = LocalContext.current
     val bitmap by produceState<Bitmap?>(
@@ -85,6 +91,27 @@ fun AudioCover(
                 modifier = Modifier.size(size = 28.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+        if (showProgress && playedPercentage != null) {
+            Box(
+                modifier = Modifier
+                    .height(4.dp)
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.secondaryContainer),
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(fraction = playedPercentage)
+                        .fillMaxHeight()
+                        .clip(shape = CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                )
+            }
         }
     }
 }
@@ -179,6 +206,8 @@ private fun MusicListItem(
                 audio = audio,
                 modifier = Modifier.size(size = 52.dp),
                 contentDescription = audio.displayName,
+                playedPercentage = audio.playedPercentage,
+                showProgress = preferences.showPlayedProgress,
             )
         },
         content = {
@@ -269,6 +298,8 @@ private fun MusicGridItem(
                         audio = audio,
                         modifier = Modifier.fillMaxSize(),
                         contentDescription = audio.displayName,
+                        playedPercentage = audio.playedPercentage,
+                        showProgress = preferences.showPlayedProgress,
                     )
                     if (preferences.showDurationField && audio.formattedDuration.isNotBlank()) {
                         InfoChip(
