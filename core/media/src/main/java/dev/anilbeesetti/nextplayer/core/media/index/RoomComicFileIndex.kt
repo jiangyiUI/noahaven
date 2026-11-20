@@ -113,6 +113,18 @@ class RoomComicFileIndex(
                     watched = progress.watched,
                 ),
             )
+            // 同步内存索引，退出阅读器回到列表时缩略图进度条立即生效，不用等重启
+            stateMutex.withLock {
+                val existing = index[progress.path] ?: return@withLock
+                val updated = existing.copy(
+                    lastPage = progress.lastPage,
+                    watched = progress.watched,
+                )
+                if (updated != existing) {
+                    index[progress.path] = updated
+                    publishLocked()
+                }
+            }
         }
     }
 
@@ -368,8 +380,9 @@ class RoomComicFileIndex(
                         formattedFileSize = dev.anilbeesetti.nextplayer.core.common.Utils
                             .formatFileSize(scanned.size),
                         noMediaHidden = scanned.noMediaHidden,
-                        lastPage = 0,
-                        watched = false,
+                        // 重扫时保留已读进度，否则缩略图进度条会被清掉
+                        lastPage = current?.lastPage ?: 0,
+                        watched = current?.watched == true,
                     )
                     stateMutex.withLock {
                         index[scanned.path] = comic

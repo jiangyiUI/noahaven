@@ -433,7 +433,6 @@ class ComicsViewModel(
         sortOrder = comicSortOrder,
         showDurationField = false,
         showFolderDurationField = false,
-        showPlayedProgress = false,
     )
 
     private fun List<ComicFile>?.toUiState(

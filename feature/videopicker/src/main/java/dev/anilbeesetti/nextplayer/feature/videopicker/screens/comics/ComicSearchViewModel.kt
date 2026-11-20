@@ -299,7 +299,6 @@ class ComicSearchViewModel(
         sortOrder = comicSortOrder,
         showDurationField = false,
         showFolderDurationField = false,
-        showPlayedProgress = false,
     )
 
     private companion object {
