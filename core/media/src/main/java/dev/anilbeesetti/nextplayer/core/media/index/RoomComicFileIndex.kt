@@ -119,6 +119,7 @@ class RoomComicFileIndex(
                 val updated = existing.copy(
                     lastPage = progress.lastPage,
                     watched = progress.watched,
+                    hasProgress = true,
                 )
                 if (updated != existing) {
                     index[progress.path] = updated
@@ -383,6 +384,7 @@ class RoomComicFileIndex(
                         // 重扫时保留已读进度，否则缩略图进度条会被清掉
                         lastPage = current?.lastPage ?: 0,
                         watched = current?.watched == true,
+                        hasProgress = current?.hasProgress == true,
                     )
                     stateMutex.withLock {
                         index[scanned.path] = comic
@@ -459,6 +461,7 @@ class RoomComicFileIndex(
             index[row.path] = base.copy(
                 lastPage = p?.lastPage ?: 0,
                 watched = p?.watched == true,
+                hasProgress = p != null,
             )
         }
         loaded = true

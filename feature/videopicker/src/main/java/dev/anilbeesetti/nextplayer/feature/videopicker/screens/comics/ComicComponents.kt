@@ -301,7 +301,8 @@ private fun ComicThumbnail(
             )
         }
         // 阅读进度条：样式与视频库一致（贴底 4dp，底色 secondaryContainer，进度色 primary）
-        if (showProgress && comic.imageCount > 0 && (comic.lastPage > 0 || comic.watched)) {
+        // 只要打开过就显示轨道，停在第一页时进度为 0，与视频的 playedPercentage = 0 表现一致
+        if (showProgress && comic.imageCount > 0 && comic.hasProgress) {
             val fraction = if (comic.watched) {
                 1f
             } else {
