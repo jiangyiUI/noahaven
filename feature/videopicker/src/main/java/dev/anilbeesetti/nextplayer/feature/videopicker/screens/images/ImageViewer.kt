@@ -1,6 +1,7 @@
 package dev.anilbeesetti.nextplayer.feature.videopicker.screens.images
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
@@ -30,8 +31,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -71,6 +79,19 @@ fun ImageViewer(
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     var controlsVisible by remember { mutableStateOf(true) }
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        // 拿到焦点才能收到键盘/遥控器的方向键
+        runCatching { focusRequester.requestFocus() }
+    }
+
+    fun goToPage(page: Int) {
+        val target = page.coerceIn(0, images.lastIndex)
+        if (target != pagerState.currentPage) {
+            scope.launch { pagerState.animateScrollToPage(page = target) }
+        }
+    }
 
     LaunchedEffect(pagerState.currentPage) {
         scale = 1f
@@ -88,7 +109,28 @@ fun ImageViewer(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
+                .background(MaterialTheme.colorScheme.background)
+                .focusRequester(focusRequester = focusRequester)
+                .focusable()
+                .onPreviewKeyEvent { keyEvent ->
+                    if (keyEvent.type != KeyEventType.KeyDown) {
+                        false
+                    } else {
+                        when (keyEvent.key) {
+                            Key.DirectionLeft -> {
+                                goToPage(pagerState.currentPage - 1)
+                                true
+                            }
+
+                            Key.DirectionRight -> {
+                                goToPage(pagerState.currentPage + 1)
+                                true
+                            }
+
+                            else -> false
+                        }
+                    }
+                },
         ) {
             HorizontalPager(
                 state = pagerState,

@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -41,10 +42,34 @@ import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 fun DoubleTapIndicator(modifier: Modifier = Modifier, tapGestureState: TapGestureState) {
-    if (tapGestureState.seekMillis == 0L) return
+    SeekSideIndicator(
+        modifier = modifier,
+        seekMillis = tapGestureState.seekMillis,
+        fraction = when (tapGestureState.doubleTapGesture) {
+            DoubleTapGesture.PLAY_PAUSE -> 0f
+            DoubleTapGesture.FAST_FORWARD_AND_REWIND -> 0.5f
+            DoubleTapGesture.BOTH -> 0.35f
+            DoubleTapGesture.NONE -> 0f
+        },
+        interactionSource = tapGestureState.interactionSource,
+    )
+}
+
+/**
+ * 左右两侧的“快进/快退 N 秒”提示。双击和键盘方向键共用这一套视觉，
+ * seekMillis > 0 时贴右边、< 0 时贴左边，累计后自动消失（由调用方清零）。
+ */
+@Composable
+internal fun SeekSideIndicator(
+    seekMillis: Long,
+    modifier: Modifier = Modifier,
+    fraction: Float = 0.35f,
+    interactionSource: MutableInteractionSource? = null,
+) {
+    if (seekMillis == 0L) return
     Box(
         modifier = modifier.fillMaxSize(),
-        contentAlignment = if (tapGestureState.seekMillis > 0) {
+        contentAlignment = if (seekMillis > 0) {
             Alignment.CenterEnd
         } else {
             Alignment.CenterStart
@@ -53,34 +78,33 @@ fun DoubleTapIndicator(modifier: Modifier = Modifier, tapGestureState: TapGestur
         Box(
             modifier = Modifier
                 .fillMaxHeight()
-                .fillMaxWidth(
-                    fraction = when (tapGestureState.doubleTapGesture) {
-                        DoubleTapGesture.PLAY_PAUSE -> 0f
-                        DoubleTapGesture.FAST_FORWARD_AND_REWIND -> 0.5f
-                        DoubleTapGesture.BOTH -> 0.35f
-                        DoubleTapGesture.NONE -> 0f
-                    },
-                )
+                .fillMaxWidth(fraction = fraction)
                 .clip(
-                    shape = if (tapGestureState.seekMillis > 0) {
+                    shape = if (seekMillis > 0) {
                         RightSideOvalShape()
                     } else {
                         LeftSideOvalShape()
                     },
                 )
                 .background(Color.White.copy(alpha = 0.2f))
-                .indication(
-                    tapGestureState.interactionSource,
-                    indication = ripple(),
+                .then(
+                    if (interactionSource != null) {
+                        Modifier.indication(
+                            interactionSource,
+                            indication = ripple(),
+                        )
+                    } else {
+                        Modifier
+                    },
                 ),
             contentAlignment = Alignment.Center,
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                DoubleTapSeekTriangles(isForward = tapGestureState.seekMillis > 0)
+                DoubleTapSeekTriangles(isForward = seekMillis > 0)
                 Text(
-                    text = "${tapGestureState.seekMillis.milliseconds.inWholeSeconds} seconds",
+                    text = "${seekMillis.milliseconds.inWholeSeconds} seconds",
                     style = MaterialTheme.typography.labelMedium,
                     color = Color.White,
                 )

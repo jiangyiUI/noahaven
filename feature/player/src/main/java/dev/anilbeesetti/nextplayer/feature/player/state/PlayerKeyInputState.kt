@@ -3,14 +3,8 @@ package dev.anilbeesetti.nextplayer.feature.player.state
 import android.media.AudioManager
 import androidx.annotation.OptIn
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Stable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -19,11 +13,6 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import kotlin.time.Duration.Companion.seconds
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 @Composable
 internal fun rememberPlayerKeyInputState(
@@ -31,21 +20,24 @@ internal fun rememberPlayerKeyInputState(
     controls: ControlsVisibilityState,
     seekIncrementMs: Long,
     dpadUpDown: Int? = null,
+    seekEvenWhenControlsVisible: Boolean = false,
+    onSeekFeedback: (Long) -> Unit = {},
 ): PlayerKeyInputState {
-    val coroutineScope = rememberCoroutineScope()
     val audioManager = LocalContext.current.getSystemService(AudioManager::class.java)
     val state = remember(
         player,
         controls,
         seekIncrementMs,
         dpadUpDown,
+        seekEvenWhenControlsVisible,
     ) {
         PlayerKeyInputState(
             player,
             controls,
             seekIncrementMs,
-            coroutineScope,
             dpadUpDown,
+            seekEvenWhenControlsVisible,
+            onSeekFeedback,
         ) { up ->
             audioManager.adjustStreamVolume(
                 AudioManager.STREAM_MUSIC,
@@ -54,7 +46,6 @@ internal fun rememberPlayerKeyInputState(
             )
         }
     }
-    DisposableEffect(key1 = state) { onDispose { state.cancelPendingReset() } }
     return state
 }
 
@@ -63,21 +54,13 @@ internal class PlayerKeyInputState(
     private val player: Player,
     private val controls: ControlsVisibilityState,
     private val seekIncrementMs: Long,
-    private val coroutineScope: CoroutineScope,
     private val dpadUpDown: Int? = null,
+    /** 非电视设备没有焦点导航需求，控制条显示时左右键也直接快进快退。 */
+    private val seekEvenWhenControlsVisible: Boolean = false,
+    /** 快进快退时通知界面显示与双击同一套左右侧提示。 */
+    private val onSeekFeedback: (Long) -> Unit = {},
     private val adjustVolume: (Boolean) -> Unit = {},
 ) {
-    var isSeeking: Boolean by mutableStateOf(value = false)
-        private set
-
-    var seekOffsetMs: Long by mutableLongStateOf(value = 0L)
-        private set
-
-    var seekPositionMs: Long by mutableLongStateOf(value = 0L)
-        private set
-
-    private var resetJob: Job? = null
-
     @OptIn(UnstableApi::class)
     fun onKeyEvent(keyEvent: KeyEvent): Boolean {
         if (keyEvent.key == Key.Back && !controls.controlsLocked) {
@@ -170,9 +153,9 @@ internal class PlayerKeyInputState(
             }
 
             Key.DirectionLeft -> {
-                if (!controls.controlsVisible) {
+                if (!controls.controlsVisible || seekEvenWhenControlsVisible) {
                     seekBy(deltaMs = -seekIncrementMs)
-                    showSeekFeedback(deltaMs = -seekIncrementMs)
+                    onSeekFeedback(-seekIncrementMs)
                     true
                 } else {
                     controls.showControls()
@@ -181,9 +164,9 @@ internal class PlayerKeyInputState(
             }
 
             Key.DirectionRight -> {
-                if (!controls.controlsVisible) {
+                if (!controls.controlsVisible || seekEvenWhenControlsVisible) {
                     seekBy(deltaMs = seekIncrementMs)
-                    showSeekFeedback(deltaMs = seekIncrementMs)
+                    onSeekFeedback(seekIncrementMs)
                     true
                 } else {
                     controls.showControls()
@@ -214,23 +197,6 @@ internal class PlayerKeyInputState(
             }
 
             else -> false
-        }
-    }
-
-    internal fun cancelPendingReset() {
-        resetJob?.cancel()
-        resetJob = null
-    }
-
-    private fun showSeekFeedback(deltaMs: Long) {
-        if (!isSeeking) seekOffsetMs = 0L
-        seekOffsetMs += deltaMs
-        seekPositionMs = player.currentPosition
-        isSeeking = true
-        resetJob?.cancel()
-        resetJob = coroutineScope.launch {
-            delay(1.seconds)
-            isSeeking = false
         }
     }
 }

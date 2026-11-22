@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -38,11 +39,12 @@ import dev.anilbeesetti.nextplayer.feature.player.state.rememberChaptersState
 import dev.anilbeesetti.nextplayer.feature.player.state.rememberMediaPresentationState
 import dev.anilbeesetti.nextplayer.feature.player.state.rememberMetadataState
 import dev.anilbeesetti.nextplayer.feature.player.state.rememberPlayerKeyInputState
-import dev.anilbeesetti.nextplayer.feature.player.ui.DpadSeekIndicator
 import dev.anilbeesetti.nextplayer.feature.player.ui.OverlayShowView
 import dev.anilbeesetti.nextplayer.feature.player.ui.OverlayView
 import dev.anilbeesetti.nextplayer.feature.player.ui.PlayerGestureIndicators
+import dev.anilbeesetti.nextplayer.feature.player.ui.SeekSideIndicator
 import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.delay
 
 /** Controls and overlays shared by live playback and the previewable content. */
 @OptIn(UnstableApi::class)
@@ -69,11 +71,31 @@ internal fun MediaPlayerControls(
         player = player,
         progressState = progressState,
     )
+    val context = LocalContext.current
+    val isTv = remember { context.isTelevision }
+    // 键盘方向键快进快退的提示：与双击左右侧共用同一套视觉
+    var keyboardSeekMillis by remember { mutableLongStateOf(value = 0L) }
+    LaunchedEffect(keyboardSeekMillis) {
+        if (keyboardSeekMillis != 0L) {
+            delay(750)
+            keyboardSeekMillis = 0L
+        }
+    }
     val keyInputState = rememberPlayerKeyInputState(
         player = player,
         controls = controlsVisibilityState,
         seekIncrementMs = playerPreferences.seekIncrement.seconds.inWholeMilliseconds,
         dpadUpDown = dpadUpDown,
+        // 键盘/遥控器注入的方向键在非电视设备上也直接快进快退，不依赖电视判断
+        seekEvenWhenControlsVisible = !isTv,
+        onSeekFeedback = { deltaMs ->
+            keyboardSeekMillis = when {
+                // 换方向时从 0 重新累计，和双击逻辑一致
+                deltaMs > 0 && keyboardSeekMillis < 0 -> deltaMs
+                deltaMs < 0 && keyboardSeekMillis > 0 -> deltaMs
+                else -> keyboardSeekMillis + deltaMs
+            }
+        },
     )
     var overlayView by remember { mutableStateOf<OverlayView?>(value = null) }
     LaunchedEffect(metadataState.mediaId) {
@@ -85,30 +107,25 @@ internal fun MediaPlayerControls(
         overlayView = overlay
     }
 
-    val context = LocalContext.current
-    val isTv = remember { context.isTelevision }
-    val handleDpadKeys = isTv || dpadUpDown != null
     val rootFocusRequester = remember { FocusRequester() }
     val middleControlsFocusRequester = remember { FocusRequester() }
     val unlockFocusRequester = remember { FocusRequester() }
     var isMiddleControlsFocused by remember { mutableStateOf(value = false) }
     var isUnlockFocused by remember { mutableStateOf(value = false) }
-    if (handleDpadKeys) {
-        LaunchedEffect(
-            controlsVisibilityState.controlsVisible,
-            controlsVisibilityState.controlsLocked,
-            key3 = overlayView,
-        ) {
-            if (overlayView != null) return@LaunchedEffect
-            if (!isTv || !controlsVisibilityState.controlsVisible) {
-                runCatching { rootFocusRequester.requestFocus() }
-                return@LaunchedEffect
-            }
-            val locked = controlsVisibilityState.controlsLocked
-            val target = if (locked) unlockFocusRequester else middleControlsFocusRequester
-            target.requestFocusUntilLanded(attempts = 20) {
-                if (locked) isUnlockFocused else isMiddleControlsFocused
-            }
+    LaunchedEffect(
+        controlsVisibilityState.controlsVisible,
+        controlsVisibilityState.controlsLocked,
+        key3 = overlayView,
+    ) {
+        if (overlayView != null) return@LaunchedEffect
+        if (!isTv || !controlsVisibilityState.controlsVisible) {
+            runCatching { rootFocusRequester.requestFocus() }
+            return@LaunchedEffect
+        }
+        val locked = controlsVisibilityState.controlsLocked
+        val target = if (locked) unlockFocusRequester else middleControlsFocusRequester
+        target.requestFocusUntilLanded(attempts = 20) {
+            if (locked) isUnlockFocused else isMiddleControlsFocused
         }
     }
 
@@ -119,21 +136,18 @@ internal fun MediaPlayerControls(
         Box(
             modifier = modifier
                 .fillMaxSize()
-                .thenIf(condition = handleDpadKeys) {
-                    focusRequester(focusRequester = rootFocusRequester)
-                        .focusable()
-                        .onPreviewKeyEvent { keyEvent ->
-                            if (overlayView != null ||
-                                (
-                                    !isTv && keyEvent.key != Key.DirectionUp &&
-                                        keyEvent.key != Key.DirectionDown
-                                    )
-                            ) {
-                                false
-                            } else {
-                                keyInputState.onKeyEvent(keyEvent = keyEvent)
-                            }
-                        }
+                .focusRequester(focusRequester = rootFocusRequester)
+                .focusable()
+                .onPreviewKeyEvent { keyEvent ->
+                    val isHandledArrowKey = keyEvent.key == Key.DirectionUp ||
+                        keyEvent.key == Key.DirectionDown ||
+                        keyEvent.key == Key.DirectionLeft ||
+                        keyEvent.key == Key.DirectionRight
+                    if (overlayView == null && (isTv || isHandledArrowKey)) {
+                        keyInputState.onKeyEvent(keyEvent = keyEvent)
+                    } else {
+                        false
+                    }
                 },
         ) {
             if (mediaPresentationState.isBuffering) {
@@ -144,11 +158,7 @@ internal fun MediaPlayerControls(
                 )
             }
             PlayerGestureIndicators(tapGestureState = tapGestureState)
-            DpadSeekIndicator(
-                visible = keyInputState.isSeeking && keyInputState.seekOffsetMs != 0L,
-                offsetMs = keyInputState.seekOffsetMs,
-                positionMs = keyInputState.seekPositionMs,
-            )
+            SeekSideIndicator(seekMillis = keyboardSeekMillis)
 
             if (controlsVisibilityState.controlsVisible && controlsVisibilityState.controlsLocked) {
                 PlayerLockedControls(

@@ -14,18 +14,14 @@ import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -35,11 +31,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.anilbeesetti.nextplayer.core.ui.R as coreUiR
 import dev.anilbeesetti.nextplayer.core.ui.extensions.copy
-import dev.anilbeesetti.nextplayer.feature.player.extensions.formatted
 import dev.anilbeesetti.nextplayer.feature.player.state.TapGestureState
 import dev.anilbeesetti.nextplayer.feature.player.state.VerticalGesture
-import kotlin.math.abs
-import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 internal fun InfoView(
@@ -60,58 +53,6 @@ internal fun InfoView(
             color = Color.White,
             textAlign = TextAlign.Center,
         )
-    }
-}
-
-/**
- * Shows the cumulative amount skipped by repeated D-pad left/right seeks while the controls are
- * hidden, along with the resulting position. Fades out shortly after the last seek.
- */
-@Composable
-internal fun BoxScope.DpadSeekIndicator(visible: Boolean, offsetMs: Long, positionMs: Long) {
-    AnimatedVisibility(
-        modifier = Modifier.align(Alignment.Center),
-        visible = visible,
-        enter = fadeIn(),
-        exit = fadeOut(),
-    ) {
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = Color.Black.copy(alpha = 0.6f),
-        ) {
-            Row(
-                modifier = Modifier.padding(
-                    horizontal = 20.dp,
-                    vertical = 12.dp,
-                ),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Icon(
-                    painter = painterResource(coreUiR.drawable.ic_fast),
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier
-                        .size(28.dp)
-                        .rotate(degrees = if (offsetMs < 0) 180f else 0f),
-                )
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "${if (offsetMs >= 0) "+" else "-"}${abs(
-                            n = offsetMs,
-                        ).milliseconds.inWholeSeconds}s",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                    )
-                    Text(
-                        text = positionMs.milliseconds.formatted(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.8f),
-                    )
-                }
-            }
-        }
     }
 }
 

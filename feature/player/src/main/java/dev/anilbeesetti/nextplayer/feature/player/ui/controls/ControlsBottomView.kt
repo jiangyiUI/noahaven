@@ -199,16 +199,19 @@ fun ControlsBottomView(
                     }
                 }
 
-                if (!useCompactControls) {
+                if (!useCompactControls || (!isTv && !audioOnly)) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        PlaybackSpeedButton(
-                            player = player,
-                            onClick = onPlaybackSpeedClick,
-                        )
+                        if (!useCompactControls) {
+                            PlaybackSpeedButton(
+                                player = player,
+                                onClick = onPlaybackSpeedClick,
+                            )
+                        }
 
+                        // 竖屏（紧凑布局）也固定放在这里，避免被下方横向滚动的操作栏挤出屏幕
                         if (!isTv && !audioOnly) {
                             RotateButton()
                         }
@@ -270,9 +273,6 @@ fun ControlsBottomView(
                         player = player,
                         onClick = onPlaybackSpeedClick,
                     )
-                    if (!audioOnly) {
-                        RotateButton()
-                    }
                 }
             }
         }

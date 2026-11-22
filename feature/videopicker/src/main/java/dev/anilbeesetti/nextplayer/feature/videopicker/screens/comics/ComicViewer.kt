@@ -3,6 +3,7 @@ package dev.anilbeesetti.nextplayer.feature.videopicker.screens.comics
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
@@ -47,9 +48,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -112,6 +120,12 @@ fun ComicViewer(
     var arrivedBackward by remember { mutableStateOf(false) }
     // 当前翻页动画：新手势开始前先取消，否则动画会跟手指抢
     var pagerJob by remember { mutableStateOf<Job?>(null) }
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        // 拿到焦点才能收到键盘/遥控器的方向键
+        runCatching { focusRequester.requestFocus() }
+    }
 
     fun animateToPage(page: Int) {
         pagerJob?.cancel()
@@ -127,10 +141,43 @@ fun ComicViewer(
         onProgressChanged(currentIndex, readingDirection)
     }
 
+    fun pageBy(next: Boolean) {
+        if (images.entries.isEmpty()) return
+        val target = (if (next) currentIndex + 1 else currentIndex - 1)
+            .coerceIn(0, images.entries.lastIndex)
+        if (target != currentIndex) {
+            currentIndex = target
+            arrivedBackward = !next
+            animateToPage(target)
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+            .background(MaterialTheme.colorScheme.background)
+            .focusRequester(focusRequester = focusRequester)
+            .focusable()
+            .onPreviewKeyEvent { keyEvent ->
+                if (keyEvent.type != KeyEventType.KeyDown) {
+                    false
+                } else {
+                    when (keyEvent.key) {
+                        // 方向键跟着阅读方向走：右→左阅读时，左键才是下一页
+                        Key.DirectionLeft -> {
+                            pageBy(next = readingDirection == ComicReadingDirection.RIGHT_TO_LEFT)
+                            true
+                        }
+
+                        Key.DirectionRight -> {
+                            pageBy(next = readingDirection == ComicReadingDirection.LEFT_TO_RIGHT)
+                            true
+                        }
+
+                        else -> false
+                    }
+                }
+            },
     ) {
         HorizontalPager(
             state = pagerState,
@@ -151,15 +198,7 @@ fun ComicViewer(
                 readingDirection = readingDirection,
                 isCurrentPage = page == currentIndex,
                 arrivedBackward = arrivedBackward,
-                onSwipe = { next ->
-                    val target = (if (next) currentIndex + 1 else currentIndex - 1)
-                        .coerceIn(0, images.entries.lastIndex)
-                    if (target != currentIndex) {
-                        currentIndex = target
-                        arrivedBackward = !next
-                        animateToPage(target)
-                    }
-                },
+                onSwipe = { next -> pageBy(next = next) },
                 // 内容已经到边界：多余的位移直接带着 Pager 走，页面跟着手指动
                 onEdgeDrag = { overflow ->
                     // 翻页动画还没停就接着拖：先把逻辑页号对齐到 Pager 当前最近的页，
