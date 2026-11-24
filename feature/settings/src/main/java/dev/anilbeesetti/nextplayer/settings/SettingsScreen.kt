@@ -186,6 +186,7 @@ enum class Setting {
     GESTURES,
     AUDIO,
     SUBTITLE,
+    READER,
     GENERAL,
     ABOUT,
     UPDATE,
@@ -233,6 +234,12 @@ private enum class SettingRow(
         descriptionResId = R.string.subtitle_desc,
         icon = NextIcons.Subtitle,
         setting = Setting.SUBTITLE,
+    ),
+    READER(
+        titleResId = R.string.reader_settings,
+        descriptionResId = R.string.reader_settings_desc,
+        icon = NextIcons.Books,
+        setting = Setting.READER,
     ),
     GENERAL(
         titleResId = R.string.general_name,

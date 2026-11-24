@@ -11,6 +11,7 @@ object TopLevelFabKey {
     const val MEDIA = "media"
     const val MUSIC = "music"
     const val IMAGES = "images"
+    const val BOOKS = "books"
     const val PLAYLISTS = "playlists"
     const val MORE = "more"
 }

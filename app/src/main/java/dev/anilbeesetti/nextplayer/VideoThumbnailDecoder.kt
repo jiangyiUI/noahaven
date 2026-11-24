@@ -452,7 +452,12 @@ class VideoThumbnailDecoder(
             options: Options,
             imageLoader: ImageLoader,
         ): Decoder? {
-            if (!isApplicable(result.mimeType)) return null
+            val mimeType = result.mimeType
+            // mimeType 非空且明确不是视频 → coil 知道这是图片，让 ImageDecoder 处理
+            // mimeType 为空 → ContentResolver 可能某些 ROM 拿不到类型，也尝试 Video 解码
+            if (mimeType != null && !mimeType.startsWith(prefix = "video/")) {
+                return null
+            }
             return VideoThumbnailDecoder(
                 source = result.source,
                 options = options,
@@ -460,9 +465,6 @@ class VideoThumbnailDecoder(
                 diskCache = lazy { imageLoader.diskCache },
             )
         }
-
-        private fun isApplicable(mimeType: String?): Boolean =
-            mimeType != null && mimeType.startsWith(prefix = "video/")
     }
 }
 

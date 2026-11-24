@@ -318,6 +318,9 @@
     <string name="folders">Folders</string>
     <string name="tree">Tree</string>
     <string name="played_progress">Played progress</string>
+    <string name="date_added">Date added</string>
+    <string name="last_read">Last read</string>
+    <string name="reading_progress">Reading progress</string>
     <string name="media_view_mode">Media view mode</string>
     <string name="enable_pip_from_settings">Picture-in-Picture is disabled. Enable it in Settings to use this feature.</string>
     <string name="control_buttons_alignment_left">Left</string>
@@ -349,6 +352,7 @@
     <string name="folder_layout">Folder layout</string>
     <string name="image_layout">Image layout</string>
     <string name="comic_layout">Comic layout</string>
+    <string name="book_layout">Book layout</string>
     <string name="continue_reading">Continue reading</string>
     <string name="info">Info</string>
     <string name="play">Play</string>
@@ -445,11 +449,11 @@
     <!-- Vault -->
     <string name="hide">Hide</string>
     <string name="unhide">Unhide</string>
-    <string name="vault">Vault</string>
+    <string name="vault">Video Vault</string>
     <string name="hidden_videos">Hidden videos</string>
     <string name="hide_one_video_confirmation">Hide this video?</string>
     <string name="hide_videos_confirmation">Hide %1$d videos?</string>
-    <string name="hide_video_info">Hidden videos are moved into a private vault protected by a PIN and removed from your gallery.</string>
+    <string name="hide_video_info">Hidden videos are moved into a private video vault protected by a PIN and removed from your gallery.</string>
     <string name="hiding_videos_in_progress">Hiding…</string>
     <string name="unhiding_videos_in_progress">Unhiding…</string>
     <plurals name="videos_relocated_to_movies">
@@ -457,7 +461,7 @@
         <item quantity="other">Couldn\'t restore %1$d videos to their original folders — moved to Movies/</item>
     </plurals>
     <string name="hiding_videos">Hiding\u2026</string>
-    <string name="set_vault_pin">Set vault PIN</string>
+    <string name="set_vault_pin">Set Video Vault PIN</string>
     <string name="set_vault_pin_description">Create a 4-digit PIN to protect your hidden videos</string>
     <string name="confirm_vault_pin">Confirm PIN</string>
     <string name="confirm_vault_pin_description">Re-enter your PIN to confirm</string>
@@ -465,19 +469,19 @@
     <string name="enter_vault_pin_description">Enter your PIN to access hidden videos</string>
     <string name="pins_do_not_match">PINs don\'t match. Try again</string>
     <string name="incorrect_pin">Incorrect PIN</string>
-    <string name="open_vault">Open vault</string>
+    <string name="open_vault">Open Video Vault</string>
     <string name="open_vault_description">Access your hidden videos</string>
     <string name="unlock_with_biometrics">Unlock with biometrics</string>
-    <string name="use_vault_pin">Use vault PIN</string>
+    <string name="use_vault_pin">Use Video Vault PIN</string>
     <string name="vault_biometric_setup_title">Use biometrics to unlock?</string>
-    <string name="vault_biometric_setup_description">Unlock your vault with your fingerprint or face. Confirm with a biometric scan to enable it. You can still use your PIN and turn this off in Vault settings.</string>
+    <string name="vault_biometric_setup_description">Unlock your Video Vault with your fingerprint or face. Confirm with a biometric scan to enable it. You can still use your PIN and turn this off in Video Vault settings.</string>
     <string name="enable_biometric_unlock">Enable biometric unlock</string>
     <string name="not_now">Not now</string>
-    <string name="vault_settings">Vault settings</string>
-    <string name="vault_biometric_description">Use your fingerprint or face to unlock. Your vault PIN remains available.</string>
+    <string name="vault_settings">Video Vault settings</string>
+    <string name="vault_biometric_description">Use your fingerprint or face to unlock. Your Video Vault PIN remains available.</string>
     <string name="vault_biometric_unavailable">Set up a supported fingerprint or face in your device settings to enable biometric unlock.</string>
     <string name="vault_empty_title">No hidden videos</string>
-    <string name="vault_empty_description">Videos you hide will show up here. Long press a video and tap Hide to add it to the vault.</string>
+    <string name="vault_empty_description">Videos you hide will show up here. Long press a video and tap Hide to add it to the Video Vault.</string>
     <string name="unhide_one_video_confirmation">Unhide this video? It will be moved back to its original location.</string>
     <string name="unhide_videos_confirmation">Unhide %1$d videos? They will be moved back to their original location.</string>
     <string name="delete_one_video_from_vault">Permanently delete this video?</string>
@@ -487,11 +491,12 @@
     <string name="name">Name</string>
     <string name="date_hidden">Date hidden</string>
     <string name="forgot_pin">Forgot PIN?</string>
-    <string name="reset_vault_pin_confirmation">Resetting your PIN will permanently delete all videos currently in the vault, since they can no longer be unlocked. Continue?</string>
+    <string name="reset_vault_pin_confirmation">Resetting your PIN will permanently delete all videos currently in the Video Vault, since they can no longer be unlocked. Continue?</string>
     <string name="reset_pin_and_delete_all">Reset PIN &amp; delete all</string>
 
     <!-- Network -->
     <string name="home">Home</string>
+    <string name="nav_videos">Video</string>
     <string name="network">Network</string>
     <string name="add_connection">Add connection</string>
     <string name="edit_connection">Edit connection</string>
@@ -651,8 +656,86 @@
     <!-- Watched marks -->
     <string name="watched_marks_section">Playback completion</string>
     <string name="watched_marks_enabled">Show completion badges</string>
-    <string name="watched_marks_enabled_sub">Mark videos and comics as watched when reaching their thresholds</string>
+    <string name="watched_marks_enabled_sub">Mark videos, comics and books as watched when reaching their thresholds</string>
     <string name="watched_marks_video_threshold">Video completion threshold</string>
     <string name="watched_marks_comic_threshold">Comic completion threshold</string>
+    <string name="watched_marks_book_threshold">Book completion threshold</string>
     <string name="watched_badge_content_desc">Watched</string>
+
+    <!-- Books -->
+    <string name="books">Books</string>
+    <string name="manage_book_folders">Manage book folders</string>
+    <string name="manage_book_folders_desc">Choose the folders to include in the book library</string>
+    <string name="no_books_found">No books found. Add a book folder in Settings.</string>
+    <string name="book_folders_empty">No book folders added.</string>
+    <string name="book_folders_setup">Add folders</string>
+    <string name="search_books">Search books</string>
+    <string name="search_books_and_folders">Search books and folders</string>
+    <string name="book_tab_shelf">Bookshelf</string>
+    <string name="book_tab_browse">Browse</string>
+    <string name="add_to_shelf">Add to shelf</string>
+    <string name="add_to_shelf_title">Choose a group</string>
+    <string name="book_shelf_group_all">All</string>
+    <string name="book_shelf_new_group">New group</string>
+    <string name="book_shelf_group_name">Group name</string>
+    <string name="book_shelf_default_group">Default</string>
+    <string name="book_shelf_added">Added to shelf</string>
+    <string name="book_shelf_remove">Remove from shelf</string>
+    <string name="book_shelf_remove_message">Only the shelf entry will be removed. The file will not be deleted.</string>
+    <string name="book_shelf_empty">Your shelf is empty. Long-press a book or folder in Browse to add it.</string>
+    <string name="book_shelf_remove_confirm">Remove</string>
+    <string name="book_shelf_rename_group">Rename group</string>
+    <string name="book_shelf_delete_group">Delete group</string>
+    <string name="book_shelf_delete_group_message">The group and its shelf entries will be removed. Files will not be deleted.</string>
+    <string name="book_shelf_sort_group">Reorder</string>
+    <string name="book_shelf_group_position">Position %1$d</string>
+    <string name="book_shelf_group_count">%1$s %2$d</string>
+    <string name="book_shelf_move_to_group">Move to group</string>
+    <string name="book_shelf_copy_to_group">Copy to group</string>
+
+    <!-- Reader -->
+    <string name="reader_loading">Loading…</string>
+    <string name="reader_back">Back</string>
+    <string name="reader_error_book_missing">This book is no longer available.</string>
+    <string name="reader_error_content_missing">The book file could not be read.</string>
+    <string name="reader_toc">Contents</string>
+    <string name="reader_bookmarks">Bookmarks</string>
+    <string name="reader_bookmarks_empty">No bookmarks yet</string>
+    <string name="reader_bookmark_add">Add bookmark</string>
+    <string name="reader_bookmark_remove">Remove bookmark</string>
+    <string name="reader_bookmark_delete">Delete bookmark</string>
+    <string name="reader_settings">Reading settings</string>
+    <string name="reader_settings_desc">Book reading options</string>
+    <string name="reader_theme_light">Light theme</string>
+    <string name="reader_theme_dark">Dark theme</string>
+    <string name="reader_appearance">Appearance</string>
+    <string name="reader_theme_paper">Paper</string>
+    <string name="reader_theme_ink_green">Ink green</string>
+    <string name="reader_theme_dark_pink">Dusty rose</string>
+    <string name="reader_theme_ink_blue">Ink blue</string>
+    <string name="reader_theme_black">Pure black</string>
+    <string name="reader_font_size">Font size</string>
+    <string name="reader_line_spacing">Line spacing</string>
+    <string name="reader_paragraph_spacing">Paragraph spacing</string>
+    <string name="reader_spacing_none">None</string>
+    <string name="reader_brightness">Brightness</string>
+    <string name="reader_brightness_follow">Auto</string>
+    <string name="reader_horizontal_padding">Side margins</string>
+    <string name="reader_progress_scope">Progress bar</string>
+    <string name="reader_progress_book">Full book pages</string>
+    <string name="reader_progress_chapter">Chapter pages</string>
+    <string name="reader_page_turn">Page turn</string>
+    <string name="reader_page_turn_slide">Slide</string>
+    <string name="reader_page_turn_cover">Cover</string>
+    <string name="reader_page_turn_vertical">Vertical</string>
+    <string name="reader_page_turn_none">None</string>
+    <string name="reader_font_family">Font</string>
+    <string name="reader_font_default">Default</string>
+    <string name="reader_font_add">Add font</string>
+    <string name="reader_font_weight">Font weight</string>
+    <string name="reader_first_line_indent">First-line indent</string>
+    <string name="reader_show_chapter_title">Chapter title at top</string>
+    <string name="reader_show_time_battery">Show time &amp; battery</string>
+
+    <string name="reader_untitled_chapter">Untitled chapter</string>
 </resources>

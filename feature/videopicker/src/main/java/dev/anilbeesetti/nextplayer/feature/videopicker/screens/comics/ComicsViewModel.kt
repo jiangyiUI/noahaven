@@ -187,7 +187,7 @@ class ComicsViewModel(
         }
     }
 
-    /** 删除选中的压缩包，文件夹只删其中的 zip，自底向上清掉空目录。 */
+    /** 删除选中的压缩包；文件夹只删其中的漫画文件，目录本身和其他文件不动。 */
     private fun deleteSelected(items: Set<SelectionItem>) {
         if (items.isEmpty()) return
         viewModelScope.launch {
@@ -202,10 +202,6 @@ class ComicsViewModel(
                     comicFileIndex.deletePassword(path)
                 }
             }
-            val protectedRoots = preferencesRepository.applicationPreferences.value.comicFolders
-                .map(::normalizePath)
-            items.filterIsInstance<SelectionItem.Folder>()
-                .forEach { folder -> deleteEmptyDirectories(File(folder.path), protectedRoots) }
             refreshIndex()
         }
     }
@@ -321,19 +317,6 @@ class ComicsViewModel(
                 }
             }
         }.distinct()
-    }
-
-    /** 自底向上删除空目录；还有内容的目录保持原样。 */
-    private fun deleteEmptyDirectories(directory: File, protectedRoots: List<String>) {
-        val children = directory.listFiles() ?: return
-        children.filter { it.isDirectory }.forEach { deleteEmptyDirectories(it, protectedRoots) }
-        if (directory.listFiles().isNullOrEmpty()) {
-            // 白名单根目录及它们的上级不能删
-            val dirPath = normalizePath(directory.path)
-            val isProtected = dirPath in protectedRoots ||
-                protectedRoots.any { it.startsWith("$dirPath/") }
-            if (!isProtected) directory.delete()
-        }
     }
 
     private fun refreshIndex() {

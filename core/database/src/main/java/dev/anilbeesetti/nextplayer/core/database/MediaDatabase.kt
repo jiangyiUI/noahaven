@@ -5,6 +5,8 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import dev.anilbeesetti.nextplayer.core.database.dao.AudioFileIndexDao
+import dev.anilbeesetti.nextplayer.core.database.dao.BookDao
+import dev.anilbeesetti.nextplayer.core.database.dao.BookShelfDao
 import dev.anilbeesetti.nextplayer.core.database.dao.ComicFileIndexDao
 import dev.anilbeesetti.nextplayer.core.database.dao.ComicPasswordDao
 import dev.anilbeesetti.nextplayer.core.database.dao.ComicProgressDao
@@ -15,6 +17,9 @@ import dev.anilbeesetti.nextplayer.core.database.dao.MediumStateDao
 import dev.anilbeesetti.nextplayer.core.database.dao.NetworkConnectionDao
 import dev.anilbeesetti.nextplayer.core.database.dao.PlaylistDao
 import dev.anilbeesetti.nextplayer.core.database.entities.AudioFileIndexEntity
+import dev.anilbeesetti.nextplayer.core.database.entities.BookEntity
+import dev.anilbeesetti.nextplayer.core.database.entities.BookShelfGroupEntity
+import dev.anilbeesetti.nextplayer.core.database.entities.BookShelfItemEntity
 import dev.anilbeesetti.nextplayer.core.database.entities.ComicFileIndexEntity
 import dev.anilbeesetti.nextplayer.core.database.entities.ComicPasswordEntity
 import dev.anilbeesetti.nextplayer.core.database.entities.ComicProgressEntity
@@ -39,8 +44,11 @@ import dev.anilbeesetti.nextplayer.core.database.entities.PlaylistItemEntity
         ComicFileIndexEntity::class,
         ComicProgressEntity::class,
         ComicPasswordEntity::class,
+        BookEntity::class,
+        BookShelfGroupEntity::class,
+        BookShelfItemEntity::class,
     ],
-    version = 23,
+    version = 26,
     exportSchema = true,
 )
 abstract class MediaDatabase : RoomDatabase() {
@@ -64,6 +72,10 @@ abstract class MediaDatabase : RoomDatabase() {
     abstract fun networkConnectionDao(): NetworkConnectionDao
 
     abstract fun playlistDao(): PlaylistDao
+
+    abstract fun bookDao(): BookDao
+
+    abstract fun bookShelfDao(): BookShelfDao
 
     companion object {
         const val DATABASE_NAME = "media_db"
@@ -649,6 +661,129 @@ abstract class MediaDatabase : RoomDatabase() {
                     sql = """
                     ALTER TABLE `comic_progress`
                     ADD COLUMN `watched` INTEGER NOT NULL DEFAULT 0
+                    """,
+                )
+            }
+        }
+
+        /** 书架：书籍元数据/进度表与分组表，纯新增表，不触碰任何已有数据。 */
+        val MIGRATION_23_24 = object : Migration(
+            23,
+            24,
+        ) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    sql = """
+                    CREATE TABLE IF NOT EXISTS `book` (
+                        `id` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `author` TEXT NOT NULL,
+                        `uri` TEXT NOT NULL,
+                        `format` TEXT NOT NULL,
+                        `cover_path` TEXT,
+                        `file_size` INTEGER NOT NULL,
+                        `chapter_count` INTEGER NOT NULL,
+                        `total_chars` INTEGER NOT NULL,
+                        `group_id` TEXT,
+                        `added_at` INTEGER NOT NULL,
+                        `last_opened_at` INTEGER NOT NULL DEFAULT 0,
+                        `chapter_index` INTEGER NOT NULL DEFAULT 0,
+                        `char_offset` INTEGER NOT NULL DEFAULT 0,
+                        `percent` REAL NOT NULL DEFAULT 0,
+                        `finished` INTEGER NOT NULL DEFAULT 0,
+                        PRIMARY KEY(`id`)
+                    )
+                    """,
+                )
+                db.execSQL(
+                    sql = """
+                    CREATE TABLE IF NOT EXISTS `book_group` (
+                        `id` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `created_at` INTEGER NOT NULL,
+                        `sort_order` INTEGER NOT NULL DEFAULT 0,
+                        PRIMARY KEY(`id`)
+                    )
+                    """,
+                )
+            }
+        }
+
+        /**
+         * 书架改为白名单扫描（与图片/漫画一致）：book 表换成扫描索引 + 进度，
+         * 移除导入/分组。旧导入数据未发布，直接重建。
+         */
+        val MIGRATION_24_25 = object : Migration(
+            24,
+            25,
+        ) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(sql = "DROP TABLE IF EXISTS `book`")
+                db.execSQL(sql = "DROP TABLE IF EXISTS `book_group`")
+                db.execSQL(
+                    sql = """
+                    CREATE TABLE IF NOT EXISTS `book` (
+                        `path` TEXT NOT NULL,
+                        `parent_path` TEXT NOT NULL,
+                        `whitelist_root` TEXT NOT NULL,
+                        `display_name` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `author` TEXT NOT NULL,
+                        `format` TEXT NOT NULL,
+                        `cover_path` TEXT,
+                        `file_size` INTEGER NOT NULL,
+                        `date_modified` INTEGER NOT NULL,
+                        `no_media_hidden` INTEGER NOT NULL DEFAULT 0,
+                        `chapter_index` INTEGER NOT NULL DEFAULT 0,
+                        `char_offset` INTEGER NOT NULL DEFAULT 0,
+                        `percent` REAL NOT NULL DEFAULT 0,
+                        `last_opened_at` INTEGER NOT NULL DEFAULT 0,
+                        `finished` INTEGER NOT NULL DEFAULT 0,
+                        PRIMARY KEY(`path`)
+                    )
+                    """,
+                )
+            }
+        }
+
+        /** 收藏书架：分组表与条目表，纯新增表，不触碰任何已有数据。 */
+        val MIGRATION_25_26 = object : Migration(
+            25,
+            26,
+        ) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    sql = """
+                    CREATE TABLE IF NOT EXISTS `book_shelf_group` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `sort_order` INTEGER NOT NULL,
+                        `created_at` INTEGER NOT NULL
+                    )
+                    """,
+                )
+                db.execSQL(
+                    sql = """
+                    CREATE TABLE IF NOT EXISTS `book_shelf_item` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `group_id` INTEGER NOT NULL,
+                        `path` TEXT NOT NULL,
+                        `added_at` INTEGER NOT NULL,
+                        FOREIGN KEY(`group_id`) REFERENCES `book_shelf_group`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """,
+                )
+                db.execSQL(
+                    sql = """
+                    CREATE INDEX IF NOT EXISTS `index_book_shelf_item_path`
+                    ON `book_shelf_item` (`path`)
+                    """,
+                )
+                db.execSQL(
+                    sql = """
+                    CREATE UNIQUE INDEX IF NOT EXISTS `index_book_shelf_item_group_id_path`
+                    ON `book_shelf_item` (`group_id`, `path`)
                     """,
                 )
             }

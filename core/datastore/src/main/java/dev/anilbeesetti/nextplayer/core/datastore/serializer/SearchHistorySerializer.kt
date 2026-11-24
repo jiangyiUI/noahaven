@@ -5,7 +5,6 @@ import androidx.datastore.core.Serializer
 import dev.anilbeesetti.nextplayer.core.model.SearchHistory
 import java.io.InputStream
 import java.io.OutputStream
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 
 object SearchHistorySerializer : Serializer<SearchHistory> {
@@ -21,7 +20,7 @@ object SearchHistorySerializer : Serializer<SearchHistory> {
                 deserializer = SearchHistory.serializer(),
                 string = input.readBytes().decodeToString(),
             )
-        } catch (exception: SerializationException) {
+        } catch (exception: Exception) {
             throw CorruptionException(
                 message = "Cannot read datastore",
                 cause = exception,

@@ -132,6 +132,8 @@ fun MediaLayoutAndSortSettings(
                 Sort.By.DATE -> dateLabel to NextIcons.Calendar
                 Sort.By.SIZE -> R.string.size to NextIcons.Size
                 Sort.By.PATH -> R.string.location to NextIcons.Location
+                Sort.By.SHELF_ADDED -> R.string.date_added to NextIcons.Calendar
+                Sort.By.LAST_VIEWED -> R.string.last_read to NextIcons.History
             }
             TextIconToggleButton(
                 text = stringResource(id = label),
@@ -171,7 +173,8 @@ fun MediaLayoutAndSortSettings(
                     Sort.By.TITLE, Sort.By.PATH -> if (ascending) R.string.a_z else R.string.z_a
                     Sort.By.LENGTH -> if (ascending) R.string.shortest else R.string.longest
                     Sort.By.SIZE -> if (ascending) R.string.smallest else R.string.largest
-                    Sort.By.DATE -> if (ascending) R.string.oldest else R.string.newest
+                    Sort.By.DATE, Sort.By.SHELF_ADDED, Sort.By.LAST_VIEWED ->
+                        if (ascending) R.string.oldest else R.string.newest
                 }
                 Text(text = stringResource(id = label))
             }

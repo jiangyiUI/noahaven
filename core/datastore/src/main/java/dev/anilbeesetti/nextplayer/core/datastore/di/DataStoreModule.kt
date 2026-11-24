@@ -3,6 +3,7 @@ package dev.anilbeesetti.nextplayer.core.datastore.di
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.DataStoreFactory
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.dataStoreFile
 import dev.anilbeesetti.nextplayer.core.common.di.DiQualifiers
 import dev.anilbeesetti.nextplayer.core.common.di.DispatchersModule
@@ -37,6 +38,7 @@ class DataStoreModule {
         serializer = ApplicationPreferencesSerializer,
         scope = CoroutineScope(context = scope.coroutineContext + ioDispatcher),
         produceFile = { context.dataStoreFile(fileName = APP_PREFERENCES_DATASTORE_FILE) },
+        corruptionHandler = ReplaceFileCorruptionHandler { _ -> ApplicationPreferencesSerializer.defaultValue },
     )
 
     @Single
@@ -51,6 +53,7 @@ class DataStoreModule {
         produceFile = {
             applicationContext.dataStoreFile(fileName = PLAYER_PREFERENCES_DATASTORE_FILE)
         },
+        corruptionHandler = ReplaceFileCorruptionHandler { _ -> PlayerPreferencesSerializer.defaultValue },
     )
 
     @Single
@@ -65,5 +68,6 @@ class DataStoreModule {
         produceFile = {
             applicationContext.dataStoreFile(fileName = SEARCH_HISTORY_DATASTORE_FILE)
         },
+        corruptionHandler = ReplaceFileCorruptionHandler { _ -> SearchHistorySerializer.defaultValue },
     )
 }

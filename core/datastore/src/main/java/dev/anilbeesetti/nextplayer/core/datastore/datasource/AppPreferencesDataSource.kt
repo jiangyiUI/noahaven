@@ -22,13 +22,6 @@ class AppPreferencesDataSource(
     override suspend fun update(
         transform: suspend (ApplicationPreferences) -> ApplicationPreferences,
     ) {
-        try {
-            appPreferences.updateData(transform = transform)
-        } catch (ioException: Exception) {
-            Logger.logError(
-                tag = TAG,
-                message = "Failed to update app preferences: $ioException",
-            )
-        }
+        appPreferences.updateData(transform = transform)
     }
 }

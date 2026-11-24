@@ -365,16 +365,16 @@
     <string name="open_vault">Vault öffnen</string>
     <string name="open_vault_description">Greife auf deine versteckten Videos zu</string>
     <string name="unlock_with_biometrics">Entsperren mit Biometrie</string>
-    <string name="use_vault_pin">Vault PIN verwenden</string>
+    <string name="use_vault_pin">Video-Tresor-PIN verwenden</string>
     <string name="vault_biometric_setup_title">Mit Biometrie entsperren?</string>
-    <string name="vault_biometric_setup_description">Entsperre deine Vault mit Fingerabdruck oder Gesicht. Bestätige mit einem biometrischen Scan, um die Funktion zu aktivieren. Du kannst weiterhin deine PIN verwenden und die Funktion in den Vaulteinstellungen deaktivieren.</string>
+    <string name="vault_biometric_setup_description">Entsperre deinen Video-Tresor mit Fingerabdruck oder Gesicht. Bestätige mit einem biometrischen Scan, um die Funktion zu aktivieren. Du kannst weiterhin deine PIN verwenden und die Funktion in den Video-Tresor-Einstellungen deaktivieren.</string>
     <string name="enable_biometric_unlock">Biometrisches Entsperren aktivieren</string>
     <string name="not_now">Nicht jetzt</string>
-    <string name="vault_settings">Vaulteinstellungen</string>
-    <string name="vault_biometric_description">Benutze Fingerabdruck oder Gesicht zum Entsperren. Deine Vault PIN bleibt aktiv.</string>
+    <string name="vault_settings">Video-Tresor-Einstellungen</string>
+    <string name="vault_biometric_description">Benutze Fingerabdruck oder Gesicht zum Entsperren. Deine Video-Tresor-PIN bleibt aktiv.</string>
     <string name="vault_biometric_unavailable">Richte in den Geräteeinstellungen einen unterstützten Fingerabdruck oder ein unterstütztes Gesicht ein, um das Entsperren per Biometrie zu aktivieren.</string>
     <string name="vault_empty_title">Keine versteckten Videos</string>
-    <string name="vault_empty_description">Videos, die du ausblendest, werden hier angezeigt. Halte ein Video gedrückt und tippe auf \"Ausblenden\", um es dem Vault hinzuzufügen.</string>
+    <string name="vault_empty_description">Videos, die du ausblendest, werden hier angezeigt. Halte ein Video gedrückt und tippe auf \"Ausblenden\", um es dem Video-Tresor hinzuzufügen.</string>
     <string name="unhide_one_video_confirmation">Dieses Video anzeigen? Es wird an seinen Originalort zurück verschoben.</string>
     <string name="unhide_videos_confirmation">%1$d Videos anzeigen? Sie werden an ihren Originalort zurück verschoben.</string>
     <string name="delete_one_video_from_vault">Diese Video permanent löschen?</string>
@@ -384,7 +384,7 @@
     <string name="name">Name</string>
     <string name="date_hidden">Datum (versteckt)</string>
     <string name="forgot_pin">PIN vergessen?</string>
-    <string name="reset_vault_pin_confirmation">Wenn du deine PIN zurücksetzt, werden alle Videos, die sich aktuell im Vault befinden, endgültig gelöscht, da sie nicht mehr entsperrt werden können. Fortfahren?</string>
+    <string name="reset_vault_pin_confirmation">Wenn du deine PIN zurücksetzt, werden alle Videos, die sich aktuell im Video-Tresor befinden, endgültig gelöscht, da sie nicht mehr entsperrt werden können. Fortfahren?</string>
     <string name="reset_pin_and_delete_all">PIN zurücksetzen und alle löschen</string>
     <string name="network">Netzwerk</string>
     <string name="add_connection">Verbindung hinzufügen</string>
@@ -530,7 +530,7 @@
     </plurals>
     <string name="crash_screen_logcat">Logcat:</string>
     <string name="hybrid">Hybrid (smart)</string>
-    <string name="vault">Vault</string>
+    <string name="vault">Video-Tresor</string>
     <string name="home">Home</string>
     <string name="add_to_home_screen">Zum Startbildschirm hinzufügen</string>
     <string name="playlist_shortcut_failed">Playlist Verknüpfung konnte nicht erstellt werden. Bitte erneut versuchen.</string>

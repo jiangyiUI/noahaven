@@ -64,6 +64,8 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import dev.anilbeesetti.nextplayer.core.common.extensions.isTelevision
 import dev.anilbeesetti.nextplayer.core.common.service.system.SystemService
 import dev.anilbeesetti.nextplayer.core.media.services.MediaOperationsService
+import dev.anilbeesetti.nextplayer.core.data.repository.PreferencesRepository
+import dev.anilbeesetti.nextplayer.core.model.MediaLibraryTab
 import dev.anilbeesetti.nextplayer.core.model.ThemeConfig
 import dev.anilbeesetti.nextplayer.core.ui.components.LocalNavigationBottomPadding
 import dev.anilbeesetti.nextplayer.core.ui.components.LocalTopLevelBottomBarVisibleSetter
@@ -75,6 +77,7 @@ import dev.anilbeesetti.nextplayer.navigation.NextNavigationBar
 import dev.anilbeesetti.nextplayer.navigation.NextNavigationRail
 import dev.anilbeesetti.nextplayer.navigation.TopLevelDestination
 import dev.anilbeesetti.nextplayer.navigation.TopLevelNavState
+import dev.anilbeesetti.nextplayer.navigation.booksNavGraph
 import dev.anilbeesetti.nextplayer.navigation.imagesNavGraph
 import dev.anilbeesetti.nextplayer.navigation.mediaNavGraph
 import dev.anilbeesetti.nextplayer.navigation.moreNavGraph
@@ -88,8 +91,10 @@ import dev.anilbeesetti.nextplayer.navigation.rememberTopLevelNavState
 import dev.anilbeesetti.nextplayer.navigation.settingsNavGraph
 import dev.anilbeesetti.nextplayer.settings.update.UpdateDialogs
 import dev.anilbeesetti.nextplayer.settings.update.UpdateViewModel
+import kotlinx.coroutines.flow.map
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
 class MainActivity : FragmentActivity() {
@@ -165,7 +170,12 @@ class MainActivity : FragmentActivity() {
                     val updateState by updateViewModel.state.collectAsStateWithLifecycle()
 
                     Box(modifier = Modifier.fillMaxSize()) {
-                        val navState = rememberTopLevelNavState()
+                        val navState = rememberTopLevelNavState(
+                            destinationOrder = (state as? MainActivityUiState.Success)
+                                ?.preferences
+                                ?.topLevelDestinationOrder
+                                .orEmpty(),
+                        )
 
                     LaunchedEffect(key1 = pendingPlaylistId) {
                         pendingPlaylistId?.let { playlistId ->
@@ -177,6 +187,7 @@ class MainActivity : FragmentActivity() {
                     val mediaStack = navState.backStacks.getValue(TopLevelDestination.MEDIA.route)
                     val musicStack = navState.backStacks.getValue(TopLevelDestination.MUSIC.route)
                     val imagesStack = navState.backStacks.getValue(TopLevelDestination.IMAGES.route)
+                    val booksStack = navState.backStacks.getValue(TopLevelDestination.BOOKS.route)
                     val moreStack = navState.backStacks.getValue(TopLevelDestination.MORE.route)
 
                     val provider = entryProvider {
@@ -189,6 +200,7 @@ class MainActivity : FragmentActivity() {
                             backStack = musicStack,
                         )
                         imagesNavGraph(backStack = imagesStack)
+                        booksNavGraph(backStack = booksStack)
                         playlistNavGraph(
                             context = this@MainActivity,
                             backStack = moreStack,
@@ -211,6 +223,7 @@ class MainActivity : FragmentActivity() {
                         state = navState,
                         fabStates = topLevelFabStates,
                         showBottomBar = showTopLevelBottomBar,
+                        onMoveTopLevelDestination = viewModel::moveTopLevelDestination,
                     ) { layoutPaddingValues ->
                         val railPadding = layoutPaddingValues.calculateStartPadding(
                             LocalLayoutDirection.current,
@@ -303,6 +316,7 @@ fun NavigationLayout(
     state: TopLevelNavState,
     fabStates: SnapshotStateMap<String, TopLevelFabState>,
     showBottomBar: Boolean,
+    onMoveTopLevelDestination: (Int, Int) -> Unit = { _, _ -> },
     windowSizeClass: WindowSizeClass = currentWindowAdaptiveInfoV2().windowSizeClass,
     content: @Composable (PaddingValues) -> Unit,
 ) {
@@ -311,6 +325,11 @@ fun NavigationLayout(
     var railWidth by remember(density) { mutableStateOf(0.dp) }
     val contentFocusRequester = remember { FocusRequester() }
     val fabFocusRequester = remember { FocusRequester() }
+    val preferencesRepository: PreferencesRepository = koinInject()
+    // 图片/漫画复合 tab 的展示身份跟随图片库内部排序的第一项
+    val imageLibraryFirstTab by preferencesRepository.applicationPreferences
+        .map { MediaLibraryTab.sanitize(it.imageLibraryTabOrder).first() }
+        .collectAsStateWithLifecycle(initialValue = MediaLibraryTab.IMAGES)
     val showNavRail = windowSizeClass.isWidthAtLeastBreakpoint(
         WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND,
     )
@@ -341,6 +360,8 @@ fun NavigationLayout(
                         fabState = displayedFabState,
                         contentFocusRequester = contentFocusRequester,
                         fabFocusRequester = fabFocusRequester,
+                        imageLibraryFirstTab = imageLibraryFirstTab,
+                        onMoveDestination = onMoveTopLevelDestination,
                         showFabOnly = showNavRail,
                     )
                 }
@@ -384,6 +405,7 @@ fun NavigationLayout(
         ) {
             NextNavigationRail(
                 state = state,
+                imageLibraryFirstTab = imageLibraryFirstTab,
                 modifier = Modifier.onSizeChanged {
                     railWidth =
                         with(receiver = density) { it.width.toDp() }

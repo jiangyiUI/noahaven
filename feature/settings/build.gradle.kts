@@ -43,8 +43,11 @@ dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:common"))
     implementation(project(":core:media"))
+    // 复用阅读设置（BooksPreferences / ReaderSettings），与阅读页面板共享同一份参数
+    implementation(project(":feature:books"))
 
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.activity.compose)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
 

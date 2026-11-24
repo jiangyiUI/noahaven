@@ -485,13 +485,13 @@
     <string name="clear_history_confirmation">Hapus semua video yang telah ditonton dari riwayat?</string>
     <string name="open_vault_description">Akses video tersembunyi Anda</string>
     <string name="unlock_with_biometrics">Buka kunci dengan biometrik</string>
-    <string name="use_vault_pin">Gunakan PIN vault</string>
+    <string name="use_vault_pin">Gunakan PIN Brankas Video</string>
     <string name="vault_biometric_setup_title">Gunakan biometrik untuk membuka kunci?</string>
-    <string name="vault_biometric_setup_description">Buka kunci vault Anda dengan sidik jari atau wajah. Konfirmasikan dengan pemindaian biometrik untuk mengaktifkannya. Anda tetap dapat menggunakan PIN dan menonaktifkan fitur ini di pengaturan Vault.</string>
+    <string name="vault_biometric_setup_description">Buka kunci Brankas Video Anda dengan sidik jari atau wajah. Konfirmasikan dengan pemindaian biometrik untuk mengaktifkannya. Anda tetap dapat menggunakan PIN dan menonaktifkan fitur ini di pengaturan Brankas Video.</string>
     <string name="enable_biometric_unlock">Aktifkan pembukaan kunci biometrik</string>
     <string name="not_now">Nanti saja</string>
-    <string name="vault_settings">Pengaturan Vault</string>
-    <string name="vault_biometric_description">Gunakan sidik jari atau wajah Anda untuk membuka kunci. PIN vault Anda tetap tersedia.</string>
+    <string name="vault_settings">Pengaturan Brankas Video</string>
+    <string name="vault_biometric_description">Gunakan sidik jari atau wajah Anda untuk membuka kunci. PIN Brankas Video Anda tetap tersedia.</string>
     <string name="vault_biometric_unavailable">Atur sidik jari atau wajah yang didukung di pengaturan perangkat Anda untuk mengaktifkan pembukaan kunci biometrik.</string>
     <string name="ftp_sftp">FTP/SFTP</string>
     <string name="use_sftp">Gunakan SFTP</string>

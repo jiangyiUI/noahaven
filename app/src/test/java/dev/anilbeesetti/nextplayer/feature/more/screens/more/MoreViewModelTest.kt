@@ -259,6 +259,7 @@ class MoreViewModelTest {
         openVault = {},
         openPlaylists = {},
         openNetwork = {},
+        openBooks = {},
     )
 }
 

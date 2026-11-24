@@ -1,10 +1,10 @@
 package dev.anilbeesetti.nextplayer
 
 import android.app.Application
+import android.util.Log
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
-import dev.anilbeesetti.nextplayer.core.common.Logger
 import dev.anilbeesetti.nextplayer.core.common.di.DiQualifiers
 import dev.anilbeesetti.nextplayer.core.data.repository.NetworkConnectionRepository
 import dev.anilbeesetti.nextplayer.core.media.network.keys.SshKeyStore
@@ -44,10 +44,7 @@ class NextPlayerApplication :
                     sshKeyStore = sshKeyStore,
                 )
             }.onFailure { error ->
-                Logger.logError(
-                    tag = TAG,
-                    message = "Couldn't reconcile SSH keys: ${error.message}",
-                )
+                Log.e(TAG, "Couldn't reconcile SSH keys: ${error.message}", error)
             }
         }
     }

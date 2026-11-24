@@ -10,6 +10,7 @@ import dev.anilbeesetti.nextplayer.core.common.di.DispatchersModule
 import dev.anilbeesetti.nextplayer.core.data.DataModule
 import dev.anilbeesetti.nextplayer.core.data.repository.PreferencesRepository
 import dev.anilbeesetti.nextplayer.core.model.ThumbnailGenerationStrategy
+import dev.anilbeesetti.nextplayer.feature.books.BooksModule
 import dev.anilbeesetti.nextplayer.feature.network.NetworkModule
 import dev.anilbeesetti.nextplayer.feature.player.PlayerModule
 import dev.anilbeesetti.nextplayer.feature.playlist.PlaylistModule
@@ -25,6 +26,7 @@ import org.koin.core.annotation.Single
     includes = [
         DispatchersModule::class,
         DataModule::class,
+        BooksModule::class,
         NetworkModule::class,
         PlaylistModule::class,
         PlayerModule::class,
@@ -43,36 +45,38 @@ class AppModule {
     fun provideImageLoader(
         context: Context,
         preferencesRepository: PreferencesRepository,
-    ): ImageLoader = ImageLoader.Builder(context = context)
-        .components {
-            add(
-                VideoThumbnailDecoder.Factory(
-                    thumbnailStrategy = {
-                        val preferences = preferencesRepository.applicationPreferences.value
-                        when (preferences.thumbnailGenerationStrategy) {
-                            ThumbnailGenerationStrategy.FIRST_FRAME -> ThumbnailStrategy.FirstFrame
+    ): ImageLoader {
+        return ImageLoader.Builder(context = context)
+            .components {
+                add(
+                    VideoThumbnailDecoder.Factory(
+                        thumbnailStrategy = {
+                            val preferences = preferencesRepository.applicationPreferences.value
+                            when (preferences.thumbnailGenerationStrategy) {
+                                ThumbnailGenerationStrategy.FIRST_FRAME -> ThumbnailStrategy.FirstFrame
 
-                            ThumbnailGenerationStrategy.FRAME_AT_PERCENTAGE ->
-                                ThumbnailStrategy.FrameAtPercentage(
+                                ThumbnailGenerationStrategy.FRAME_AT_PERCENTAGE ->
+                                    ThumbnailStrategy.FrameAtPercentage(
+                                        preferences.thumbnailFramePosition,
+                                    )
+
+                                ThumbnailGenerationStrategy.HYBRID -> ThumbnailStrategy.Hybrid(
                                     preferences.thumbnailFramePosition,
                                 )
-
-                            ThumbnailGenerationStrategy.HYBRID -> ThumbnailStrategy.Hybrid(
-                                preferences.thumbnailFramePosition,
-                            )
-                        }
-                    },
-                ),
+                            }
+                        },
+                    ),
+                )
+            }
+            .diskCachePolicy(CachePolicy.ENABLED)
+            .diskCache(
+                DiskCache.Builder()
+                    .fileSystem(FileSystem.SYSTEM)
+                    .directory(context.filesDir.resolve(relative = "thumbnails"))
+                    .maxSizePercent(percent = 1.0)
+                    .build(),
             )
-        }
-        .diskCachePolicy(CachePolicy.ENABLED)
-        .diskCache(
-            DiskCache.Builder()
-                .fileSystem(FileSystem.SYSTEM)
-                .directory(context.filesDir.resolve(relative = "thumbnails"))
-                .maxSizePercent(percent = 1.0)
-                .build(),
-        )
-        .crossfade(enable = true)
-        .build()
+            .crossfade(enable = true)
+            .build()
+    }
 }

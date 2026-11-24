@@ -58,6 +58,14 @@ fun QuickSettingsDialog(
     mediaFilesLabel: String? = null,
     imageMode: Boolean = false,
     comicMode: Boolean = false,
+    /** 书架专用模式：
+     *  - imageLayoutMode 可选 LIST + NINE_GRID（九宫格，不带 GRID）
+     *  - 字段只显示 extension / size / thumbnail / playedProgress
+     *  - 不走 comicMode 的过滤逻辑
+     */
+    shelfMode: Boolean = false,
+    /** 书籍浏览 tab：不显示「路径」字段开关（书籍条目用不到）。 */
+    bookMode: Boolean = false,
 ) {
     var preferences by remember { mutableStateOf(value = applicationPreferences) }
 
@@ -69,48 +77,18 @@ fun QuickSettingsDialog(
             Column(
                 modifier = Modifier.verticalScroll(state = rememberScrollState()),
             ) {
-                DialogSectionTitle(text = stringResource(R.string.media_view_mode))
-                SingleChoiceSegmentedButtonRow(
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    MediaViewMode.entries.forEachIndexed { index, viewMode ->
-                        SegmentedButton(
-                            selected = preferences.mediaViewMode == viewMode,
-                            onClick = { preferences = preferences.copy(mediaViewMode = viewMode) },
-                            shape = SegmentedButtonDefaults.itemShape(
-                                index = index,
-                                count = MediaViewMode.entries.size,
-                            ),
-                            colors = SegmentedButtonDefaults.colors(
-                                activeContentColor = MaterialTheme.colorScheme.primary,
-                                activeBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
-                        ) {
-                            Text(
-                                text = if (viewMode == MediaViewMode.VIDEOS &&
-                                    mediaFilesLabel != null
-                                ) {
-                                    mediaFilesLabel
-                                } else {
-                                    viewMode.name()
-                                },
-                            )
-                        }
-                    }
-                }
-                if (imageMode) {
-                    DialogSectionTitle(text = stringResource(R.string.folder_layout))
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        MediaLayoutMode.entries.forEachIndexed { index, mode ->
+                if (!shelfMode) {
+                    DialogSectionTitle(text = stringResource(R.string.media_view_mode))
+                    SingleChoiceSegmentedButtonRow(
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        MediaViewMode.entries.forEachIndexed { index, viewMode ->
                             SegmentedButton(
-                                selected = preferences.imageFolderLayoutMode == mode,
-                                onClick = {
-                                    preferences =
-                                        preferences.copy(imageFolderLayoutMode = mode)
-                                },
+                                selected = preferences.mediaViewMode == viewMode,
+                                onClick = { preferences = preferences.copy(mediaViewMode = viewMode) },
                                 shape = SegmentedButtonDefaults.itemShape(
                                     index = index,
-                                    count = MediaLayoutMode.entries.size,
+                                    count = MediaViewMode.entries.size,
                                 ),
                                 colors = SegmentedButtonDefaults.colors(
                                     activeContentColor = MaterialTheme.colorScheme.primary,
@@ -118,27 +96,66 @@ fun QuickSettingsDialog(
                                 ),
                             ) {
                                 Text(
-                                    text = stringResource(
-                                        id = if (mode == MediaLayoutMode.LIST) {
-                                            R.string.list
-                                        } else {
-                                            R.string.grid
-                                        },
-                                    ),
+                                    text = if (viewMode == MediaViewMode.VIDEOS &&
+                                        mediaFilesLabel != null
+                                    ) {
+                                        mediaFilesLabel
+                                    } else {
+                                        viewMode.name()
+                                    },
                                 )
+                            }
+                        }
+                    }
+                }
+                if (imageMode) {
+                    // shelfMode（书架 tab）没有文件夹概念，跳过文件夹布局
+                    if (!shelfMode) {
+                        DialogSectionTitle(text = stringResource(R.string.folder_layout))
+                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                            MediaLayoutMode.entries.forEachIndexed { index, mode ->
+                                SegmentedButton(
+                                    selected = preferences.imageFolderLayoutMode == mode,
+                                    onClick = {
+                                        preferences =
+                                            preferences.copy(imageFolderLayoutMode = mode)
+                                    },
+                                    shape = SegmentedButtonDefaults.itemShape(
+                                        index = index,
+                                        count = MediaLayoutMode.entries.size,
+                                    ),
+                                    colors = SegmentedButtonDefaults.colors(
+                                        activeContentColor = MaterialTheme.colorScheme.primary,
+                                        activeBorderColor = MaterialTheme.colorScheme.primary,
+                                    ),
+                                ) {
+                                    Text(
+                                        text = stringResource(
+                                            id = if (mode == MediaLayoutMode.LIST) {
+                                                R.string.list
+                                            } else {
+                                                R.string.grid
+                                            },
+                                        ),
+                                    )
+                                }
                             }
                         }
                     }
                     DialogSectionTitle(
                         text = stringResource(
-                            if (comicMode) R.string.comic_layout else R.string.image_layout,
+                            when {
+                                shelfMode -> R.string.book_layout
+                                comicMode -> R.string.comic_layout
+                                else -> R.string.image_layout
+                            },
                         ),
                     )
                     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        val layoutModes = if (comicMode) {
-                            listOf(ImageLayoutMode.LIST, ImageLayoutMode.GRID)
-                        } else {
-                            ImageLayoutMode.entries
+                        val layoutModes = when {
+                            shelfMode -> listOf(ImageLayoutMode.LIST, ImageLayoutMode.NINE_GRID)
+                            comicMode -> listOf(ImageLayoutMode.LIST, ImageLayoutMode.GRID)
+                            else -> ImageLayoutMode.entries
                         }
                         layoutModes.forEachIndexed { index, mode ->
                             SegmentedButton(
@@ -182,14 +199,14 @@ fun QuickSettingsDialog(
                             sortOrder = it.order,
                         )
                     },
-                    sortOptions = if (imageMode) {
-                        listOf(
+                    sortOptions = when {
+                        shelfMode -> listOf(
                             Sort.By.TITLE,
-                            Sort.By.DATE,
-                            Sort.By.SIZE,
+                            Sort.By.SHELF_ADDED,
+                            Sort.By.LAST_VIEWED,
                         )
-                    } else {
-                        listOf(
+                        imageMode -> listOf(Sort.By.TITLE, Sort.By.DATE, Sort.By.SIZE)
+                        else -> listOf(
                             Sort.By.TITLE,
                             Sort.By.LENGTH,
                             Sort.By.DATE,
@@ -207,7 +224,9 @@ fun QuickSettingsDialog(
                             .wrapContentHeight(align = Alignment.Top),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        if (!imageMode) {
+                        // shelfMode 时只保留 extension/size/thumbnail/playedProgress
+                        val showDurationFields = !imageMode && !shelfMode
+                        if (showDurationFields) {
                             FieldChip(
                                 label = stringResource(id = R.string.duration),
                                 selected = preferences.showDurationField,
@@ -238,7 +257,8 @@ fun QuickSettingsDialog(
                                 )
                             },
                         )
-                        if (!comicMode) {
+                        val showPathField = !comicMode && !shelfMode && !bookMode
+                        if (showPathField) {
                             FieldChip(
                                 label = stringResource(id = R.string.path),
                                 selected = preferences.showPathField,
@@ -248,9 +268,12 @@ fun QuickSettingsDialog(
                                 },
                             )
                         }
-                        if (!imageMode) {
+                        val showPlayedProgress = !imageMode || shelfMode
+                        if (showPlayedProgress) {
                             FieldChip(
-                                label = stringResource(id = R.string.played_progress),
+                                label = stringResource(
+                                    id = if (shelfMode) R.string.reading_progress else R.string.played_progress,
+                                ),
                                 selected = preferences.showPlayedProgress,
                                 onClick = {
                                     preferences = preferences.copy(
@@ -259,7 +282,9 @@ fun QuickSettingsDialog(
                                 },
                             )
                         }
-                        if (!comicMode) {
+                        // 图片库显示分辨率；漫画/书架/书籍浏览 tab 不显示
+                        val showResolutionField = !comicMode && !shelfMode && !bookMode
+                        if (showResolutionField) {
                             FieldChip(
                                 label = stringResource(id = R.string.resolution),
                                 selected = preferences.showResolutionField,

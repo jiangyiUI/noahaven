@@ -34,4 +34,10 @@ class DaoModule {
 
     @Factory
     fun providePlaylistDao(db: MediaDatabase) = db.playlistDao()
+
+    @Factory
+    fun provideBookDao(db: MediaDatabase) = db.bookDao()
+
+    @Factory
+    fun provideBookShelfDao(db: MediaDatabase) = db.bookShelfDao()
 }

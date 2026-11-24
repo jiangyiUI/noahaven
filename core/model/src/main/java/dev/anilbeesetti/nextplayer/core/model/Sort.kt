@@ -1,16 +1,24 @@
 package dev.anilbeesetti.nextplayer.core.model
 
 import kotlin.comparisons.reversed as kotlinReversed
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class Sort(val by: By, val order: Order) {
+    @Serializable
     enum class By {
         TITLE,
         LENGTH,
         PATH,
         SIZE,
         DATE,
+        /** 书架专属：按加入书架的时间（BookShelfEntry.addedAt）。 */
+        SHELF_ADDED,
+        /** 书架专属：按最近阅读时间（preferences.lastViewedAt 时间戳）。 */
+        LAST_VIEWED,
     }
 
+    @Serializable
     enum class Order {
         ASCENDING,
         DESCENDING,
@@ -88,6 +96,7 @@ data class Sort(val by: By, val order: Order) {
             By.PATH -> videoPathComparator
             By.SIZE -> compareBy<Video> { it.size }.then(comparator = videoTitleComparator)
             By.DATE -> compareBy<Video> { it.dateModified }.then(comparator = videoTitleComparator)
+            By.SHELF_ADDED, By.LAST_VIEWED -> videoTitleComparator
         }
 
         return when (order) {
@@ -125,6 +134,8 @@ data class Sort(val by: By, val order: Order) {
             By.DATE -> compareBy<AudioFile> {
                 it.dateModified
             }.then(comparator = audioTitleComparator)
+
+            By.SHELF_ADDED, By.LAST_VIEWED -> audioTitleComparator
         }
 
         return when (order) {
@@ -155,6 +166,8 @@ data class Sort(val by: By, val order: Order) {
             By.SIZE -> compareBy<ImageFile> { it.size }.then(titleComparator)
 
             By.DATE -> compareBy<ImageFile> { it.dateModified }.then(titleComparator)
+
+            By.SHELF_ADDED, By.LAST_VIEWED -> titleComparator
         }
         return when (order) {
             Order.ASCENDING -> comparator
@@ -182,6 +195,37 @@ data class Sort(val by: By, val order: Order) {
             By.SIZE -> compareBy<ComicFile> { it.size }.then(titleComparator)
 
             By.DATE -> compareBy<ComicFile> { it.dateModified }.then(titleComparator)
+
+            By.SHELF_ADDED, By.LAST_VIEWED -> titleComparator
+        }
+        return when (order) {
+            Order.ASCENDING -> comparator
+            Order.DESCENDING -> comparator.reversedCompat()
+        }
+    }
+
+    fun bookComparator(): Comparator<BookFile> {
+        val titleComparator = Comparator<BookFile> { first, second ->
+            stringComparator.compare(
+                first.title.lowercase(),
+                second.title.lowercase(),
+            )
+        }
+        val comparator = when (by) {
+            By.TITLE, By.LENGTH -> titleComparator
+
+            By.PATH -> Comparator { first, second ->
+                stringComparator.compare(
+                    first.path.lowercase(),
+                    second.path.lowercase(),
+                )
+            }
+
+            By.SIZE -> compareBy<BookFile> { it.size }.then(titleComparator)
+
+            By.DATE -> compareBy<BookFile> { it.dateModified }.then(titleComparator)
+
+            By.SHELF_ADDED, By.LAST_VIEWED -> titleComparator
         }
         return when (order) {
             Order.ASCENDING -> comparator
@@ -216,6 +260,8 @@ data class Sort(val by: By, val order: Order) {
             By.SIZE -> compareBy<Folder> { it.totalSize }.then(comparator = folderNameComparator)
 
             By.DATE -> compareBy<Folder> { it.dateModified }.then(comparator = folderNameComparator)
+
+            By.SHELF_ADDED, By.LAST_VIEWED -> folderNameComparator
         }
 
         return when (order) {
@@ -246,6 +292,8 @@ data class Sort(val by: By, val order: Order) {
             By.DATE -> compareBy<NetworkFile> {
                 it.modified ?: 0L
             }.then(comparator = nameComparator)
+
+            By.SHELF_ADDED, By.LAST_VIEWED -> nameComparator
         }.thenBy { it.path }
         val orderedComparator = when (order) {
             Order.ASCENDING -> comparator

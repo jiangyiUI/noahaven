@@ -26,6 +26,7 @@ class MediaLibraryPreferencesViewModel(
         val openAudioFolders: () -> Unit,
         val openImageFolders: () -> Unit,
         val openComicFolders: () -> Unit,
+        val openBookFolders: () -> Unit,
         val openThumbnails: () -> Unit,
     )
 
@@ -51,6 +52,8 @@ class MediaLibraryPreferencesViewModel(
             is MediaLibraryPreferencesUiEvent.OpenImageFolders -> output.openImageFolders()
 
             is MediaLibraryPreferencesUiEvent.OpenComicFolders -> output.openComicFolders()
+
+            is MediaLibraryPreferencesUiEvent.OpenBookFolders -> output.openBookFolders()
 
             is MediaLibraryPreferencesUiEvent.OpenThumbnails -> output.openThumbnails()
 
@@ -79,6 +82,9 @@ class MediaLibraryPreferencesViewModel(
 
             is MediaLibraryPreferencesUiEvent.UpdateComicWatchedThreshold ->
                 updateComicWatchedThreshold(action.threshold)
+
+            is MediaLibraryPreferencesUiEvent.UpdateBookWatchedThreshold ->
+                updateBookWatchedThreshold(action.threshold)
         }
     }
 
@@ -151,6 +157,14 @@ class MediaLibraryPreferencesViewModel(
             }
         }
     }
+
+    private fun updateBookWatchedThreshold(threshold: Int) {
+        viewModelScope.launch {
+            preferencesRepository.updateApplicationPreferences {
+                it.copy(bookWatchedThreshold = threshold.coerceIn(50, 100))
+            }
+        }
+    }
 }
 
 data class MediaLibraryPreferencesUiState(
@@ -163,6 +177,7 @@ sealed interface MediaLibraryPreferencesUiEvent {
     data object OpenAudioFolders : MediaLibraryPreferencesUiEvent
     data object OpenImageFolders : MediaLibraryPreferencesUiEvent
     data object OpenComicFolders : MediaLibraryPreferencesUiEvent
+    data object OpenBookFolders : MediaLibraryPreferencesUiEvent
     data object OpenThumbnails : MediaLibraryPreferencesUiEvent
 
     data object ToggleMarkLastPlayedMedia : MediaLibraryPreferencesUiEvent
@@ -173,4 +188,5 @@ sealed interface MediaLibraryPreferencesUiEvent {
     data object ToggleEnableWatchedMarks : MediaLibraryPreferencesUiEvent
     data class UpdateVideoWatchedThreshold(val threshold: Int) : MediaLibraryPreferencesUiEvent
     data class UpdateComicWatchedThreshold(val threshold: Int) : MediaLibraryPreferencesUiEvent
+    data class UpdateBookWatchedThreshold(val threshold: Int) : MediaLibraryPreferencesUiEvent
 }

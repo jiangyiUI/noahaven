@@ -254,7 +254,7 @@ internal fun MediaPickerScreenContent(
         topBar = {
             NextTopAppBar(
                 title = {
-                    val titleText = (state.folderName ?: stringResource(R.string.app_name))
+                    val titleText = (state.folderName ?: stringResource(R.string.nav_videos))
                         .takeIf { !selectionManager.isInSelectionMode } ?: ""
                     Text(
                         text = titleText,
@@ -589,7 +589,7 @@ internal fun MediaPickerScreenContent(
 }
 
 @Composable
-internal fun TransferProgressDialog(
+fun TransferProgressDialog(
     mode: TransferMode,
     progress: TransferProgress,
     onCancel: () -> Unit,
@@ -693,7 +693,7 @@ private fun ProgressSection(label: String, fraction: Float?) {
 }
 
 @Composable
-internal fun DeleteConfirmationDialog(
+fun DeleteConfirmationDialog(
     modifier: Modifier = Modifier,
     selectionItems: Set<SelectionItem>,
     isAudio: Boolean = false,
@@ -1161,10 +1161,13 @@ fun SelectionActionsSheet(
     showDeleteAction: Boolean = true,
     showPlayAction: Boolean = true,
     showAddToPlaylistAction: Boolean = true,
+    showAddToShelfAction: Boolean = false,
     showShareAction: Boolean = true,
     showCopyAction: Boolean = true,
+    showReorderAction: Boolean = false,
     onPlayAction: () -> Unit,
     onAddToPlaylistAction: () -> Unit,
+    onAddToShelfAction: () -> Unit = {},
     onRenameAction: () -> Unit,
     onShareAction: () -> Unit,
     onCopyAction: () -> Unit,
@@ -1172,6 +1175,7 @@ fun SelectionActionsSheet(
     onInfoAction: () -> Unit,
     onHideAction: () -> Unit,
     onDeleteAction: () -> Unit,
+    onReorderAction: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val isTv = remember { context.isTelevision }
@@ -1240,12 +1244,28 @@ fun SelectionActionsSheet(
                         onClick = onAddToPlaylistAction,
                     )
                 }
+                if (showAddToShelfAction) {
+                    SelectionAction(
+                        isTv = isTv,
+                        imageVector = NextIcons.Books,
+                        title = stringResource(R.string.add_to_shelf),
+                        onClick = onAddToShelfAction,
+                    )
+                }
                 if (showRenameAction) {
                     SelectionAction(
                         isTv = isTv,
                         imageVector = NextIcons.Edit,
                         title = stringResource(R.string.rename),
                         onClick = onRenameAction,
+                    )
+                }
+                if (showReorderAction) {
+                    SelectionAction(
+                        isTv = isTv,
+                        imageVector = NextIcons.Reorder,
+                        title = stringResource(R.string.book_shelf_sort_group),
+                        onClick = onReorderAction,
                     )
                 }
                 if (showShareAction) {

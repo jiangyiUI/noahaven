@@ -27,6 +27,9 @@ object ImageFolderPreferencesRoute : NavKey
 @Serializable
 object ComicFolderPreferencesRoute : NavKey
 
+@Serializable
+object BookFolderPreferencesRoute : NavKey
+
 fun NavBackStack<NavKey>.navigateToMediaLibraryPreferencesScreen() {
     add(element = MediaLibraryPreferencesRoute)
 }
@@ -47,12 +50,17 @@ fun NavBackStack<NavKey>.navigateToComicFolderPreferencesScreen() {
     add(element = ComicFolderPreferencesRoute)
 }
 
+fun NavBackStack<NavKey>.navigateToBookFolders() {
+    add(element = BookFolderPreferencesRoute)
+}
+
 fun EntryProviderScope<NavKey>.mediaLibraryPreferencesEntry(
     onNavigateUp: () -> Unit,
     onFolderSettingClick: () -> Unit,
     onAudioFolderSettingClick: () -> Unit,
     onImageFolderSettingClick: () -> Unit,
     onComicFolderSettingClick: () -> Unit,
+    onBookFolderSettingClick: () -> Unit,
     onThumbnailSettingClick: () -> Unit,
 ) {
     entry<MediaLibraryPreferencesRoute> {
@@ -62,6 +70,7 @@ fun EntryProviderScope<NavKey>.mediaLibraryPreferencesEntry(
             openAudioFolders = onAudioFolderSettingClick,
             openImageFolders = onImageFolderSettingClick,
             openComicFolders = onComicFolderSettingClick,
+            openBookFolders = onBookFolderSettingClick,
             openThumbnails = onThumbnailSettingClick,
         )
         val viewModel = koinViewModel<MediaLibraryPreferencesViewModel>(
@@ -116,6 +125,20 @@ fun EntryProviderScope<NavKey>.comicFolderPreferencesEntry(onNavigateUp: () -> U
         val output = FolderPreferencesViewModel.Output(
             navigateUp = onNavigateUp,
             comicFolders = true,
+        )
+        val viewModel = koinViewModel<FolderPreferencesViewModel>(
+            parameters = { parametersOf(output) },
+        )
+        SideEffect { viewModel.output = output }
+        FolderPreferencesScreen(viewModel = viewModel)
+    }
+}
+
+fun EntryProviderScope<NavKey>.bookFolderPreferencesEntry(onNavigateUp: () -> Unit) {
+    entry<BookFolderPreferencesRoute> {
+        val output = FolderPreferencesViewModel.Output(
+            navigateUp = onNavigateUp,
+            bookFolders = true,
         )
         val viewModel = koinViewModel<FolderPreferencesViewModel>(
             parameters = { parametersOf(output) },

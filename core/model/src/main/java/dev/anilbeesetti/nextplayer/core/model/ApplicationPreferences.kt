@@ -9,6 +9,8 @@ data class ApplicationPreferences(
     val themeConfig: ThemeConfig = ThemeConfig.SYSTEM,
     val useHighContrastDarkTheme: Boolean = false,
     val useDynamicColors: Boolean = true,
+    /** 首页底栏按钮顺序，保存目标枚举名称；旧数据的空列表回退到默认顺序。 */
+    val topLevelDestinationOrder: List<String> = emptyList(),
     val markLastPlayedMedia: Boolean = true,
     val isHistoryPaused: Boolean = false,
     val includeNetworkWatchHistory: Boolean = true,
@@ -60,6 +62,39 @@ data class ApplicationPreferences(
     val comicSortBy: Sort.By = Sort.By.TITLE,
     val comicSortOrder: Sort.Order = Sort.Order.ASCENDING,
 
+    // Books tab
+    /** 书籍库白名单目录（只扫描这些文件夹下的 txt/epub）。 */
+    val bookFolders: List<String> = emptyList(),
+    /** 浏览 tab 的显示模式/布局/排序（与书架 tab 分开记忆）。 */
+    val bookViewMode: MediaViewMode = MediaViewMode.FOLDERS,
+    val bookFolderLayoutMode: MediaLayoutMode = MediaLayoutMode.GRID,
+    val bookLayoutMode: ImageLayoutMode = ImageLayoutMode.GRID,
+    val bookSortBy: Sort.By = Sort.By.TITLE,
+    val bookSortOrder: Sort.Order = Sort.Order.ASCENDING,
+    /** 浏览 tab 的缩略图开关（独立字段，不写全局 showThumbnailField，避免关掉视频/图片/漫画的缩略图）。 */
+    val bookShowThumbnailField: Boolean = true,
+    /** 浏览 tab 的字段显示开关（独立字段，不写全局字段，避免影响视频/图片/漫画库）。 */
+    val bookShowSizeField: Boolean = false,
+    val bookShowExtensionField: Boolean = false,
+    val bookShowResolutionField: Boolean = false,
+    /** 书架 tab 的布局/排序（与浏览 tab 分开记忆）。 */
+    val shelfLayoutMode: ImageLayoutMode = ImageLayoutMode.NINE_GRID,
+    val shelfSortBy: Sort.By = Sort.By.TITLE,
+    val shelfSortOrder: Sort.Order = Sort.Order.ASCENDING,
+    /** 书架 tab 的字段显示开关（独立于浏览 tab）。 */
+    val shelfShowSizeField: Boolean = false,
+    val shelfShowExtensionField: Boolean = false,
+    val shelfShowPlayedProgressField: Boolean = true,
+    val shelfShowThumbnailField: Boolean = true,
+    /** 最后一次阅读的书籍路径，用于底部按钮「继续阅读」。 */
+    val lastViewedBookPath: String? = null,
+    /** 每本书的最近阅读时间戳（System.currentTimeMillis），用于书架按最近阅读排序。 */
+    val bookLastViewedAt: Map<String, Long> = emptyMap(),
+    /** 每本书的书签列表，key = 书籍绝对路径。 */
+    val bookBookmarks: Map<String, List<Bookmark>> = emptyMap(),
+    /** 书籍页顶部 tab（书架/浏览）的顺序，可在 tab 上长按拖动调整。 */
+    val bookLibraryTabOrder: List<BookLibraryTab> = BookLibraryTab.defaultOrder,
+
     // Update
     /** 启动时自动检查更新开关。 */
     val autoCheckUpdate: Boolean = true,
@@ -84,6 +119,8 @@ data class ApplicationPreferences(
     val videoWatchedThreshold: Int = 90,
     /** 漫画看完阈值（百分比，0-100）。默认 95，范围 50-100。 */
     val comicWatchedThreshold: Int = 95,
+    /** 书籍看完阈值（百分比，0-100）。默认 95，范围 50-100。 */
+    val bookWatchedThreshold: Int = 95,
 
     // Thumbnail generation
     val thumbnailGenerationStrategy: ThumbnailGenerationStrategy =

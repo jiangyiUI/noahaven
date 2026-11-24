@@ -65,6 +65,7 @@ private fun FolderPreferencesScreenContent(
                     id = when {
                         state.imageFolders -> R.string.manage_image_folders
                         state.comicFolders -> R.string.manage_comic_folders
+                        state.bookFolders -> R.string.manage_book_folders
                         state.audioFolders -> R.string.manage_audio_folders
                         else -> R.string.manage_folders
                     },
@@ -103,6 +104,17 @@ private fun FolderPreferencesScreenContent(
                                 )
                             }
                         }
+
+                        state.bookFolders -> {
+                            IconButton(onClick = {
+                                onAction(FolderPreferencesUiEvent.AddBookFolder)
+                            }) {
+                                Icon(
+                                    imageVector = NextIcons.Add,
+                                    contentDescription = stringResource(id = R.string.add_folder),
+                                )
+                            }
+                        }
                     }
                 },
             )
@@ -130,6 +142,7 @@ private fun FolderPreferencesScreenContent(
                         val selectedFolders = when {
                             state.imageFolders -> state.preferences.imageFolders
                             state.comicFolders -> state.preferences.comicFolders
+                            state.bookFolders -> state.preferences.bookFolders
                             state.audioFolders -> state.preferences.excludeAudioFolders
                             else -> state.preferences.excludeFolders
                         }
@@ -142,7 +155,9 @@ private fun FolderPreferencesScreenContent(
                             },
                             isFirstItem = index == 0,
                             isLastItem = index == state.foldersDataState.value.lastIndex,
-                            strikeThroughSelected = !state.imageFolders && !state.comicFolders,
+                            strikeThroughSelected = !state.imageFolders &&
+                                !state.comicFolders &&
+                                !state.bookFolders,
                         )
                     }
                 }

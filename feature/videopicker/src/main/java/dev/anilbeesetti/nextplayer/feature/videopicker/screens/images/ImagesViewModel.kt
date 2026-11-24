@@ -34,7 +34,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.koin.core.annotation.KoinViewModel
 import org.koin.core.annotation.Named
 
@@ -264,40 +263,14 @@ class ImagesViewModel(
 
     private fun deleteSelected(items: Set<SelectionItem>) {
         val images = items.toImageFiles()
-        // 文件夹选中时，图片删完后还要把这些目录下的空目录清理掉
-        val folderPaths = items.filterIsInstance<SelectionItem.Folder>().map { it.path }
-        if (images.isEmpty() && folderPaths.isEmpty()) return
+        if (images.isEmpty()) return
         viewModelScope.launch {
-            if (images.isNotEmpty()) {
-                val deleted = mediaOperationsService.deleteMedia(
-                    uris = images.map { it.uriString.toUri() },
-                    permanently = true,
-                )
-                if (deleted) imageFileIndex.removePaths(images.map { it.path })
-            }
-            deleteEmptyDirectories(folderPaths)
-            if (folderPaths.isNotEmpty()) refresh(force = true)
-        }
-    }
-
-    private suspend fun deleteEmptyDirectories(paths: List<String>) {
-        if (paths.isEmpty()) return
-        // 白名单根目录本身及它们的上级不能删，否则下次扫描会少一个入口
-        val protectedRoots = preferencesRepository.applicationPreferences.value.imageFolders
-            .map(::normalizePath)
-        withContext(defaultDispatcher) {
-            paths.forEach { path ->
-                // 自底向上按路径长度倒序清理：只删空目录，非空目录和普通文件保持原样
-                File(path).walkBottomUp()
-                    .filter { it.isDirectory }
-                    .sortedByDescending { it.path.length }
-                    .forEach { dir ->
-                        val dirPath = normalizePath(dir.path)
-                        if (dirPath in protectedRoots) return@forEach
-                        if (protectedRoots.any { it.startsWith("$dirPath/") }) return@forEach
-                        if (dir.listFiles()?.isEmpty() == true) dir.delete()
-                    }
-            }
+            val deleted = mediaOperationsService.deleteMedia(
+                uris = images.map { it.uriString.toUri() },
+                permanently = true,
+            )
+            if (deleted) imageFileIndex.removePaths(images.map { it.path })
+            refresh(force = true)
         }
     }
 

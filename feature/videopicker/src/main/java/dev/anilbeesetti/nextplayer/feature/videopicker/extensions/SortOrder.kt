@@ -25,7 +25,10 @@ fun Sort.Order.name(sortBy: Sort.By): String {
             Sort.Order.DESCENDING -> R.string.largest
         }
 
-        Sort.By.DATE -> when (this) {
+        Sort.By.DATE,
+        Sort.By.SHELF_ADDED,
+        Sort.By.LAST_VIEWED,
+        -> when (this) {
             Sort.Order.ASCENDING -> R.string.oldest
             Sort.Order.DESCENDING -> R.string.newest
         }

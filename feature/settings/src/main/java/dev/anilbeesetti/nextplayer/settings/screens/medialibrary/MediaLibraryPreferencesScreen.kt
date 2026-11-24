@@ -203,6 +203,28 @@ private fun MediaLibraryPreferencesScreenContent(
                         )
                     },
                     isFirstItem = false,
+                    isLastItem = false,
+                )
+                PreferenceSlider(
+                    modifier = Modifier.restorableFocusItem(
+                        state = focusState,
+                        key = "book_watched_threshold",
+                    ),
+                    title = stringResource(id = R.string.watched_marks_book_threshold),
+                    description = "${preferences.bookWatchedThreshold}%",
+                    icon = NextIcons.Books,
+                    value = preferences.bookWatchedThreshold.toFloat(),
+                    valueRange = 50f..100f,
+                    steps = 49,
+                    enabled = preferences.enableWatchedMarks,
+                    onValueChange = {
+                        onAction(
+                            MediaLibraryPreferencesUiEvent.UpdateBookWatchedThreshold(
+                                it.roundToInt(),
+                            )
+                        )
+                    },
+                    isFirstItem = false,
                     isLastItem = true,
                 )
             }
@@ -256,6 +278,18 @@ private fun MediaLibraryPreferencesScreenContent(
                     description = stringResource(id = R.string.manage_comic_folders_desc),
                     icon = NextIcons.Comic,
                     onClick = { onAction(MediaLibraryPreferencesUiEvent.OpenComicFolders) },
+                    isFirstItem = false,
+                    isLastItem = false,
+                )
+                ClickablePreferenceItem(
+                    modifier = Modifier.restorableFocusItem(
+                        state = focusState,
+                        key = "manage_book_folders",
+                    ),
+                    title = stringResource(id = R.string.manage_book_folders),
+                    description = stringResource(id = R.string.manage_book_folders_desc),
+                    icon = NextIcons.Books,
+                    onClick = { onAction(MediaLibraryPreferencesUiEvent.OpenBookFolders) },
                     isFirstItem = false,
                     isLastItem = false,
                 )

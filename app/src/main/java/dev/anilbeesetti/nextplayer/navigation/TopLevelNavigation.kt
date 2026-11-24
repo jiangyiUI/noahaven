@@ -22,18 +22,21 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -47,14 +50,18 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.MutableIntState
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.movableContentOf
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
@@ -74,6 +81,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LookaheadScope
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -94,16 +102,19 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.scene.Scene
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import dev.anilbeesetti.nextplayer.core.common.extensions.isTelevision
+import dev.anilbeesetti.nextplayer.core.model.MediaLibraryTab
 import dev.anilbeesetti.nextplayer.core.ui.R
 import dev.anilbeesetti.nextplayer.core.ui.components.TopLevelFabKey
 import dev.anilbeesetti.nextplayer.core.ui.components.TopLevelFabState
 import dev.anilbeesetti.nextplayer.core.ui.components.thenIf
 import dev.anilbeesetti.nextplayer.core.ui.components.tvFocusRing
 import dev.anilbeesetti.nextplayer.core.ui.designsystem.NextIcons
+import dev.anilbeesetti.nextplayer.feature.books.navigation.BookshelfRoute
 import dev.anilbeesetti.nextplayer.feature.more.navigation.MoreRoute
 import dev.anilbeesetti.nextplayer.feature.videopicker.navigation.ImagesRoute
 import dev.anilbeesetti.nextplayer.feature.videopicker.navigation.MediaPickerRoute
 import dev.anilbeesetti.nextplayer.feature.videopicker.navigation.MusicRoute
+import kotlin.math.abs
 
 /**
  * Top-level destinations shown in the bottom bar / nav rail. The first entry is the start (exit)
@@ -117,8 +128,8 @@ enum class TopLevelDestination(
 ) {
     MEDIA(
         MediaPickerRoute(),
-        NextIcons.Home,
-        R.string.home,
+        NextIcons.Video,
+        R.string.nav_videos,
         TopLevelFabKey.MEDIA,
     ),
     MUSIC(
@@ -133,6 +144,12 @@ enum class TopLevelDestination(
         R.string.images,
         TopLevelFabKey.IMAGES,
     ),
+    BOOKS(
+        BookshelfRoute,
+        NextIcons.Books,
+        R.string.books,
+        TopLevelFabKey.BOOKS,
+    ),
     MORE(
         MoreRoute,
         NextIcons.More,
@@ -141,25 +158,58 @@ enum class TopLevelDestination(
     ),
 }
 
+/** 清洗保存的底栏顺序：过滤未知/重复项、补齐缺失项，并始终将「更多」放在最后。 */
+internal fun sanitizeTopLevelDestinationOrder(
+    order: List<String>,
+): List<TopLevelDestination> {
+    val requested = order.mapNotNull { name ->
+        TopLevelDestination.entries.firstOrNull { it.name == name }
+    }.distinct().filterNot { it == TopLevelDestination.MORE }
+    val missing = TopLevelDestination.entries.filterNot {
+        it == TopLevelDestination.MORE || it in requested
+    }
+    return requested + missing + TopLevelDestination.MORE
+}
+
+/** 移动底栏目标；「更多」不可拖动，也不能作为移动目标。 */
+internal fun List<TopLevelDestination>.moveDestination(
+    fromIndex: Int,
+    toIndex: Int,
+): List<TopLevelDestination> {
+    if (fromIndex == toIndex ||
+        fromIndex !in indices ||
+        toIndex !in indices ||
+        this[fromIndex] == TopLevelDestination.MORE ||
+        this[toIndex] == TopLevelDestination.MORE
+    ) {
+        return this
+    }
+    return toMutableList().apply { add(toIndex, removeAt(fromIndex)) }
+}
+
 @Composable
-fun rememberTopLevelNavState(): TopLevelNavState {
-    val destinations = TopLevelDestination.entries
+fun rememberTopLevelNavState(
+    destinationOrder: List<String> = emptyList(),
+): TopLevelNavState {
+    val destinations = sanitizeTopLevelDestinationOrder(destinationOrder)
     // Each tab keeps its own back stack; rememberNavBackStack persists it across config change and
-    // process death.
-    val backStacks = destinations.associate { dest ->
+    // process death. Composition order stays fixed even when the visible destinations are reordered.
+    val backStacks = TopLevelDestination.entries.associate { dest ->
         val backStack = rememberNavBackStack(dest.route)
         backStack.ensureRoot(dest.route)
         dest.route to backStack
     }
-    val selectedIndex = rememberSaveable { mutableIntStateOf(value = 0) }
+    // Null follows the first destination, so a persisted custom order also controls the start page.
+    val selectedDestinationName = rememberSaveable { mutableStateOf<String?>(value = null) }
     return remember(
+        destinations,
         backStacks,
-        selectedIndex,
+        selectedDestinationName,
     ) {
         TopLevelNavState(
             destinations = destinations,
             backStacks = backStacks,
-            selectedIndexState = selectedIndex,
+            selectedDestinationNameState = selectedDestinationName,
         )
     }
 }
@@ -175,14 +225,17 @@ fun rememberTopLevelNavState(): TopLevelNavState {
 class TopLevelNavState(
     val destinations: List<TopLevelDestination>,
     val backStacks: Map<NavKey, NavBackStack<NavKey>>,
-    private val selectedIndexState: MutableIntState,
+    private val selectedDestinationNameState: MutableState<String?>,
 ) {
-    var selectedIndex by selectedIndexState
-        private set
+    private val selectedDestination: TopLevelDestination
+        get() = destinations.firstOrNull { it.name == selectedDestinationNameState.value }
+            ?: destinations.first()
+
+    val selectedIndex: Int get() = destinations.indexOf(selectedDestination)
 
     private val startRoute: NavKey get() = destinations.first().route
 
-    val topLevelRoute: NavKey get() = destinations[selectedIndex].route
+    val topLevelRoute: NavKey get() = selectedDestination.route
 
     /** The back stack of the currently selected tab — navigation targets are added here. */
     val currentStack: NavBackStack<NavKey> get() = backStacks.getValue(key = topLevelRoute)
@@ -206,15 +259,20 @@ class TopLevelNavState(
     }.toSet()
 
     fun switchTo(route: NavKey) {
-        val index = destinations.indexOfFirst { it.route == route }
-        if (index >= 0) selectedIndex = index
+        val destination = destinations.firstOrNull { it.route == route } ?: return
+        selectedDestinationNameState.value = destination.name
+    }
+
+    /** Keep the visible destination stable when dragging changes the destination indices. */
+    fun pinSelectedDestination() {
+        selectedDestinationNameState.value = selectedDestination.name
     }
 
     fun goBack() {
         val stack = currentStack
         when {
             stack.size > 1 -> stack.removeLastOrNull()
-            selectedIndex != 0 -> selectedIndex = 0
+            selectedIndex != 0 -> selectedDestinationNameState.value = destinations.first().name
         }
     }
 
@@ -224,7 +282,7 @@ class TopLevelNavState(
         entryDecorator: NavEntryDecorator<NavKey>,
     ): SnapshotStateList<NavEntry<NavKey>> {
         val decoratedByRoute = LinkedHashMap<NavKey, List<NavEntry<NavKey>>>()
-        for (dest in destinations) {
+        for (dest in TopLevelDestination.entries) {
             decoratedByRoute[dest.route] = rememberDecoratedNavEntries(
                 backStack = backStacks.getValue(dest.route),
                 entryDecorators = listOf(
@@ -395,12 +453,42 @@ private fun rememberDisplayCornerShape(): Shape? {
     }
 }
 
+/**
+ * 全宽胶囊导航条高度：64dp 外容器减去上下各 4dp 内边距，槽位净高 56dp，
+ * 与 M3 FloatingActionButton 默认容器等高。
+ */
+private val NavigationBarHeight = 64.dp
+
+/**
+ * FAB 悬浮后与底栏胶囊之间的垂直间距。
+ * 取 16dp 与外层 horizontal padding 一致，使 FAB 距底栏和距屏幕右边的间距相等。
+ */
+private val FabGapAboveBar = 16.dp
+
+/** 图片/漫画复合 tab 的图标：跟随图片库内部排序里的第一个 tab。 */
+private fun TopLevelDestination.iconFor(firstImageTab: MediaLibraryTab): ImageVector =
+    if (this == TopLevelDestination.IMAGES) {
+        if (firstImageTab == MediaLibraryTab.COMICS) NextIcons.Comic else NextIcons.Image
+    } else {
+        icon
+    }
+
+/** 图片/漫画复合 tab 的标签：跟随图片库内部排序里的第一个 tab。 */
+private fun TopLevelDestination.labelFor(firstImageTab: MediaLibraryTab): Int =
+    if (this == TopLevelDestination.IMAGES) {
+        if (firstImageTab == MediaLibraryTab.COMICS) R.string.comics else R.string.images
+    } else {
+        labelRes
+    }
+
 @Composable
 fun NextNavigationBar(
     state: TopLevelNavState,
     fabState: TopLevelFabState?,
     contentFocusRequester: FocusRequester,
     fabFocusRequester: FocusRequester,
+    imageLibraryFirstTab: MediaLibraryTab,
+    onMoveDestination: (Int, Int) -> Unit = { _, _ -> },
     showFabOnly: Boolean = false,
 ) {
     val isTv = LocalContext.current.isTelevision
@@ -424,73 +512,76 @@ fun NextNavigationBar(
             .thenIf(condition = !showFabOnly) { pointerInput(key1 = Unit) {} },
         contentAlignment = Alignment.BottomCenter,
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(space = 12.dp),
-        ) {
-            if (!showFabOnly) {
-                NavigationView(
-                    destinations = state.destinations,
-                    isSelected = { it.route == state.topLevelRoute },
-                    onDestinationClick = { state.switchTo(it.route) },
-                )
-            } else {
-                Spacer(Modifier.weight(weight = 1f))
-            }
+        if (!showFabOnly) {
+            NavigationView(
+                destinations = state.destinations,
+                imageLibraryFirstTab = imageLibraryFirstTab,
+                isSelected = { it.route == state.topLevelRoute },
+                onDestinationClick = { state.switchTo(it.route) },
+                onDestinationDragStart = state::pinSelectedDestination,
+                onMoveDestination = onMoveDestination,
+                modifier = Modifier.align(alignment = Alignment.BottomCenter),
+            )
+        }
 
-            fabState?.let { fab ->
-                FloatingActionButton(
-                    onClick = fab.onClick,
-                    modifier = Modifier
-                        .testTag(tag = "top_level_fab")
-                        .focusRequester(focusRequester = fabFocusRequester)
-                        .tvFocusRing(shape = MaterialTheme.shapes.large)
-                        .focusProperties {
-                            if (isTv) {
-                                up =
-                                    fab.upFocusRequester.takeUnless { it == FocusRequester.Default }
-                                        ?: contentFocusRequester
-                            }
-                        },
-                    shape = MaterialTheme.shapes.large,
-                ) {
-                    AnimatedContent(
-                        targetState = fab,
-                        transitionSpec = {
-                            fadeIn(
+        fabState?.let { fab ->
+            FloatingActionButton(
+                onClick = fab.onClick,
+                modifier = Modifier
+                    .align(alignment = Alignment.BottomEnd)
+                    // 手机端 FAB 悬浮在全宽胶囊上方 30dp；offset 只平移视觉与触摸位置，
+                    // 布局占位不变。平板 showFabOnly 无胶囊，保持右下角原位。
+                    .thenIf(condition = !showFabOnly) {
+                        offset(y = -(NavigationBarHeight + FabGapAboveBar))
+                    }
+                    .testTag(tag = "top_level_fab")
+                    .focusRequester(focusRequester = fabFocusRequester)
+                    .tvFocusRing(shape = MaterialTheme.shapes.large)
+                    .focusProperties {
+                        if (isTv) {
+                            up =
+                                fab.upFocusRequester.takeUnless { it == FocusRequester.Default }
+                                    ?: contentFocusRequester
+                        }
+                    },
+                shape = MaterialTheme.shapes.large,
+            ) {
+                AnimatedContent(
+                    targetState = fab,
+                    transitionSpec = {
+                        fadeIn(
+                            animationSpec = tween(
+                                durationMillis = 250,
+                                easing = FastOutSlowInEasing,
+                            ),
+                        ) +
+                            scaleIn(
+                                animationSpec = tween(
+                                    durationMillis = 250,
+                                    easing = FastOutSlowInEasing,
+                                ),
+                                initialScale = 0.25f,
+                            ) togetherWith
+                            fadeOut(
                                 animationSpec = tween(
                                     durationMillis = 250,
                                     easing = FastOutSlowInEasing,
                                 ),
                             ) +
-                                scaleIn(
-                                    animationSpec = tween(
-                                        durationMillis = 250,
-                                        easing = FastOutSlowInEasing,
-                                    ),
-                                    initialScale = 0.25f,
-                                ) togetherWith
-                                fadeOut(
-                                    animationSpec = tween(
-                                        durationMillis = 250,
-                                        easing = FastOutSlowInEasing,
-                                    ),
-                                ) +
-                                scaleOut(
-                                    animationSpec = tween(
-                                        durationMillis = 250,
-                                        easing = FastOutSlowInEasing,
-                                    ),
-                                    targetScale = 0.25f,
-                                )
-                        },
-                        label = "fab_icon_swap",
-                    ) { fab ->
-                        Icon(
-                            imageVector = fab.icon,
-                            contentDescription = null,
-                        )
-                    }
+                            scaleOut(
+                                animationSpec = tween(
+                                    durationMillis = 250,
+                                    easing = FastOutSlowInEasing,
+                                ),
+                                targetScale = 0.25f,
+                            )
+                    },
+                    label = "fab_icon_swap",
+                ) { fab ->
+                    Icon(
+                        imageVector = fab.icon,
+                        contentDescription = null,
+                    )
                 }
             }
         }
@@ -501,21 +592,30 @@ fun NextNavigationBar(
 fun NavigationView(
     modifier: Modifier = Modifier,
     destinations: List<TopLevelDestination>,
+    imageLibraryFirstTab: MediaLibraryTab,
     isSelected: (TopLevelDestination) -> Boolean,
     onDestinationClick: (TopLevelDestination) -> Unit,
+    onDestinationDragStart: () -> Unit = {},
+    onMoveDestination: (Int, Int) -> Unit = { _, _ -> },
 ) {
     val animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Rect>()
     val boundsTransform = remember { BoundsTransform { _, _ -> animationSpec } }
+    val destinationWidths = remember { mutableMapOf<TopLevelDestination, Float>() }
+    var draggingDestination by remember { mutableStateOf<TopLevelDestination?>(null) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    val currentDestinations by rememberUpdatedState(destinations)
 
     Box(
         modifier = modifier
+            .fillMaxWidth()
+            .height(height = NavigationBarHeight)
             .graphicsLayer(
                 shadowElevation = with(LocalDensity.current) { 6.dp.toPx() },
                 shape = CircleShape,
             )
             .clip(shape = CircleShape)
             .background(MaterialTheme.colorScheme.surfaceContainer)
-            .padding(4.dp),
+            .padding(all = 4.dp),
     ) {
         LookaheadScope {
             val pill = remember {
@@ -536,48 +636,128 @@ fun NavigationView(
             }
 
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 destinations.forEach { destination ->
-                    val isSelected = isSelected(destination)
-                    Box(
-                        modifier = Modifier.zIndex(zIndex = if (isSelected) 0f else 1f),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        if (isSelected) {
-                            pill(this)
-                        }
-                        Column(
-                            Modifier
-                                .tvFocusRing(shape = RoundedCornerShape(99.dp))
-                                .clip(shape = CircleShape)
-                                .selectable(
-                                    selected = isSelected,
-                                    onClick = { onDestinationClick(destination) },
-                                    role = Role.Tab,
-                                    indication = null,
-                                    interactionSource = null,
+                    key(destination) {
+                        val selected = isSelected(destination)
+                        val dragging = destination == draggingDestination
+                        Box(
+                            modifier = Modifier
+                                .weight(weight = 1f)
+                                .fillMaxHeight()
+                                .zIndex(
+                                    zIndex = when {
+                                        dragging -> 2f
+                                        selected -> 0f
+                                        else -> 1f
+                                    },
                                 )
-                                .padding(
-                                    horizontal = 16.dp,
-                                    vertical = 12.dp,
-                                ),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(2.dp),
-                        ) {
-                            CompositionLocalProvider(
-                                value = LocalContentColor provides if (isSelected) {
-                                    MaterialTheme.colorScheme.onSecondaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                .graphicsLayer {
+                                    translationX = if (dragging) dragOffset else 0f
+                                    alpha = if (dragging) 0.8f else 1f
+                                }
+                                .onGloballyPositioned { coordinates ->
+                                    destinationWidths[destination] =
+                                        coordinates.size.width.toFloat()
+                                }
+                                .thenIf(condition = destination != TopLevelDestination.MORE) {
+                                    pointerInput(key1 = destination) {
+                                        detectDragGesturesAfterLongPress(
+                                            onDragStart = {
+                                                draggingDestination = destination
+                                                dragOffset = 0f
+                                                onDestinationDragStart()
+                                            },
+                                            onDrag = { change, dragAmount ->
+                                                change.consume()
+                                                dragOffset += dragAmount.x
+                                                val current = currentDestinations
+                                                val currentIndex = current.indexOf(destination)
+                                                if (currentIndex == -1) {
+                                                    return@detectDragGesturesAfterLongPress
+                                                }
+                                                val neighborIndex = when {
+                                                    dragOffset > 0f &&
+                                                        currentIndex < current.lastIndex - 1 ->
+                                                        currentIndex + 1
+                                                    dragOffset < 0f && currentIndex > 0 ->
+                                                        currentIndex - 1
+                                                    else -> -1
+                                                }
+                                                if (neighborIndex == -1) {
+                                                    return@detectDragGesturesAfterLongPress
+                                                }
+                                                val neighbor = current[neighborIndex]
+                                                val step = destinationWidths[neighbor] ?: 0f
+                                                if (step <= 0f) {
+                                                    return@detectDragGesturesAfterLongPress
+                                                }
+                                                if (abs(dragOffset) >= step / 2f) {
+                                                    onMoveDestination(currentIndex, neighborIndex)
+                                                    dragOffset -= if (dragOffset > 0f) step else -step
+                                                }
+                                            },
+                                            onDragEnd = {
+                                                draggingDestination = null
+                                                dragOffset = 0f
+                                            },
+                                            onDragCancel = {
+                                                draggingDestination = null
+                                                dragOffset = 0f
+                                            },
+                                        )
+                                    }
                                 },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (selected) {
+                                pill(this)
+                            }
+                            Column(
+                                Modifier
+                                    .fillMaxSize()
+                                    .tvFocusRing(shape = RoundedCornerShape(99.dp))
+                                    .clip(shape = CircleShape)
+                                    .selectable(
+                                        selected = selected,
+                                        onClick = { onDestinationClick(destination) },
+                                        role = Role.Tab,
+                                        indication = null,
+                                        interactionSource = null,
+                                    ),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(
+                                    space = 2.dp,
+                                    alignment = Alignment.CenterVertically,
+                                ),
                             ) {
-                                Icon(
-                                    imageVector = destination.icon,
-                                    contentDescription = stringResource(destination.labelRes),
-                                    modifier = Modifier.size(24.dp),
-                                )
+                                CompositionLocalProvider(
+                                    value = LocalContentColor provides if (selected) {
+                                        MaterialTheme.colorScheme.onSecondaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                ) {
+                                    Icon(
+                                        imageVector = destination.iconFor(imageLibraryFirstTab),
+                                        contentDescription = stringResource(
+                                            destination.labelFor(imageLibraryFirstTab),
+                                        ),
+                                        modifier = Modifier.size(24.dp),
+                                    )
+                                    // 与参考底栏一致：只有选中项展示文字标签，未选中只留图标
+                                    if (selected) {
+                                        Text(
+                                            text = stringResource(
+                                                destination.labelFor(imageLibraryFirstTab),
+                                            ),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            maxLines = 1,
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -588,7 +768,11 @@ fun NavigationView(
 }
 
 @Composable
-fun NextNavigationRail(state: TopLevelNavState, modifier: Modifier = Modifier) {
+fun NextNavigationRail(
+    state: TopLevelNavState,
+    imageLibraryFirstTab: MediaLibraryTab,
+    modifier: Modifier = Modifier,
+) {
     NavigationRail(
         modifier = modifier.fillMaxHeight(),
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
@@ -631,8 +815,10 @@ fun NextNavigationRail(state: TopLevelNavState, modifier: Modifier = Modifier) {
                         },
                     ) {
                         Icon(
-                            imageVector = dest.icon,
-                            contentDescription = null,
+                            imageVector = dest.iconFor(imageLibraryFirstTab),
+                            contentDescription = stringResource(
+                                dest.labelFor(imageLibraryFirstTab),
+                            ),
                             modifier = Modifier.size(24.dp),
                         )
                     }

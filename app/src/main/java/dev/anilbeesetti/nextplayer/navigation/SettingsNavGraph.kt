@@ -8,6 +8,7 @@ import dev.anilbeesetti.nextplayer.settings.navigation.aboutPreferencesEntry
 import dev.anilbeesetti.nextplayer.settings.navigation.appearancePreferencesEntry
 import dev.anilbeesetti.nextplayer.settings.navigation.audioFolderPreferencesEntry
 import dev.anilbeesetti.nextplayer.settings.navigation.audioPreferencesEntry
+import dev.anilbeesetti.nextplayer.settings.navigation.bookFolderPreferencesEntry
 import dev.anilbeesetti.nextplayer.settings.navigation.comicFolderPreferencesEntry
 import dev.anilbeesetti.nextplayer.settings.navigation.folderPreferencesEntry
 import dev.anilbeesetti.nextplayer.settings.navigation.generalPreferencesEntry
@@ -19,6 +20,7 @@ import dev.anilbeesetti.nextplayer.settings.navigation.navigateToAboutPreference
 import dev.anilbeesetti.nextplayer.settings.navigation.navigateToAppearancePreferences
 import dev.anilbeesetti.nextplayer.settings.navigation.navigateToAudioFolderPreferencesScreen
 import dev.anilbeesetti.nextplayer.settings.navigation.navigateToAudioPreferences
+import dev.anilbeesetti.nextplayer.settings.navigation.navigateToBookFolders
 import dev.anilbeesetti.nextplayer.settings.navigation.navigateToComicFolderPreferencesScreen
 import dev.anilbeesetti.nextplayer.settings.navigation.navigateToFolderPreferencesScreen
 import dev.anilbeesetti.nextplayer.settings.navigation.navigateToGeneralPreferences
@@ -26,9 +28,11 @@ import dev.anilbeesetti.nextplayer.settings.navigation.navigateToGesturePreferen
 import dev.anilbeesetti.nextplayer.settings.navigation.navigateToImageFolderPreferencesScreen
 import dev.anilbeesetti.nextplayer.settings.navigation.navigateToMediaLibraryPreferencesScreen
 import dev.anilbeesetti.nextplayer.settings.navigation.navigateToPlayerPreferences
+import dev.anilbeesetti.nextplayer.settings.navigation.navigateToReaderPreferences
 import dev.anilbeesetti.nextplayer.settings.navigation.navigateToSubtitlePreferences
 import dev.anilbeesetti.nextplayer.settings.navigation.navigateToThumbnailPreferencesScreen
 import dev.anilbeesetti.nextplayer.settings.navigation.playerPreferencesEntry
+import dev.anilbeesetti.nextplayer.settings.navigation.readerPreferencesEntry
 import dev.anilbeesetti.nextplayer.settings.navigation.settingsEntry
 import dev.anilbeesetti.nextplayer.settings.navigation.subtitlePreferencesEntry
 import dev.anilbeesetti.nextplayer.settings.navigation.thumbnailPreferencesEntry
@@ -44,6 +48,7 @@ fun EntryProviderScope<NavKey>.settingsNavGraph(backStack: NavBackStack<NavKey>)
                 Setting.GESTURES -> backStack.navigateToGesturePreferences()
                 Setting.AUDIO -> backStack.navigateToAudioPreferences()
                 Setting.SUBTITLE -> backStack.navigateToSubtitlePreferences()
+                Setting.READER -> backStack.navigateToReaderPreferences()
                 Setting.GENERAL -> backStack.navigateToGeneralPreferences()
                 Setting.ABOUT -> backStack.navigateToAboutPreferences()
                 Setting.UPDATE -> Unit // 检查更新在 SettingsScreen 内直接触发，不导航页面
@@ -59,6 +64,7 @@ fun EntryProviderScope<NavKey>.settingsNavGraph(backStack: NavBackStack<NavKey>)
         onAudioFolderSettingClick = backStack::navigateToAudioFolderPreferencesScreen,
         onImageFolderSettingClick = backStack::navigateToImageFolderPreferencesScreen,
         onComicFolderSettingClick = backStack::navigateToComicFolderPreferencesScreen,
+        onBookFolderSettingClick = backStack::navigateToBookFolders,
         onThumbnailSettingClick = backStack::navigateToThumbnailPreferencesScreen,
     )
     thumbnailPreferencesEntry(
@@ -76,6 +82,9 @@ fun EntryProviderScope<NavKey>.settingsNavGraph(backStack: NavBackStack<NavKey>)
     comicFolderPreferencesEntry(
         onNavigateUp = { backStack.removeLastIfNotRoot() },
     )
+    bookFolderPreferencesEntry(
+        onNavigateUp = { backStack.removeLastIfNotRoot() },
+    )
     playerPreferencesEntry(
         onNavigateUp = { backStack.removeLastIfNotRoot() },
     )
@@ -86,6 +95,9 @@ fun EntryProviderScope<NavKey>.settingsNavGraph(backStack: NavBackStack<NavKey>)
         onNavigateUp = { backStack.removeLastIfNotRoot() },
     )
     subtitlePreferencesEntry(
+        onNavigateUp = { backStack.removeLastIfNotRoot() },
+    )
+    readerPreferencesEntry(
         onNavigateUp = { backStack.removeLastIfNotRoot() },
     )
     generalPreferencesEntry(

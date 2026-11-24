@@ -5,7 +5,6 @@ import androidx.datastore.core.Serializer
 import dev.anilbeesetti.nextplayer.core.model.ApplicationPreferences
 import java.io.InputStream
 import java.io.OutputStream
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 
 object ApplicationPreferencesSerializer : Serializer<ApplicationPreferences> {
@@ -20,7 +19,7 @@ object ApplicationPreferencesSerializer : Serializer<ApplicationPreferences> {
                 deserializer = ApplicationPreferences.serializer(),
                 string = input.readBytes().decodeToString(),
             )
-        } catch (exception: SerializationException) {
+        } catch (exception: Exception) {
             throw CorruptionException(
                 message = "Cannot read datastore",
                 cause = exception,
