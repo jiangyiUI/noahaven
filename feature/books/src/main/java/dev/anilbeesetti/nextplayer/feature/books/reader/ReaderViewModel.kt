@@ -7,16 +7,22 @@ import dev.anilbeesetti.nextplayer.core.data.repository.PreferencesRepository
 import dev.anilbeesetti.nextplayer.core.media.index.BookFileIndex
 import dev.anilbeesetti.nextplayer.core.model.BookFile
 import dev.anilbeesetti.nextplayer.core.model.Bookmark
+import dev.anilbeesetti.nextplayer.core.model.ChapterRule
 import dev.anilbeesetti.nextplayer.core.ui.base.MviViewModel
 import dev.anilbeesetti.nextplayer.feature.books.data.BookContentLoader
 import dev.anilbeesetti.nextplayer.feature.books.data.BooksPreferences
+import dev.anilbeesetti.nextplayer.feature.books.data.ChapterRuleDefaults
+import dev.anilbeesetti.nextplayer.feature.books.data.ChapterRuleRepository
 import dev.anilbeesetti.nextplayer.feature.books.model.BookContent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.koin.core.annotation.InjectedParam
@@ -29,6 +35,7 @@ class ReaderViewModel(
     private val contentLoader: BookContentLoader,
     private val preferences: BooksPreferences,
     private val preferencesRepository: PreferencesRepository,
+    private val chapterRuleRepository: ChapterRuleRepository,
     @Named(DiQualifiers.APPLICATION_SCOPE) private val applicationScope: CoroutineScope,
     @InjectedParam private val bookPath: String,
     @InjectedParam internal var output: Output,
@@ -37,9 +44,34 @@ class ReaderViewModel(
     private val stateInternal = MutableStateFlow(ReaderUiState())
     override val state: StateFlow<ReaderUiState> = stateInternal.asStateFlow()
 
+    /** 全部分章规则（内置 + 自建），供「重新分章」列表使用。 */
+    val chapterRules: StateFlow<List<ChapterRule>> = chapterRuleRepository.rules
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** 当前默认分章规则 id。 */
+    val defaultRuleId: StateFlow<String> = chapterRuleRepository.defaultRuleId
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChapterRuleDefaults.DEFAULT_RULE_ID)
+
+    /** 每条规则对当前书试分章得到的章数（打开「重新分章」时计算）。空 map 表示尚未计算。 */
+    private val _chapterCounts = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val chapterCounts: StateFlow<Map<String, Int>> = _chapterCounts.asStateFlow()
+
+    /**
+     * 打开「重新分章」时调用：用全部规则对当前书全文各试分一次，把每条规则分出的章数写进 [chapterCounts]。
+     * 全文只解码一次（在 [BookContentLoader.previewChapterCounts] 内）。
+     */
+    fun previewChapterCounts() {
+        viewModelScope.launch {
+            val allRules = chapterRuleRepository.rules.first()
+            if (allRules.isEmpty()) return@launch
+            _chapterCounts.value = contentLoader.previewChapterCounts(bookPath, allRules)
+        }
+    }
+
     private var saveJob: Job? = null
 
     init {
+        viewModelScope.launch { chapterRuleRepository.ensureSeeded() }
         viewModelScope.launch {
             preferences.settings.collect { settings ->
                 stateInternal.update { it.copy(settings = settings) }
@@ -109,7 +141,62 @@ class ReaderViewModel(
 
             is ReaderAction.RemoveFont -> preferences.deleteFont(action.path)
 
+            is ReaderAction.SaveChapterRule -> viewModelScope.launch {
+                chapterRuleRepository.upsertCustomRule(action.rule, action.setAsDefault)
+            }
+
+            is ReaderAction.DeleteChapterRule -> viewModelScope.launch {
+                chapterRuleRepository.deleteCustomRule(action.id)
+            }
+
+            is ReaderAction.SetDefaultChapterRule -> viewModelScope.launch {
+                chapterRuleRepository.setDefaultRuleId(action.id)
+            }
+
+            is ReaderAction.Rechapter -> rechapter(ruleIds = action.ruleIds, onDone = action.onDone)
+
             ReaderAction.SaveNow -> saveNow()
+        }
+    }
+
+    /**
+     * 用指定规则（可多条，结果按行去重合并）重新分章，记住目录并刷新正文。
+     * 重分前后保持阅读字符偏移，不丢进度。
+     */
+    private fun rechapter(ruleIds: List<String>, onDone: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val old = stateInternal.value
+            val oldContent = old.content
+            val absolute = oldContent?.let {
+                it.chapters.getOrNull(old.positionChapter)?.startChar
+                    ?.plus(old.positionOffset)
+            } ?: 0
+            val newContent = contentLoader.rechapter(bookPath, ruleIds)
+            if (newContent == null) {
+                onDone(false)
+                return@launch
+            }
+            val newChapter = newContent.chapterIndexAt(absolute)
+            val chapterStart = newContent.chapters.getOrNull(newChapter)?.startChar ?: 0
+            val newOffset = (absolute - chapterStart).coerceAtLeast(0)
+            val percent = if (newContent.totalChars > 0) {
+                (absolute.toFloat() / newContent.totalChars).coerceIn(0f, 1f)
+            } else {
+                0f
+            }
+            stateInternal.update {
+                it.copy(
+                    content = newContent,
+                    positionChapter = newChapter,
+                    positionOffset = newOffset,
+                    initialChapter = newChapter,
+                    initialOffset = newOffset,
+                    percent = percent,
+                )
+            }
+            // 映射后的新进度立刻落盘，避免重分后未翻页就杀进程导致进度错位。
+            saveNow()
+            onDone(true)
         }
     }
 
@@ -261,6 +348,21 @@ sealed interface ReaderAction {
     data class ImportFont(val uri: Uri) : ReaderAction
 
     data class RemoveFont(val path: String) : ReaderAction
+
+    /** 新建或更新一条自建分章规则。 */
+    data class SaveChapterRule(val rule: ChapterRule, val setAsDefault: Boolean) : ReaderAction
+
+    /** 删除一条自建分章规则。 */
+    data class DeleteChapterRule(val id: String) : ReaderAction
+
+    /** 把某条规则设为默认（新书打开时用它分章）。 */
+    data class SetDefaultChapterRule(val id: String) : ReaderAction
+
+    /** 用选中的规则（可多条合并）重新分章当前书；完成后回调成功与否。 */
+    data class Rechapter(
+        val ruleIds: List<String>,
+        val onDone: (Boolean) -> Unit,
+    ) : ReaderAction
 
     data object SaveNow : ReaderAction
 }

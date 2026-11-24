@@ -59,3 +59,6 @@ AGENTS.md
 # 构建产物
 *.aab
 *.apks
+
+# 本地备份目录
+backup_appicon_20261124/

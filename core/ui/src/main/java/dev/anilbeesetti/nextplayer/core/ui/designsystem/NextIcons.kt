@@ -14,6 +14,9 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AppSettingsAlt
 import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Audiotrack
 import androidx.compose.material.icons.rounded.Book
@@ -112,6 +115,7 @@ object NextIcons {
     val ArrowBack = Icons.AutoMirrored.Rounded.ArrowBack
     val ArrowForward = Icons.AutoMirrored.Rounded.ArrowForward
     val ArrowDownward = Icons.Rounded.ArrowDownward
+    val ArrowDropDown = Icons.Rounded.ArrowDropDown
     val ArrowUpward = Icons.Rounded.ArrowUpward
     val Audio = Icons.Rounded.Audiotrack
     val Background = Icons.Rounded.FlipToBack
@@ -162,6 +166,8 @@ object NextIcons {
     val Rotation = Icons.Rounded.ScreenRotationAlt
     val Search = Icons.Rounded.Search
     val Selection = Icons.Rounded.DoneAll
+    val Star = Icons.Rounded.Star
+    val StarBorder = Icons.Rounded.StarBorder
     val Settings = Icons.Rounded.Settings
     val Share = Icons.Rounded.Share
     val SmartButton = Icons.Rounded.SmartButton

@@ -94,6 +94,16 @@ data class ApplicationPreferences(
     val bookBookmarks: Map<String, List<Bookmark>> = emptyMap(),
     /** 书籍页顶部 tab（书架/浏览）的顺序，可在 tab 上长按拖动调整。 */
     val bookLibraryTabOrder: List<BookLibraryTab> = BookLibraryTab.defaultOrder,
+    /**
+     * 用户自建的 TXT 分章规则（JSON 字符串，List<ChapterRule> 序列化结果）。
+     * 存成字符串是为了让设置导入/导出能无损带上它（备份合并器只透传基本类型字段）。
+     * 空字符串表示没有自建规则。
+     */
+    val bookChapterRules: String = "",
+    /** 默认分章规则 id（可指向内置 builtin_2 或自建规则）；null 表示未设置。 */
+    val bookDefaultChapterRuleId: String? = null,
+    /** 是否已播种过初始自建规则（避免用户删除后又被自动加回）。 */
+    val bookChapterRulesSeeded: Boolean = false,
 
     // Update
     /** 启动时自动检查更新开关。 */

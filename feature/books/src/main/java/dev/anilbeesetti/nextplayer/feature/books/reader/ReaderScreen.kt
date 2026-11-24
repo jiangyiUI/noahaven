@@ -92,6 +92,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.anilbeesetti.nextplayer.core.model.ChapterRule
 import dev.anilbeesetti.nextplayer.core.ui.R
 import dev.anilbeesetti.nextplayer.core.ui.designsystem.NextIcons
 import dev.anilbeesetti.nextplayer.core.ui.theme.LocalDarkTheme
@@ -156,6 +157,9 @@ private fun ReaderContent(
 ) {
     val settings = state.settings
     val theme = if (LocalDarkTheme.current) settings.darkTheme else settings.lightTheme
+    val chapterRules by viewModel.chapterRules.collectAsStateWithLifecycle()
+    val defaultRuleId by viewModel.defaultRuleId.collectAsStateWithLifecycle()
+    val chapterCounts by viewModel.chapterCounts.collectAsStateWithLifecycle()
     val density = LocalDensity.current
     val textMeasurer = rememberTextMeasurer(cacheSize = 64)
 
@@ -252,6 +256,8 @@ private fun ReaderContent(
     var barsVisible by remember { mutableStateOf(true) }
     var showToc by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var showChapterRules by remember { mutableStateOf(false) }
+    var editingRule by remember { mutableStateOf<ChapterRule?>(null) }
     var revision by remember { mutableIntStateOf(0) }
     var pager by remember { mutableStateOf<ReaderPager?>(null) }
 
@@ -614,7 +620,51 @@ private fun ReaderContent(
                 onDeleteBookmark = { id ->
                     viewModel.onAction(ReaderAction.RemoveBookmark(id))
                 },
+                onRechapter = { showChapterRules = true },
                 onDismiss = { showToc = false },
+            )
+        }
+
+        LaunchedEffect(showChapterRules) {
+            if (showChapterRules) viewModel.previewChapterCounts()
+        }
+
+        if (showChapterRules) {
+            ChapterRuleListSheet(
+                theme = theme,
+                rules = chapterRules,
+                counts = chapterCounts,
+                defaultRuleId = defaultRuleId,
+                onDismiss = { showChapterRules = false },
+                onNewRule = { editingRule = ChapterRule(id = "", name = "", sortOrder = 0) },
+                onEditRule = { rule -> editingRule = rule },
+                onDeleteRule = { id ->
+                    viewModel.onAction(ReaderAction.DeleteChapterRule(id))
+                },
+                onSetDefault = { id ->
+                    viewModel.onAction(ReaderAction.SetDefaultChapterRule(id))
+                },
+                onRechapter = { ids, onDone ->
+                    viewModel.onAction(
+                        ReaderAction.Rechapter(ruleIds = ids) { success ->
+                            onDone(success)
+                            if (success) showChapterRules = false
+                        },
+                    )
+                },
+            )
+        }
+
+        editingRule?.let { rule ->
+            ChapterRuleEditSheet(
+                theme = theme,
+                rule = rule,
+                defaultRuleId = defaultRuleId,
+                onDismiss = { editingRule = null },
+                onSave = { saved, setAsDefault ->
+                    viewModel.onAction(ReaderAction.SaveChapterRule(saved, setAsDefault))
+                    editingRule = null
+                },
             )
         }
 
