@@ -447,7 +447,7 @@ class SettingsBackupTest {
         val values = ContentValues().apply {
             put(
                 MediaStore.Downloads.DISPLAY_NAME,
-                "nextplayer-settings-$prefix.json",
+                "noahaven-settings-$prefix.json",
             )
             put(
                 MediaStore.Downloads.MIME_TYPE,
@@ -504,7 +504,7 @@ class SettingsBackupTest {
             MediaStore.Downloads.EXTERNAL_CONTENT_URI,
             arrayOf(MediaStore.Downloads._ID),
             "${MediaStore.Downloads.DISPLAY_NAME} LIKE ?",
-            arrayOf("nextplayer-settings-%"),
+            arrayOf("noahaven-settings-%"),
             null,
         )!!.use { cursor ->
             while (cursor.moveToNext()) {

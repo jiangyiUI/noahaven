@@ -11,6 +11,8 @@ import dev.anilbeesetti.nextplayer.core.data.repository.fake.FakePreferencesRepo
 import dev.anilbeesetti.nextplayer.core.media.network.keys.SshKeyStore
 import dev.anilbeesetti.nextplayer.core.media.network.keys.StagedSshKey
 import dev.anilbeesetti.nextplayer.core.model.NetworkConnection
+import dev.anilbeesetti.nextplayer.feature.books.data.BookShelfBackupData
+import dev.anilbeesetti.nextplayer.feature.books.data.BookShelfBackupDataSource
 import dev.anilbeesetti.nextplayer.feature.books.data.BooksPreferences
 import java.io.File
 import java.io.FileNotFoundException
@@ -31,6 +33,14 @@ import org.robolectric.shadows.ShadowContentResolver
 @Config(sdk = [28])
 class SettingsBackupServiceTest {
     private val preferences = FakePreferencesRepository()
+    private val booksPreferences = BooksPreferences(RuntimeEnvironment.getApplication())
+    private val importedBookShelf = mutableListOf<BookShelfBackupData>()
+    private val bookShelfDataSource = object : BookShelfBackupDataSource {
+        override suspend fun exportBookShelf(): BookShelfBackupData = BookShelfBackupData()
+        override suspend fun importBookShelf(data: BookShelfBackupData) {
+            importedBookShelf.add(data)
+        }
+    }
     private val service = SettingsBackupService(
         context = RuntimeEnvironment.getApplication(),
         preferencesRepository = preferences,
@@ -46,7 +56,8 @@ class SettingsBackupServiceTest {
             override suspend fun commit(fileName: String): String = error("Not used")
             override suspend fun delete(fileName: String) = Unit
         },
-        booksPreferences = BooksPreferences(RuntimeEnvironment.getApplication()),
+        booksPreferences = booksPreferences,
+        bookShelfBackupDataSource = bookShelfDataSource,
     )
 
     @Test
@@ -67,6 +78,24 @@ class SettingsBackupServiceTest {
             preferences.updatePlayerPreferences { it.copy(autoplay = true) }
             service.importSettings(content)
             assertFalse(preferences.playerPreferences.value.autoplay)
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
+    fun exportsAndImportsReaderSettingsAndBookShelf() = runBlocking {
+        val file = File.createTempFile("settings-backup", ".json")
+        val uri = Uri.fromFile(file)
+        try {
+            booksPreferences.updateSettings { it.copy(oneHandMode = true, fontSizeSp = 24f) }
+            service.exportSettings(uri, includeNetworkConnections = false)
+            booksPreferences.updateSettings { it.copy(oneHandMode = false, fontSizeSp = 19f) }
+            importedBookShelf.clear()
+            service.importSettings(service.readSettings(uri))
+            assertTrue(booksPreferences.settings.value.oneHandMode)
+            assertEquals(24f, booksPreferences.settings.value.fontSizeSp, 0.001f)
+            assertEquals(1, importedBookShelf.size)
         } finally {
             file.delete()
         }

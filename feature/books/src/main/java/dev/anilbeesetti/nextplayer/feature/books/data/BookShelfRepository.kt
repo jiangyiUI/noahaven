@@ -22,10 +22,10 @@ data class BookShelfEntry(
 )
 
 /** 收藏书架的数据访问：分组、条目以及去重写入。 */
-@Single
+@Single(binds = [BookShelfBackupDataSource::class])
 class BookShelfRepository(
     private val bookShelfDao: BookShelfDao,
-) {
+) : BookShelfBackupDataSource {
 
     val groups: Flow<List<BookShelfGroup>> = bookShelfDao.observeGroups()
         .map { groups -> groups.map { BookShelfGroup(id = it.id, name = it.name) } }
@@ -140,5 +140,43 @@ class BookShelfRepository(
         if (ids.isEmpty()) return
         val paths = bookShelfDao.getItems(ids.toList()).map { it.path }
         addPaths(groupId = targetGroupId, paths = paths)
+    }
+
+    override suspend fun exportBookShelf(): BookShelfBackupData {
+        val groups = bookShelfDao.getGroups()
+        val idToName = groups.associate { it.id to it.name }
+        val items = bookShelfDao.getAllItems().mapNotNull { item ->
+            BookShelfItemBackup(
+                groupName = idToName[item.groupId] ?: return@mapNotNull null,
+                path = item.path,
+                addedAt = item.addedAt,
+            )
+        }
+        return BookShelfBackupData(
+            groups = groups.map {
+                BookShelfGroupBackup(name = it.name, sortOrder = it.sortOrder, createdAt = it.createdAt)
+            },
+            items = items,
+        )
+    }
+
+    override suspend fun importBookShelf(data: BookShelfBackupData) {
+        val existing = bookShelfDao.getGroups().associateBy { it.name }
+        val nameToId = mutableMapOf<String, Long>()
+        for (group in data.groups) {
+            nameToId[group.name] = existing[group.name]?.id
+                ?: bookShelfDao.insertGroup(
+                    BookShelfGroupEntity(
+                        name = group.name,
+                        sortOrder = group.sortOrder,
+                        createdAt = group.createdAt,
+                    ),
+                )
+        }
+        val items = data.items.mapNotNull { item ->
+            val groupId = nameToId[item.groupName] ?: return@mapNotNull null
+            BookShelfItemEntity(groupId = groupId, path = item.path, addedAt = item.addedAt)
+        }
+        if (items.isNotEmpty()) bookShelfDao.insertItems(items)
     }
 }

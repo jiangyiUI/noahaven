@@ -10,6 +10,7 @@ import dev.anilbeesetti.nextplayer.core.media.network.keys.isValidSshPrivateKey
 import dev.anilbeesetti.nextplayer.core.model.NetworkAuthentication
 import dev.anilbeesetti.nextplayer.core.model.NetworkConnection
 import dev.anilbeesetti.nextplayer.core.ui.R
+import dev.anilbeesetti.nextplayer.feature.books.data.BookShelfBackupDataSource
 import dev.anilbeesetti.nextplayer.feature.books.data.BooksPreferences
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -27,6 +28,7 @@ class SettingsBackupService(
     private val networkConnectionRepository: NetworkConnectionRepository,
     private val sshKeyStore: SshKeyStore,
     private val booksPreferences: BooksPreferences,
+    private val bookShelfBackupDataSource: BookShelfBackupDataSource,
 ) {
     private val codec = SettingsBackupCodec(
         subtitleEncodings = context.resources.getStringArray(R.array.charsets_list).map {
@@ -62,6 +64,8 @@ class SettingsBackupService(
                 networkConnections = connections,
                 sshKeys = keys,
                 customThemes = booksPreferences.customThemes.first(),
+                readerSettings = booksPreferences.settings.first().toBackup(),
+                bookShelf = bookShelfBackupDataSource.exportBookShelf(),
             ).toByteArray(Charsets.UTF_8)
             require(bytes.size <= MAX_BACKUP_BYTES)
             checkNotNull(
@@ -113,6 +117,16 @@ class SettingsBackupService(
         preferencesRepository.updateApplicationPreferences { imported.applicationPreferences }
         preferencesRepository.updatePlayerPreferences { imported.playerPreferences }
         imported.customThemes.forEach { booksPreferences.saveCustomTheme(it) }
+        // 自定义主题导入后再还原阅读设置：主题用最新 customThemes 解析；字体不随备份迁移，保留当前设备值。
+        imported.readerSettings?.let { backup ->
+            val customThemes = booksPreferences.customThemes.first()
+            val currentFontPath = booksPreferences.settings.value.customFontPath
+            booksPreferences.updateSettings { _ ->
+                backup.toReaderSettings(customThemes, currentFontPath)
+            }
+        }
+        // 书架分组 + 条目：分组按 name 去重，条目唯一索引去重，已存在的不会重复插入。
+        bookShelfBackupDataSource.importBookShelf(imported.bookShelf)
         // Preference data sources log storage failures; do not report an import that did not persist.
         check(
             withTimeoutOrNull(5_000) {
@@ -121,6 +135,12 @@ class SettingsBackupService(
                         imported.applicationPreferences
                 }
                 preferencesRepository.playerPreferences.first { it == imported.playerPreferences }
+                imported.readerSettings?.let { backup ->
+                    booksPreferences.settings.first {
+                        it.lightTheme.storageKey == backup.lightThemeKey &&
+                            it.darkTheme.storageKey == backup.darkThemeKey
+                    }
+                }
                 true
             } == true,
         )

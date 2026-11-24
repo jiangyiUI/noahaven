@@ -27,6 +27,9 @@ interface BookShelfDao {
     @Query("SELECT * FROM book_shelf_item WHERE id IN (:ids)")
     suspend fun getItems(ids: List<Long>): List<BookShelfItemEntity>
 
+    @Query("SELECT * FROM book_shelf_item ORDER BY added_at, id")
+    suspend fun getAllItems(): List<BookShelfItemEntity>
+
     @Insert
     suspend fun insertGroup(group: BookShelfGroupEntity): Long
 
