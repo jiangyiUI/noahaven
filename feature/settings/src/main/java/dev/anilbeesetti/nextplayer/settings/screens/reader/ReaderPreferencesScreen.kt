@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -43,6 +44,7 @@ import dev.anilbeesetti.nextplayer.core.ui.designsystem.NextIcons
 import dev.anilbeesetti.nextplayer.feature.books.reader.ReaderPageTurn
 import dev.anilbeesetti.nextplayer.feature.books.reader.ReaderProgressScope
 import dev.anilbeesetti.nextplayer.feature.books.reader.ReaderTheme
+import dev.anilbeesetti.nextplayer.feature.books.reader.displayName
 import dev.anilbeesetti.nextplayer.settings.composables.OptionsDialog
 
 @Composable
@@ -57,10 +59,19 @@ fun ReaderPreferencesScreen(viewModel: ReaderPreferencesViewModel) {
         }
     }
 
+    val themeImagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent(),
+    ) { uri ->
+        if (uri != null) {
+            viewModel.onAction(ReaderPreferencesUiEvent.PickThemeImage(uri))
+        }
+    }
+
     ReaderPreferencesScreenContent(
         state = state,
         onAction = viewModel::onAction,
         onPickFont = { fontPicker.launch(arrayOf("*/*")) },
+        onPickThemeImage = { themeImagePicker.launch("image/*") },
     )
 }
 
@@ -73,8 +84,11 @@ private fun ReaderPreferencesScreenContent(
     state: ReaderPreferencesUiState,
     onAction: (ReaderPreferencesUiEvent) -> Unit,
     onPickFont: () -> Unit,
+    onPickThemeImage: () -> Unit,
 ) {
     val settings = state.settings
+    var editingCustom by remember { mutableStateOf<ReaderTheme.Custom?>(null) }
+    var creatingDark by remember { mutableStateOf<Boolean?>(null) }
 
     Scaffold(
         topBar = {
@@ -233,7 +247,7 @@ private fun ReaderPreferencesScreenContent(
             )
             ClickablePreferenceItem(
                 title = stringResource(R.string.reader_theme_light),
-                description = stringResource(settings.lightTheme.labelRes),
+                description = settings.lightTheme.displayName(),
                 icon = NextIcons.Appearance,
                 onClick = {
                     onAction(
@@ -243,7 +257,7 @@ private fun ReaderPreferencesScreenContent(
             )
             ClickablePreferenceItem(
                 title = stringResource(R.string.reader_theme_dark),
-                description = stringResource(settings.darkTheme.labelRes),
+                description = settings.darkTheme.displayName(),
                 icon = NextIcons.Contrast,
                 onClick = {
                     onAction(
@@ -282,10 +296,16 @@ private fun ReaderPreferencesScreenContent(
 
             // 开关组
             PreferenceSwitch(
+                title = stringResource(R.string.reader_one_hand_mode),
+                description = stringResource(R.string.reader_one_hand_mode_desc),
+                isChecked = settings.oneHandMode,
+                onClick = { onAction(ReaderPreferencesUiEvent.ToggleOneHandMode) },
+                isFirstItem = true,
+            )
+            PreferenceSwitch(
                 title = stringResource(R.string.reader_first_line_indent),
                 isChecked = settings.firstLineIndent,
                 onClick = { onAction(ReaderPreferencesUiEvent.ToggleFirstLineIndent) },
-                isFirstItem = true,
             )
             PreferenceSwitch(
                 title = stringResource(R.string.reader_show_chapter_title),
@@ -331,17 +351,46 @@ private fun ReaderPreferencesScreenContent(
                             onAction(ReaderPreferencesUiEvent.ShowDialog(null))
                         },
                     ) {
-                        items(ReaderTheme.entries.filterNot { it.isDark }) { theme ->
+                        val lightThemes = ReaderTheme.builtIns.filterNot { it.isDark } +
+                            state.customThemes.filterNot { it.isDark }
+                        items(lightThemes) { theme ->
                             RadioTextButton(
-                                text = stringResource(theme.labelRes),
-                                selected = theme == settings.lightTheme,
+                                text = theme.displayName(),
+                                selected = theme.storageKey == settings.lightTheme.storageKey,
                                 onClick = {
                                     onAction(
                                         ReaderPreferencesUiEvent.SetLightTheme(theme),
                                     )
                                     onAction(ReaderPreferencesUiEvent.ShowDialog(null))
                                 },
+                                onLongClick = if (theme is ReaderTheme.Custom) {
+                                    {
+                                        editingCustom = theme
+                                        onAction(ReaderPreferencesUiEvent.ShowDialog(null))
+                                    }
+                                } else {
+                                    null
+                                },
                             )
+                        }
+                        item {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        creatingDark = false
+                                        onAction(ReaderPreferencesUiEvent.ShowDialog(null))
+                                    }
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    imageVector = NextIcons.Add,
+                                    contentDescription = null,
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(text = stringResource(R.string.reader_theme_add))
+                            }
                         }
                     }
                 }
@@ -353,17 +402,46 @@ private fun ReaderPreferencesScreenContent(
                             onAction(ReaderPreferencesUiEvent.ShowDialog(null))
                         },
                     ) {
-                        items(ReaderTheme.entries.filter { it.isDark }) { theme ->
+                        val darkThemes = ReaderTheme.builtIns.filter { it.isDark } +
+                            state.customThemes.filter { it.isDark }
+                        items(darkThemes) { theme ->
                             RadioTextButton(
-                                text = stringResource(theme.labelRes),
-                                selected = theme == settings.darkTheme,
+                                text = theme.displayName(),
+                                selected = theme.storageKey == settings.darkTheme.storageKey,
                                 onClick = {
                                     onAction(
                                         ReaderPreferencesUiEvent.SetDarkTheme(theme),
                                     )
                                     onAction(ReaderPreferencesUiEvent.ShowDialog(null))
                                 },
+                                onLongClick = if (theme is ReaderTheme.Custom) {
+                                    {
+                                        editingCustom = theme
+                                        onAction(ReaderPreferencesUiEvent.ShowDialog(null))
+                                    }
+                                } else {
+                                    null
+                                },
                             )
+                        }
+                        item {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        creatingDark = true
+                                        onAction(ReaderPreferencesUiEvent.ShowDialog(null))
+                                    }
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    imageVector = NextIcons.Add,
+                                    contentDescription = null,
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(text = stringResource(R.string.reader_theme_add))
+                            }
                         }
                     }
                 }
@@ -465,6 +543,47 @@ private fun ReaderPreferencesScreenContent(
                     }
                 }
             }
+        }
+
+        // 自定义主题编辑器（编辑已有主题）
+        editingCustom?.let { theme ->
+            SettingsReaderThemeEditorSheet(
+                isDark = theme.isDark,
+                initial = theme,
+                pendingImagePath = state.pendingThemeImagePath,
+                onPickImage = onPickThemeImage,
+                onImageConsumed = {
+                    onAction(ReaderPreferencesUiEvent.ClearPendingThemeImage)
+                },
+                onDismiss = { editingCustom = null },
+                onSave = { saved ->
+                    onAction(ReaderPreferencesUiEvent.SaveCustomTheme(saved))
+                    editingCustom = null
+                },
+                onDelete = { key ->
+                    onAction(ReaderPreferencesUiEvent.DeleteCustomTheme(key))
+                    editingCustom = null
+                },
+            )
+        }
+
+        // 自定义主题编辑器（新建主题）
+        creatingDark?.let { isDark ->
+            SettingsReaderThemeEditorSheet(
+                isDark = isDark,
+                initial = null,
+                pendingImagePath = state.pendingThemeImagePath,
+                onPickImage = onPickThemeImage,
+                onImageConsumed = {
+                    onAction(ReaderPreferencesUiEvent.ClearPendingThemeImage)
+                },
+                onDismiss = { creatingDark = null },
+                onSave = { saved ->
+                    onAction(ReaderPreferencesUiEvent.SaveCustomTheme(saved))
+                    creatingDark = null
+                },
+                onDelete = {},
+            )
         }
     }
 }

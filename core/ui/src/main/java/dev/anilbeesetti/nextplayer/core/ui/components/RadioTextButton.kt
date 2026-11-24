@@ -1,5 +1,6 @@
 package dev.anilbeesetti.nextplayer.core.ui.components
 
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,14 +21,25 @@ fun RadioTextButton(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .selectable(
-                selected = selected,
-                onClick = onClick,
-                role = Role.RadioButton,
+            .then(
+                if (onLongClick != null) {
+                    Modifier.combinedClickable(
+                        onClick = onClick,
+                        onLongClick = onLongClick,
+                        role = Role.RadioButton,
+                    )
+                } else {
+                    Modifier.selectable(
+                        selected = selected,
+                        onClick = onClick,
+                        role = Role.RadioButton,
+                    )
+                }
             )
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,

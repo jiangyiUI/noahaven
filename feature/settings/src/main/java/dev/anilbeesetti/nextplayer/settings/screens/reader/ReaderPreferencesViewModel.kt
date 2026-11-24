@@ -34,6 +34,7 @@ class ReaderPreferencesViewModel(
         value = ReaderPreferencesUiState(
             settings = booksPreferences.settings.value,
             customFonts = booksPreferences.customFonts.value,
+            customThemes = booksPreferences.customThemes.value,
         ),
     )
     override val state: StateFlow<ReaderPreferencesUiState> = stateInternal.asStateFlow()
@@ -47,6 +48,11 @@ class ReaderPreferencesViewModel(
         viewModelScope.launch {
             booksPreferences.customFonts.collect { fonts ->
                 stateInternal.update { it.copy(customFonts = fonts) }
+            }
+        }
+        viewModelScope.launch {
+            booksPreferences.customThemes.collect { themes ->
+                stateInternal.update { it.copy(customThemes = themes) }
             }
         }
     }
@@ -99,9 +105,22 @@ class ReaderPreferencesViewModel(
             ReaderPreferencesUiEvent.ToggleShowTimeBattery ->
                 updateSettings { it.copy(showTimeBattery = !it.showTimeBattery) }
 
+            ReaderPreferencesUiEvent.ToggleOneHandMode ->
+                updateSettings { it.copy(oneHandMode = !it.oneHandMode) }
+
             is ReaderPreferencesUiEvent.ImportFont -> importFont(action.uri)
 
             is ReaderPreferencesUiEvent.DeleteFont -> booksPreferences.deleteFont(action.path)
+
+            is ReaderPreferencesUiEvent.SaveCustomTheme -> saveCustomTheme(action.theme)
+
+            is ReaderPreferencesUiEvent.DeleteCustomTheme ->
+                booksPreferences.deleteCustomTheme(action.storageKey)
+
+            is ReaderPreferencesUiEvent.PickThemeImage -> pickThemeImage(action.uri)
+
+            ReaderPreferencesUiEvent.ClearPendingThemeImage ->
+                stateInternal.update { it.copy(pendingThemeImagePath = null) }
         }
     }
 
@@ -121,12 +140,28 @@ class ReaderPreferencesViewModel(
             }
         }
     }
+
+    private fun saveCustomTheme(theme: ReaderTheme.Custom) {
+        booksPreferences.saveCustomTheme(theme)
+        booksPreferences.updateSettings { current ->
+            if (theme.isDark) current.copy(darkTheme = theme) else current.copy(lightTheme = theme)
+        }
+    }
+
+    private fun pickThemeImage(uri: Uri) {
+        viewModelScope.launch {
+            val path = booksPreferences.importBackgroundImage(uri) ?: return@launch
+            stateInternal.update { it.copy(pendingThemeImagePath = path) }
+        }
+    }
 }
 
 @Stable
 data class ReaderPreferencesUiState(
     val settings: ReaderSettings = ReaderSettings(),
     val customFonts: List<ReaderCustomFont> = emptyList(),
+    val customThemes: List<ReaderTheme.Custom> = emptyList(),
+    val pendingThemeImagePath: String? = null,
     val showDialog: ReaderPreferenceDialog? = null,
 )
 
@@ -155,6 +190,11 @@ sealed interface ReaderPreferencesUiEvent {
     data object ToggleFirstLineIndent : ReaderPreferencesUiEvent
     data object ToggleShowChapterTitle : ReaderPreferencesUiEvent
     data object ToggleShowTimeBattery : ReaderPreferencesUiEvent
+    data object ToggleOneHandMode : ReaderPreferencesUiEvent
     data class ImportFont(val uri: Uri) : ReaderPreferencesUiEvent
     data class DeleteFont(val path: String) : ReaderPreferencesUiEvent
+    data class SaveCustomTheme(val theme: ReaderTheme.Custom) : ReaderPreferencesUiEvent
+    data class DeleteCustomTheme(val storageKey: String) : ReaderPreferencesUiEvent
+    data class PickThemeImage(val uri: Uri) : ReaderPreferencesUiEvent
+    data object ClearPendingThemeImage : ReaderPreferencesUiEvent
 }

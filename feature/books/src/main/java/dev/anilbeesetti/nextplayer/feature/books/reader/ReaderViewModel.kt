@@ -83,6 +83,11 @@ class ReaderViewModel(
             }
         }
         viewModelScope.launch {
+            preferences.customThemes.collect { themes ->
+                stateInternal.update { it.copy(customThemes = themes) }
+            }
+        }
+        viewModelScope.launch {
             preferencesRepository.applicationPreferences.collect { prefs ->
                 val list = prefs.bookBookmarks[bookPath].orEmpty().sortedBy { it.createdAt }
                 stateInternal.update { it.copy(bookmarks = list) }
@@ -140,6 +145,15 @@ class ReaderViewModel(
             is ReaderAction.ImportFont -> importFont(uri = action.uri)
 
             is ReaderAction.RemoveFont -> preferences.deleteFont(action.path)
+
+            is ReaderAction.SaveCustomTheme -> saveCustomTheme(action.theme)
+
+            is ReaderAction.DeleteCustomTheme -> preferences.deleteCustomTheme(action.storageKey)
+
+            is ReaderAction.PickThemeImage -> pickThemeImage(action.uri)
+
+            ReaderAction.ClearPendingThemeImage ->
+                stateInternal.update { it.copy(pendingThemeImagePath = null) }
 
             is ReaderAction.SaveChapterRule -> viewModelScope.launch {
                 chapterRuleRepository.upsertCustomRule(action.rule, action.setAsDefault)
@@ -273,6 +287,21 @@ class ReaderViewModel(
         }
     }
 
+    private fun saveCustomTheme(theme: ReaderTheme.Custom) {
+        preferences.saveCustomTheme(theme)
+        // 保存后自动选中该主题（新建或编辑都生效）。
+        preferences.updateSettings { current ->
+            if (theme.isDark) current.copy(darkTheme = theme) else current.copy(lightTheme = theme)
+        }
+    }
+
+    private fun pickThemeImage(uri: Uri) {
+        viewModelScope.launch {
+            val path = preferences.importBackgroundImage(uri) ?: return@launch
+            stateInternal.update { it.copy(pendingThemeImagePath = path) }
+        }
+    }
+
     fun saveNow() {
         saveJob?.cancel()
         saveImmediately()
@@ -315,6 +344,10 @@ data class ReaderUiState(
     val settings: ReaderSettings = ReaderSettings(),
     /** 用户导入的字体列表。 */
     val customFonts: List<ReaderCustomFont> = emptyList(),
+    /** 用户自建的阅读主题。 */
+    val customThemes: List<ReaderTheme.Custom> = emptyList(),
+    /** 选图导入完成后临时存放的新路径，交给编辑器消费后清零。 */
+    val pendingThemeImagePath: String? = null,
     val initialChapter: Int = 0,
     val initialOffset: Int = 0,
     val positionChapter: Int = 0,
@@ -348,6 +381,18 @@ sealed interface ReaderAction {
     data class ImportFont(val uri: Uri) : ReaderAction
 
     data class RemoveFont(val path: String) : ReaderAction
+
+    /** 新建或更新一个自定义主题；保存后自动选中它（按 isDark 归入对应组）。 */
+    data class SaveCustomTheme(val theme: ReaderTheme.Custom) : ReaderAction
+
+    /** 删除自定义主题（含背景图文件）；若正被使用则回落默认内置主题。 */
+    data class DeleteCustomTheme(val storageKey: String) : ReaderAction
+
+    /** 从系统相册选了一张背景图，导入到应用私有目录。 */
+    data class PickThemeImage(val uri: Uri) : ReaderAction
+
+    /** 编辑器已消费 pendingThemeImagePath，清零避免下次打开继承。 */
+    data object ClearPendingThemeImage : ReaderAction
 
     /** 新建或更新一条自建分章规则。 */
     data class SaveChapterRule(val rule: ChapterRule, val setAsDefault: Boolean) : ReaderAction

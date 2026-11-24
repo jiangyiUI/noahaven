@@ -22,6 +22,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import coil3.compose.AsyncImage
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -40,6 +41,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -263,13 +266,14 @@ private fun ReaderContent(
 
     val latestPosition = rememberUpdatedState(state.positionChapter to state.positionOffset)
 
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(theme.background)
-            .safeDrawingPadding(),
-    ) {
-        val outerWidthPx = with(density) { maxWidth.toPx() }
+    Box(modifier = Modifier.fillMaxSize()) {
+        ReaderBackground(theme = theme)
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxSize()
+                .safeDrawingPadding(),
+        ) {
+            val outerWidthPx = with(density) { maxWidth.toPx() }
         val outerHeightPx = with(density) { maxHeight.toPx() }
         val contentWidthPx = (outerWidthPx - with(density) { (pageHorizontalPadding * 2).toPx() }).toInt()
         val contentHeightPx = (
@@ -426,13 +430,25 @@ private fun ReaderContent(
                     }
                 }
                 .focusable()
-                .pointerInput(Unit) {
+                .pointerInput(settings.pageTurn, settings.oneHandMode) {
                     detectTapGestures { offset ->
                         val width = size.width.toFloat()
-                        when {
-                            offset.x < width * 0.28f -> turnPrevious()
-                            offset.x > width * 0.72f -> turnNext()
-                            else -> barsVisible = !barsVisible
+                        val height = size.height.toFloat()
+                        if (settings.pageTurn == ReaderPageTurn.VERTICAL) {
+                            // 上下滑动：单击上侧 = 上一页，下侧 = 下一页，中间 = 菜单。单手模式不生效。
+                            when {
+                                offset.y < height * 0.30f -> turnPrevious()
+                                offset.y > height * 0.70f -> turnNext()
+                                else -> barsVisible = !barsVisible
+                            }
+                        } else {
+                            // 单手模式开启时，左右两侧都翻到下一页。
+                            val oneHand = settings.oneHandMode
+                            when {
+                                offset.x < width * 0.28f -> if (oneHand) turnNext() else turnPrevious()
+                                offset.x > width * 0.72f -> turnNext()
+                                else -> barsVisible = !barsVisible
+                            }
                         }
                     }
                 }
@@ -673,14 +689,77 @@ private fun ReaderContent(
                 theme = theme,
                 settings = settings,
                 customFonts = state.customFonts,
+                customThemes = state.customThemes,
+                pendingThemeImagePath = state.pendingThemeImagePath,
                 onSettingsChange = { transform ->
                     viewModel.onAction(ReaderAction.UpdateSettings(transform))
                 },
                 onImportFont = { uri -> viewModel.onAction(ReaderAction.ImportFont(uri)) },
                 onDeleteFont = { path -> viewModel.onAction(ReaderAction.RemoveFont(path)) },
+                onSaveTheme = { t -> viewModel.onAction(ReaderAction.SaveCustomTheme(t)) },
+                onDeleteTheme = { k -> viewModel.onAction(ReaderAction.DeleteCustomTheme(k)) },
+                onPickThemeImage = { uri -> viewModel.onAction(ReaderAction.PickThemeImage(uri)) },
+                onClearPendingImage = { viewModel.onAction(ReaderAction.ClearPendingThemeImage) },
                 onDismiss = { showSettings = false },
             )
         }
+        }
+
+        // 顶栏 / 底栏的纯色背景延伸到状态栏 / 导航栏区域，与栏体拼接成一整块，消除系统栏处的割裂
+        AnimatedVisibility(
+            visible = barsVisible,
+            modifier = Modifier.align(Alignment.TopCenter),
+            enter = fadeIn(tween(200)),
+            exit = fadeOut(tween(200)),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(theme.background.copy(alpha = 0.97f))
+                    .statusBarsPadding(),
+            )
+        }
+        AnimatedVisibility(
+            visible = barsVisible,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = fadeIn(tween(200)),
+            exit = fadeOut(tween(200)),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(theme.background.copy(alpha = 0.97f))
+                    .navigationBarsPadding(),
+            )
+        }
+    }
+}
+
+/**
+ * 阅读页背景：有背景图则铺满并叠一层 background 色半透明遮罩，否则纯色背景。
+ * 文件不存在（如导入备份后图丢失）时自动降级为纯色。
+ */
+@Composable
+private fun ReaderBackground(theme: ReaderTheme) {
+    val file = theme.backgroundImagePath?.let { File(it) }?.takeIf { it.exists() }
+    if (file != null) {
+        AsyncImage(
+            model = file,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(theme.background.copy(alpha = theme.maskAlpha)),
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(theme.background),
+        )
     }
 }
 

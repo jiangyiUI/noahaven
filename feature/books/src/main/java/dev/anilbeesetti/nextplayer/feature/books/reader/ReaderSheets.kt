@@ -44,6 +44,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -327,11 +328,26 @@ fun ReaderSettingsSheet(
     theme: ReaderTheme,
     settings: ReaderSettings,
     customFonts: List<ReaderCustomFont>,
+    customThemes: List<ReaderTheme.Custom>,
+    pendingThemeImagePath: String?,
     onSettingsChange: ((ReaderSettings) -> ReaderSettings) -> Unit,
     onImportFont: (Uri) -> Unit,
     onDeleteFont: (String) -> Unit,
+    onSaveTheme: (ReaderTheme.Custom) -> Unit,
+    onDeleteTheme: (String) -> Unit,
+    onPickThemeImage: (Uri) -> Unit,
+    onClearPendingImage: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val themeImagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent(),
+    ) { uri ->
+        if (uri != null) onPickThemeImage(uri)
+    }
+    // 正在编辑的自定义主题（null = 没在编辑）。
+    var editingCustom by remember { mutableStateOf<ReaderTheme.Custom?>(null) }
+    // 新建主题的归属（null = 没在新建）。
+    var creatingDark by remember { mutableStateOf<Boolean?>(null) }
     val fontPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri ->
@@ -533,15 +549,20 @@ fun ReaderSettingsSheet(
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                ReaderTheme.entries.filterNot { it.isDark }.forEach { item ->
-                    ThemeSwatch(
-                        theme = item,
-                        selected = item == settings.lightTheme,
-                        onSelect = {
-                            onSettingsChange { current -> current.copy(lightTheme = item) }
-                        },
-                    )
-                }
+                (ReaderTheme.builtIns.filterNot { it.isDark } + customThemes.filterNot { it.isDark })
+                    .forEach { item ->
+                        ThemeSwatch(
+                            theme = item,
+                            selected = item.storageKey == settings.lightTheme.storageKey,
+                            onSelect = {
+                                onSettingsChange { current -> current.copy(lightTheme = item) }
+                            },
+                            onLongClick = if (item is ReaderTheme.Custom) {
+                                { editingCustom = item }
+                            } else null,
+                        )
+                    }
+                AddThemeSwatch(theme = theme, onClick = { creatingDark = false })
             }
 
             // 深色主题
@@ -557,15 +578,20 @@ fun ReaderSettingsSheet(
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                ReaderTheme.entries.filter { it.isDark }.forEach { item ->
-                    ThemeSwatch(
-                        theme = item,
-                        selected = item == settings.darkTheme,
-                        onSelect = {
-                            onSettingsChange { current -> current.copy(darkTheme = item) }
-                        },
-                    )
-                }
+                (ReaderTheme.builtIns.filter { it.isDark } + customThemes.filter { it.isDark })
+                    .forEach { item ->
+                        ThemeSwatch(
+                            theme = item,
+                            selected = item.storageKey == settings.darkTheme.storageKey,
+                            onSelect = {
+                                onSettingsChange { current -> current.copy(darkTheme = item) }
+                            },
+                            onLongClick = if (item is ReaderTheme.Custom) {
+                                { editingCustom = item }
+                            } else null,
+                        )
+                    }
+                AddThemeSwatch(theme = theme, onClick = { creatingDark = true })
             }
 
             // 翻页方式
@@ -681,6 +707,23 @@ fun ReaderSettingsSheet(
                 )
             }
 
+            // 操作
+            SectionLabel(
+                text = stringResource(R.string.reader_operation),
+                theme = theme,
+                modifier = Modifier.padding(top = 16.dp),
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            SwitchRow(
+                label = stringResource(R.string.reader_one_hand_mode),
+                description = stringResource(R.string.reader_one_hand_mode_desc),
+                checked = settings.oneHandMode,
+                theme = theme,
+                onCheckedChange = { checked ->
+                    onSettingsChange { current -> current.copy(oneHandMode = checked) }
+                },
+            )
+
             // 开关组
             SectionLabel(
                 text = stringResource(R.string.reader_appearance),
@@ -713,6 +756,33 @@ fun ReaderSettingsSheet(
                 },
             )
         }
+    }
+
+    editingCustom?.let { custom ->
+        ReaderThemeEditorSheet(
+            sheetTheme = theme,
+            isDark = custom.isDark,
+            initial = custom,
+            pendingImagePath = pendingThemeImagePath,
+            onPickImage = { themeImagePicker.launch("image/*") },
+            onImageConsumed = onClearPendingImage,
+            onDismiss = { editingCustom = null },
+            onSave = { t -> onSaveTheme(t) },
+            onDelete = { k -> onDeleteTheme(k) },
+        )
+    }
+    creatingDark?.let { dark ->
+        ReaderThemeEditorSheet(
+            sheetTheme = theme,
+            isDark = dark,
+            initial = null,
+            pendingImagePath = pendingThemeImagePath,
+            onPickImage = { themeImagePicker.launch("image/*") },
+            onImageConsumed = onClearPendingImage,
+            onDismiss = { creatingDark = null },
+            onSave = { t -> onSaveTheme(t) },
+            onDelete = {},
+        )
     }
 }
 
@@ -750,6 +820,7 @@ private fun SwitchRow(
     checked: Boolean,
     theme: ReaderTheme,
     onCheckedChange: (Boolean) -> Unit,
+    description: String? = null,
 ) {
     Row(
         modifier = Modifier
@@ -757,11 +828,19 @@ private fun SwitchRow(
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = label,
-            style = TextStyle(color = theme.panelText, fontSize = 16.sp),
-            modifier = Modifier.weight(1f),
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = TextStyle(color = theme.panelText, fontSize = 16.sp),
+            )
+            if (description != null) {
+                Text(
+                    text = description,
+                    style = TextStyle(color = theme.panelSub, fontSize = 12.sp),
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        }
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
@@ -784,11 +863,16 @@ private fun ThemeSwatch(
     theme: ReaderTheme,
     selected: Boolean,
     onSelect: () -> Unit,
+    onLongClick: (() -> Unit)?,
 ) {
+    val swatchModifier = if (onLongClick != null) {
+        Modifier.combinedClickable(onClick = onSelect, onLongClick = onLongClick)
+    } else {
+        Modifier.clickable(onClick = onSelect)
+    }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .clickable(onClick = onSelect)
+        modifier = swatchModifier
             .padding(horizontal = 2.dp, vertical = 2.dp),
     ) {
         Box(
@@ -815,7 +899,7 @@ private fun ThemeSwatch(
         }
         Spacer(modifier = Modifier.height(5.dp))
         Text(
-            text = stringResource(theme.labelRes),
+            text = theme.displayName(),
             style = TextStyle(
                 color = if (selected) theme.accent else theme.panelSub,
                 fontSize = 10.5.sp,
@@ -823,6 +907,43 @@ private fun ThemeSwatch(
             ),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** 主题行末尾的「+」入口，点击新建对应分组的自定义主题。 */
+@Composable
+private fun AddThemeSwatch(
+    theme: ReaderTheme,
+    onClick: () -> Unit,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(horizontal = 2.dp, vertical = 2.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .background(color = theme.surfaceVariant, shape = RoundedCornerShape(13.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = NextIcons.Add,
+                contentDescription = stringResource(R.string.reader_theme_custom),
+                tint = theme.panelSub,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        Spacer(modifier = Modifier.height(5.dp))
+        Text(
+            text = stringResource(R.string.reader_theme_custom),
+            style = TextStyle(
+                color = theme.panelSub,
+                fontSize = 10.5.sp,
+            ),
+            maxLines = 1,
         )
     }
 }

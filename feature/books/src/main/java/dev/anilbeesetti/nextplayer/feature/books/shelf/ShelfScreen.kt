@@ -426,6 +426,7 @@ fun ShelfScreen(
         DeleteConfirmationDialog(
             selectionItems = selectionManager.selectionItems,
             comicMode = true,
+            removalFromShelf = true,
             onConfirm = {
                 viewModel.removeBooksFromShelf(booksToRemove)
                 selectionManager.exitSelectionMode()

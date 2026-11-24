@@ -11,6 +11,7 @@ import dev.anilbeesetti.nextplayer.core.data.repository.fake.FakePreferencesRepo
 import dev.anilbeesetti.nextplayer.core.media.network.keys.SshKeyStore
 import dev.anilbeesetti.nextplayer.core.media.network.keys.StagedSshKey
 import dev.anilbeesetti.nextplayer.core.model.NetworkConnection
+import dev.anilbeesetti.nextplayer.feature.books.data.BooksPreferences
 import java.io.File
 import java.io.FileNotFoundException
 import kotlinx.coroutines.flow.Flow
@@ -45,6 +46,7 @@ class SettingsBackupServiceTest {
             override suspend fun commit(fileName: String): String = error("Not used")
             override suspend fun delete(fileName: String) = Unit
         },
+        booksPreferences = BooksPreferences(RuntimeEnvironment.getApplication()),
     )
 
     @Test

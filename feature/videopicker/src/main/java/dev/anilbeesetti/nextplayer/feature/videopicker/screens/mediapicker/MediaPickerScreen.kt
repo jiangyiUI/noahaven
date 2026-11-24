@@ -698,6 +698,8 @@ fun DeleteConfirmationDialog(
     selectionItems: Set<SelectionItem>,
     isAudio: Boolean = false,
     comicMode: Boolean = false,
+    /** 仅从书架移除记录（不删除磁盘文件）：切换为对应的标题/描述/确认按钮文案。 */
+    removalFromShelf: Boolean = false,
     onConfirm: () -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -709,6 +711,7 @@ fun DeleteConfirmationDialog(
         title = {
             Text(
                 text = when {
+                    removalFromShelf -> stringResource(R.string.book_shelf_remove)
                     comicMode -> stringResource(
                         R.string.delete_items,
                         selectionItems.size,
@@ -754,17 +757,26 @@ fun DeleteConfirmationDialog(
                 onClick = onConfirm,
                 modifier = modifier,
             ) {
-                Text(text = stringResource(R.string.delete))
+                Text(
+                    text = if (removalFromShelf) {
+                        stringResource(R.string.book_shelf_remove_confirm)
+                    } else {
+                        stringResource(R.string.delete)
+                    },
+                )
             }
         },
         dismissButton = { CancelButton(onClick = onCancel) },
         modifier = modifier,
         content = {
             Text(
-                text = if ((selectedFolders.size + selectedVideos.size) == 1) {
-                    stringResource(R.string.delete_item_info)
-                } else {
-                    stringResource(R.string.delete_items_info)
+                text = when {
+                    removalFromShelf -> stringResource(R.string.book_shelf_remove_message)
+                    (selectedFolders.size + selectedVideos.size) == 1 -> stringResource(
+                        R.string.delete_item_info,
+                    )
+
+                    else -> stringResource(R.string.delete_items_info)
                 },
                 style = MaterialTheme.typography.titleSmall,
             )

@@ -10,6 +10,7 @@ import dev.anilbeesetti.nextplayer.core.media.network.keys.isValidSshPrivateKey
 import dev.anilbeesetti.nextplayer.core.model.NetworkAuthentication
 import dev.anilbeesetti.nextplayer.core.model.NetworkConnection
 import dev.anilbeesetti.nextplayer.core.ui.R
+import dev.anilbeesetti.nextplayer.feature.books.data.BooksPreferences
 import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +26,7 @@ class SettingsBackupService(
     private val preferencesRepository: PreferencesRepository,
     private val networkConnectionRepository: NetworkConnectionRepository,
     private val sshKeyStore: SshKeyStore,
+    private val booksPreferences: BooksPreferences,
 ) {
     private val codec = SettingsBackupCodec(
         subtitleEncodings = context.resources.getStringArray(R.array.charsets_list).map {
@@ -59,6 +61,7 @@ class SettingsBackupService(
                 playerPreferences = preferencesRepository.playerPreferences.value,
                 networkConnections = connections,
                 sshKeys = keys,
+                customThemes = booksPreferences.customThemes.first(),
             ).toByteArray(Charsets.UTF_8)
             require(bytes.size <= MAX_BACKUP_BYTES)
             checkNotNull(
@@ -109,6 +112,7 @@ class SettingsBackupService(
         }
         preferencesRepository.updateApplicationPreferences { imported.applicationPreferences }
         preferencesRepository.updatePlayerPreferences { imported.playerPreferences }
+        imported.customThemes.forEach { booksPreferences.saveCustomTheme(it) }
         // Preference data sources log storage failures; do not report an import that did not persist.
         check(
             withTimeoutOrNull(5_000) {

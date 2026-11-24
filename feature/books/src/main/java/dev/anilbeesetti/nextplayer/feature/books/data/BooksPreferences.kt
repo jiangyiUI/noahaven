@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.koin.core.annotation.Single
 
 /** 阅读外观与书架排序偏好。数据量很小，直接用 SharedPreferences，同步读写避免 DataStore 首帧闪烁。 */
@@ -23,6 +26,12 @@ class BooksPreferences(context: Context) {
 
     private val appContext = context.applicationContext
     private val preferences = context.getSharedPreferences("book_preferences", Context.MODE_PRIVATE)
+    private val json = Json { ignoreUnknownKeys = true }
+
+    // 自定义主题先于阅读设置初始化：readSettings 里的 light/dark 主题可能指向自定义主题。
+    private val customThemesInternal = MutableStateFlow(readCustomThemes())
+    /** 用户自建的阅读器主题。 */
+    val customThemes: StateFlow<List<ReaderTheme.Custom>> = customThemesInternal.asStateFlow()
 
     private val settingsInternal = MutableStateFlow(readSettings())
     val settings: StateFlow<ReaderSettings> = settingsInternal.asStateFlow()
@@ -30,6 +39,11 @@ class BooksPreferences(context: Context) {
     private val customFontsInternal = MutableStateFlow(readCustomFonts())
     /** 已导入的字体，按导入顺序展示。 */
     val customFonts: StateFlow<List<ReaderCustomFont>> = customFontsInternal.asStateFlow()
+
+    /** 某一分组下的全部主题（内置 + 自定义），供 UI 遍历。 */
+    fun allThemes(isDark: Boolean): List<ReaderTheme> =
+        ReaderTheme.builtIns.filter { it.isDark == isDark } +
+            customThemesInternal.value.filter { it.isDark == isDark }
 
     fun updateSettings(transform: (ReaderSettings) -> ReaderSettings) {
         val current = settingsInternal.value
@@ -64,18 +78,21 @@ class BooksPreferences(context: Context) {
             .putBoolean(KEY_FIRST_LINE_INDENT, updated.firstLineIndent)
             .putBoolean(KEY_SHOW_CHAPTER_TITLE, updated.showChapterTitle)
             .putBoolean(KEY_SHOW_TIME_BATTERY, updated.showTimeBattery)
+            .putBoolean(KEY_ONE_HAND_MODE, updated.oneHandMode)
             .apply()
     }
 
     private fun readSettings(): ReaderSettings {
         // 旧版本只存一套主题，按深浅拆到浅色/深色两行。
-        val legacyTheme = preferences.getString(KEY_THEME, null)?.let(ReaderTheme::fromKey)
+        val customThemes = customThemesInternal.value
+        val legacyTheme = preferences.getString(KEY_THEME, null)
+            ?.let { ReaderTheme.fromKey(it, customThemes) }
         val lightTheme = preferences.getString(KEY_LIGHT_THEME, null)
-            ?.let(ReaderTheme::fromKey)
+            ?.let { ReaderTheme.fromKey(it, customThemes) }
             ?: legacyTheme?.takeUnless { it.isDark }
             ?: ReaderTheme.PAPER
         val darkTheme = preferences.getString(KEY_DARK_THEME, null)
-            ?.let(ReaderTheme::fromKey)
+            ?.let { ReaderTheme.fromKey(it, customThemes) }
             ?: legacyTheme?.takeIf { it.isDark }
             ?: ReaderTheme.INK_GREEN
         return ReaderSettings(
@@ -101,7 +118,79 @@ class BooksPreferences(context: Context) {
             firstLineIndent = preferences.getBoolean(KEY_FIRST_LINE_INDENT, true),
             showChapterTitle = preferences.getBoolean(KEY_SHOW_CHAPTER_TITLE, true),
             showTimeBattery = preferences.getBoolean(KEY_SHOW_TIME_BATTERY, true),
+            oneHandMode = preferences.getBoolean(KEY_ONE_HAND_MODE, false),
         )
+    }
+
+    private fun readCustomThemes(): List<ReaderTheme.Custom> =
+        preferences.getString(KEY_CUSTOM_THEMES, null)
+            ?.takeIf { it.isNotBlank() }
+            ?.let { raw -> runCatching { json.decodeFromString<List<ReaderTheme.Custom>>(raw) }.getOrNull() }
+            .orEmpty()
+
+    private fun persistCustomThemes(themes: List<ReaderTheme.Custom>) {
+        preferences.edit()
+            .putString(KEY_CUSTOM_THEMES, json.encodeToString(themes))
+            .apply()
+        customThemesInternal.value = themes
+    }
+
+    /** 新增或更新一个自定义主题（按 storageKey 去重）。 */
+    fun saveCustomTheme(theme: ReaderTheme.Custom) {
+        val existing = customThemesInternal.value
+        val index = existing.indexOfFirst { it.storageKey == theme.storageKey }
+        val updated = if (index >= 0) {
+            existing.toMutableList().apply { this[index] = theme }
+        } else {
+            existing + theme
+        }
+        persistCustomThemes(updated)
+        refreshSettingsTheme(theme.storageKey)
+    }
+
+    /** 删除自定义主题及其背景图文件；若正被使用则回落到默认内置主题。 */
+    fun deleteCustomTheme(storageKey: String) {
+        customThemesInternal.value.firstOrNull { it.storageKey == storageKey }
+            ?.backgroundImagePath
+            ?.let { runCatching { File(it).delete() } }
+        persistCustomThemes(customThemesInternal.value.filterNot { it.storageKey == storageKey })
+        val s = settingsInternal.value
+        if (s.lightTheme.storageKey == storageKey) {
+            updateSettings { it.copy(lightTheme = ReaderTheme.PAPER) }
+        }
+        if (s.darkTheme.storageKey == storageKey) {
+            updateSettings { it.copy(darkTheme = ReaderTheme.INK_GREEN) }
+        }
+    }
+
+    /** 编辑后若该主题正被使用，把 settings 里的实例刷新成新的。 */
+    private fun refreshSettingsTheme(storageKey: String) {
+        val newTheme = customThemesInternal.value.firstOrNull { it.storageKey == storageKey } ?: return
+        val s = settingsInternal.value
+        if (s.lightTheme.storageKey == storageKey && s.lightTheme != newTheme) {
+            updateSettings { it.copy(lightTheme = newTheme) }
+        }
+        if (s.darkTheme.storageKey == storageKey && s.darkTheme != newTheme) {
+            updateSettings { it.copy(darkTheme = newTheme) }
+        }
+    }
+
+    /** 把用户选中的背景图复制到应用私有目录，成功返回新文件绝对路径。 */
+    suspend fun importBackgroundImage(uri: Uri): String? = withContext(Dispatchers.IO) {
+        val dir = File(appContext.filesDir, BG_DIR_NAME).apply { mkdirs() }
+        val ext = queryDisplayName(uri)
+            ?.substringAfterLast('.', "")
+            ?.takeIf { it.isNotBlank() } ?: "jpg"
+        val target = File(dir, "bg_${System.currentTimeMillis()}.$ext")
+        val ok = runCatching {
+            appContext.contentResolver.openInputStream(uri)?.use { input ->
+                target.outputStream().use { output -> input.copyTo(output) }
+            } != null && target.length() > 0
+        }.getOrDefault(false)
+        if (ok) target.absolutePath else {
+            target.delete()
+            null
+        }
     }
 
     private fun readCustomFonts(): List<ReaderCustomFont> =
@@ -174,6 +263,7 @@ class BooksPreferences(context: Context) {
 
     private companion object {
         const val FONT_DIR_NAME = "reader_fonts"
+        const val BG_DIR_NAME = "reader_theme_images"
         const val KEY_FONT_SIZE = "font_size"
         const val KEY_LINE_SPACING = "line_spacing"
         const val KEY_PARAGRAPH_SPACING = "paragraph_spacing"
@@ -182,6 +272,7 @@ class BooksPreferences(context: Context) {
         const val KEY_THEME = "theme"
         const val KEY_LIGHT_THEME = "light_theme"
         const val KEY_DARK_THEME = "dark_theme"
+        const val KEY_CUSTOM_THEMES = "custom_themes"
         const val KEY_CUSTOM_FONT = "custom_font_path"
         const val KEY_CUSTOM_FONTS = "custom_fonts"
         const val KEY_FONT_WEIGHT = "font_weight"
@@ -190,5 +281,6 @@ class BooksPreferences(context: Context) {
         const val KEY_FIRST_LINE_INDENT = "first_line_indent"
         const val KEY_SHOW_CHAPTER_TITLE = "show_chapter_title"
         const val KEY_SHOW_TIME_BATTERY = "show_time_battery"
+        const val KEY_ONE_HAND_MODE = "one_hand_mode"
     }
 }

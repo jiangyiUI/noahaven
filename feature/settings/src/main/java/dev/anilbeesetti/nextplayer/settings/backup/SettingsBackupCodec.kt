@@ -4,6 +4,7 @@ import dev.anilbeesetti.nextplayer.core.model.ApplicationPreferences
 import dev.anilbeesetti.nextplayer.core.model.NetworkConnection
 import dev.anilbeesetti.nextplayer.core.model.NetworkProtocol
 import dev.anilbeesetti.nextplayer.core.model.PlayerPreferences
+import dev.anilbeesetti.nextplayer.feature.books.reader.ReaderTheme
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -32,6 +33,8 @@ internal data class ImportedSettings(
     val playerPreferences: PlayerPreferences,
     val networkConnections: List<NetworkConnection>? = null,
     val sshKeys: Map<String, String> = emptyMap(),
+    // 只备份颜色数据；背景图不打包，导入后 backgroundImagePath 为 null，降级为纯色背景。
+    val customThemes: List<ReaderTheme.Custom> = emptyList(),
 )
 
 @OptIn(ExperimentalSerializationApi::class)
@@ -47,6 +50,7 @@ internal class SettingsBackupCodec(private val subtitleEncodings: Set<String>) {
         playerPreferences: PlayerPreferences,
         networkConnections: List<NetworkConnection>? = null,
         sshKeys: Map<String, String> = emptyMap(),
+        customThemes: List<ReaderTheme.Custom> = emptyList(),
     ): String = buildJsonObject {
         put(
             "version",
@@ -59,6 +63,14 @@ internal class SettingsBackupCodec(private val subtitleEncodings: Set<String>) {
         put(
             "playerPreferences",
             JsonObject(json.encodeToJsonElement(playerPreferences).jsonObject - "useSwipeControls"),
+        )
+        put(
+            "customThemes",
+            JsonArray(
+                customThemes.map { theme ->
+                    JsonObject(json.encodeToJsonElement(theme).jsonObject - "backgroundImagePath")
+                },
+            ),
         )
         if (networkConnections != null) {
             put(
@@ -113,7 +125,15 @@ internal class SettingsBackupCodec(private val subtitleEncodings: Set<String>) {
         sshKeys = (content["sshKeys"] as? JsonObject).orEmpty().mapNotNull { (name, value) ->
             (value as? JsonPrimitive)?.takeIf { it.isString }?.content?.let { name to it }
         }.toMap(),
+        customThemes = decodeCustomThemes(content["customThemes"]),
     )
+
+    private fun decodeCustomThemes(element: JsonElement?): List<ReaderTheme.Custom> {
+        val array = element as? JsonArray ?: return emptyList()
+        return array.mapNotNull { entry ->
+            runCatching { json.decodeFromJsonElement<ReaderTheme.Custom>(entry) }.getOrNull()
+        }
+    }
 
     private fun mergeConnections(
         fields: JsonElement?,
