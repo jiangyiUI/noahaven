@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -38,6 +39,7 @@ import dev.anilbeesetti.nextplayer.core.ui.components.rememberTvListFocusRequest
 import dev.anilbeesetti.nextplayer.core.ui.components.tvFocusDown
 import dev.anilbeesetti.nextplayer.core.ui.components.tvListFocus
 import dev.anilbeesetti.nextplayer.core.ui.designsystem.NextIcons
+import dev.anilbeesetti.nextplayer.settings.backup.LegacyShelfImportService.LegacyShelfImportPreview
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -78,6 +80,18 @@ private fun GeneralPreferencesScreenContent(
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             uri?.let { onAction(GeneralPreferencesUiEvent.PrepareImport(it)) }
         }
+    val legacyFiles = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments(),
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            onAction(GeneralPreferencesUiEvent.PickLegacyFiles(uris))
+        }
+    }
+    val exportNotFoundDocument = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/plain"),
+    ) { uri ->
+        uri?.let { onAction(GeneralPreferencesUiEvent.ExportNotFound(it)) }
+    }
     val listFocusRequester = rememberTvListFocusRequester()
     Scaffold(
         topBar = {
@@ -168,8 +182,27 @@ private fun GeneralPreferencesScreenContent(
                             ),
                         )
                     },
-                    isLastItem = true,
+                    isLastItem = !state.showLegacyShelfImport,
                 )
+                if (state.showLegacyShelfImport) {
+                    ClickablePreferenceItem(
+                        title = "导入书架（临时）",
+                        description = "从旧 app 导出的 category.json / book.json 迁移分组和书籍",
+                        icon = NextIcons.ArrowDownward,
+                        enabled = !state.isBusy,
+                        onClick = {
+                            legacyFiles.launch(
+                                arrayOf(
+                                    "application/json",
+                                    "text/plain",
+                                    "application/octet-stream",
+                                    "*/*",
+                                ),
+                            )
+                        },
+                        isLastItem = true,
+                    )
+                }
             }
         }
 
@@ -261,5 +294,83 @@ private fun GeneralPreferencesScreenContent(
                 }
             }
         }
+
+        state.legacyPreview?.let { preview ->
+            LegacyImportPreviewDialog(
+                preview = preview,
+                onConfirm = { onAction(GeneralPreferencesUiEvent.ConfirmLegacyImport) },
+                onExportNotFound = {
+                    exportNotFoundDocument.launch(
+                        "noahaven-not-found-${System.currentTimeMillis()}.txt",
+                    )
+                },
+                onDismiss = { onAction(GeneralPreferencesUiEvent.DismissLegacyPreview) },
+            )
+        }
     }
+}
+
+@Composable
+private fun LegacyImportPreviewDialog(
+    preview: LegacyShelfImportPreview,
+    onConfirm: () -> Unit,
+    onExportNotFound: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    NextDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("导入书架预览", modifier = Modifier.fillMaxWidth()) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text("确认写入") }
+        },
+        dismissButton = { CancelButton(onClick = onDismiss) },
+        content = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 380.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    "有效书籍 ${preview.totalActive} 本，匹配命中 ${preview.matchedTotal} 本",
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                if (preview.groupsToCreate.isNotEmpty()) {
+                    Text(
+                        "将新建分组：${preview.groupsToCreate.joinToString("、")}",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                preview.groupMatches.forEach { (path, paths) ->
+                    Text("· ${path.joinToString(" / ")}：${paths.size} 本", style = MaterialTheme.typography.bodyMedium)
+                }
+                Text(
+                    "未分组 ${preview.uncategorizedPaths.size} 本 → 放入「${preview.uncategorizedGroup}」",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                val notFoundTotal = preview.notFoundByGroup.values.sumOf { it.size }
+                if (notFoundTotal > 0) {
+                    Text(
+                        "未匹配 $notFoundTotal 本（将抛弃），按分组：",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    preview.notFoundByGroup.forEach { (group, titles) ->
+                        Text("【$group】${titles.size} 本", style = MaterialTheme.typography.bodySmall)
+                        titles.take(8).forEach {
+                            Text("  · $it", style = MaterialTheme.typography.bodySmall)
+                        }
+                        if (titles.size > 8) {
+                            Text(
+                                "  ……还有 ${titles.size - 8} 本",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+                    TextButton(onClick = onExportNotFound) {
+                        Text("导出未匹配清单（$notFoundTotal 本）到 txt")
+                    }
+                }
+            }
+        },
+    )
 }

@@ -35,6 +35,7 @@ import androidx.compose.material.icons.rounded.ClosedCaption
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Contrast
+import androidx.compose.material.icons.rounded.CreateNewFolder
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.Delete
@@ -137,6 +138,7 @@ object NextIcons {
     val FileOpen = Icons.Rounded.FileOpen
     val Focus = Icons.Rounded.CenterFocusStrong
     val Folder = Icons.Rounded.Folder
+    val CreateNewFolder = Icons.Rounded.CreateNewFolder
     val FolderOff = Icons.Rounded.FolderOff
     val Font = Icons.Rounded.FontDownload
     val FontSize = Icons.Rounded.FormatSize

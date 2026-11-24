@@ -124,6 +124,36 @@ class BookContentLoader(
         )
     }
 
+    /**
+     * 删除目录中的一条：把该章节的字符区间并入相邻章节（优先并入上一章，删首章则并入下一章），
+     * 记住修改后的目录并重新加载。仅 TXT 生效；非 TXT / 只剩一章 / 下标越界时返回 null。
+     * 「重新分章」会按规则重切并覆盖这份目录，所以被移除的条目届时会重新出现。
+     */
+    suspend fun removeChapter(path: String, chapterIndex: Int): BookContent? =
+        withContext(Dispatchers.IO) {
+            if (BookFormat.fromPath(path) != BookFormat.TXT) return@withContext null
+            val file = File(path)
+            if (!file.exists() || !file.isFile) return@withContext null
+            val decoded = TextCodec.decode(file.readBytes())
+            if (decoded.text.isBlank()) return@withContext null
+            val fallbackTitle = file.nameWithoutExtension.ifBlank { file.name }
+            val current = chapterRangesFor(path, decoded.text, fallbackTitle).toMutableList()
+            if (chapterIndex !in current.indices || current.size <= 1) return@withContext null
+            val removed = current.removeAt(chapterIndex)
+            if (chapterIndex > 0) {
+                val prev = current[chapterIndex - 1]
+                current[chapterIndex - 1] = prev.copy(end = removed.end)
+            } else {
+                val next = current.first()
+                current[0] = next.copy(start = removed.start)
+            }
+            val valid = current.filter { it.end > it.start }
+            if (valid.isEmpty()) return@withContext null
+            overrideStore.save(path, valid)
+            forget(path)
+            load(path, forceReload = true)
+        }
+
     /** 主规则分不到标题 → 内置常规模式兜底 → 仍无则 3 万字硬分段。 */
     private suspend fun splitWithFallback(
         text: String,

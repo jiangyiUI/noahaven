@@ -6,6 +6,7 @@ import dev.anilbeesetti.nextplayer.core.common.di.DiQualifiers
 import dev.anilbeesetti.nextplayer.core.data.repository.PreferencesRepository
 import dev.anilbeesetti.nextplayer.core.media.index.BookFileIndex
 import dev.anilbeesetti.nextplayer.core.model.BookFile
+import dev.anilbeesetti.nextplayer.core.model.BookFormat
 import dev.anilbeesetti.nextplayer.core.model.Bookmark
 import dev.anilbeesetti.nextplayer.core.model.ChapterRule
 import dev.anilbeesetti.nextplayer.core.ui.base.MviViewModel
@@ -51,6 +52,9 @@ class ReaderViewModel(
     /** 当前默认分章规则 id。 */
     val defaultRuleId: StateFlow<String> = chapterRuleRepository.defaultRuleId
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChapterRuleDefaults.DEFAULT_RULE_ID)
+
+    /** 当前书是否为 TXT（仅 TXT 支持删除目录条目，EPUB 删了会丢正文）。 */
+    val isTxtBook: Boolean = BookFormat.fromPath(bookPath) == BookFormat.TXT
 
     /** 每条规则对当前书试分章得到的章数（打开「重新分章」时计算）。空 map 表示尚未计算。 */
     private val _chapterCounts = MutableStateFlow<Map<String, Int>>(emptyMap())
@@ -169,6 +173,8 @@ class ReaderViewModel(
 
             is ReaderAction.Rechapter -> rechapter(ruleIds = action.ruleIds, onDone = action.onDone)
 
+            is ReaderAction.RemoveChapter -> removeChapter(index = action.index)
+
             ReaderAction.SaveNow -> saveNow()
         }
     }
@@ -211,6 +217,40 @@ class ReaderViewModel(
             // 映射后的新进度立刻落盘，避免重分后未翻页就杀进程导致进度错位。
             saveNow()
             onDone(true)
+        }
+    }
+
+    /**
+     * 删除目录中的一条（仅 TXT）。该章节正文并入相邻章节，按绝对字符偏移映射阅读位置，
+     * 避免删完进度跳走。失败（非 TXT / 越界 / 只剩一章）时静默不处理。
+     */
+    private fun removeChapter(index: Int) {
+        viewModelScope.launch {
+            val old = stateInternal.value
+            val oldContent = old.content ?: return@launch
+            if (index !in oldContent.chapters.indices) return@launch
+            val absolute = oldContent.chapters.getOrNull(old.positionChapter)?.startChar
+                ?.plus(old.positionOffset) ?: 0
+            val newContent = contentLoader.removeChapter(bookPath, index) ?: return@launch
+            val newChapter = newContent.chapterIndexAt(absolute)
+            val chapterStart = newContent.chapters.getOrNull(newChapter)?.startChar ?: 0
+            val newOffset = (absolute - chapterStart).coerceAtLeast(0)
+            val percent = if (newContent.totalChars > 0) {
+                (absolute.toFloat() / newContent.totalChars).coerceIn(0f, 1f)
+            } else {
+                0f
+            }
+            stateInternal.update {
+                it.copy(
+                    content = newContent,
+                    positionChapter = newChapter,
+                    positionOffset = newOffset,
+                    initialChapter = newChapter,
+                    initialOffset = newOffset,
+                    percent = percent,
+                )
+            }
+            saveNow()
         }
     }
 
@@ -408,6 +448,9 @@ sealed interface ReaderAction {
         val ruleIds: List<String>,
         val onDone: (Boolean) -> Unit,
     ) : ReaderAction
+
+    /** 删除目录中的一条（仅 TXT），其正文并入相邻章节；重新分章后会按规则重现。 */
+    data class RemoveChapter(val index: Int) : ReaderAction
 
     data object SaveNow : ReaderAction
 }

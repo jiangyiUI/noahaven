@@ -8,11 +8,14 @@ import dev.anilbeesetti.nextplayer.core.data.repository.PreferencesRepository
 import dev.anilbeesetti.nextplayer.core.media.extensions.clearAllCache
 import dev.anilbeesetti.nextplayer.core.ui.R
 import dev.anilbeesetti.nextplayer.core.ui.base.MviViewModel
+import dev.anilbeesetti.nextplayer.settings.backup.LegacyShelfImportService.LegacyShelfImportPreview
+import dev.anilbeesetti.nextplayer.settings.backup.LegacyShelfImportService
 import dev.anilbeesetti.nextplayer.settings.backup.SettingsBackupService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.koin.core.annotation.InjectedParam
@@ -23,6 +26,7 @@ class GeneralPreferencesViewModel(
     private val preferencesRepository: PreferencesRepository,
     private val imageLoader: ImageLoader,
     private val settingsBackupService: SettingsBackupService,
+    private val legacyShelfImportService: LegacyShelfImportService,
     @InjectedParam internal var output: Output,
 ) : MviViewModel<GeneralPreferencesUiState, GeneralPreferencesUiEvent>() {
 
@@ -31,6 +35,16 @@ class GeneralPreferencesViewModel(
     private val stateInternal = MutableStateFlow(value = GeneralPreferencesUiState())
     override val state: StateFlow<GeneralPreferencesUiState> = stateInternal.asStateFlow()
     private var pendingImport: String? = null
+
+    init {
+        viewModelScope.launch {
+            preferencesRepository.applicationPreferences.collect { prefs ->
+                stateInternal.update {
+                    it.copy(showLegacyShelfImport = prefs.showLegacyShelfImport)
+                }
+            }
+        }
+    }
 
     override fun onAction(action: GeneralPreferencesUiEvent) {
         when (action) {
@@ -50,6 +64,15 @@ class GeneralPreferencesViewModel(
             is GeneralPreferencesUiEvent.PrepareImport -> prepareImport(action.uri)
 
             is GeneralPreferencesUiEvent.ImportSettings -> importSettings()
+
+            is GeneralPreferencesUiEvent.PickLegacyFiles -> pickLegacyFiles(action.uris)
+
+            is GeneralPreferencesUiEvent.ConfirmLegacyImport -> confirmLegacyImport()
+
+            is GeneralPreferencesUiEvent.DismissLegacyPreview ->
+                stateInternal.update { it.copy(legacyPreview = null) }
+
+            is GeneralPreferencesUiEvent.ExportNotFound -> exportNotFound(action.uri)
         }
     }
 
@@ -93,6 +116,40 @@ class GeneralPreferencesViewModel(
         }
     }
 
+    private fun pickLegacyFiles(uris: List<Uri>) {
+        if (uris.size < 2) {
+            output.showMessage(R.string.settings_import_invalid)
+            return
+        }
+        val categoryUri = uris.firstOrNull {
+            it.lastPathSegment?.contains("category", ignoreCase = true) == true
+        } ?: uris[0]
+        val bookUri = uris.firstOrNull {
+            it.lastPathSegment?.contains("book", ignoreCase = true) == true
+        } ?: uris[1]
+        backupOperation(R.string.settings_import_invalid) {
+            val preview = legacyShelfImportService.parseAndPreview(categoryUri, bookUri)
+            stateInternal.update { it.copy(legacyPreview = preview) }
+        }
+    }
+
+    private fun confirmLegacyImport() {
+        val preview = stateInternal.value.legacyPreview ?: return
+        backupOperation(R.string.settings_import_failed) {
+            legacyShelfImportService.applyImport(preview)
+            stateInternal.update { it.copy(legacyPreview = null) }
+            output.showMessage(R.string.settings_import_success)
+        }
+    }
+
+    private fun exportNotFound(uri: Uri) {
+        val preview = stateInternal.value.legacyPreview ?: return
+        backupOperation(R.string.settings_export_failed) {
+            legacyShelfImportService.exportNotFound(preview, uri)
+            output.showMessage(R.string.settings_export_success)
+        }
+    }
+
     private fun backupOperation(failureMessage: Int, operation: suspend () -> Unit) {
         if (stateInternal.value.isBusy) return
         stateInternal.update { it.copy(isBusy = true) }
@@ -117,6 +174,9 @@ class GeneralPreferencesViewModel(
 data class GeneralPreferencesUiState(
     val showDialog: GeneralPreferencesDialog? = null,
     val isBusy: Boolean = false,
+    val legacyPreview: LegacyShelfImportPreview? = null,
+    /** 是否显示「导入书架（临时）」入口（关于页连点应用名 5 下后开启）。 */
+    val showLegacyShelfImport: Boolean = false,
 )
 
 sealed interface GeneralPreferencesDialog {
@@ -136,4 +196,8 @@ sealed interface GeneralPreferencesUiEvent {
         GeneralPreferencesUiEvent
     data class PrepareImport(val uri: Uri) : GeneralPreferencesUiEvent
     data object ImportSettings : GeneralPreferencesUiEvent
+    data class PickLegacyFiles(val uris: List<Uri>) : GeneralPreferencesUiEvent
+    data object ConfirmLegacyImport : GeneralPreferencesUiEvent
+    data object DismissLegacyPreview : GeneralPreferencesUiEvent
+    data class ExportNotFound(val uri: Uri) : GeneralPreferencesUiEvent
 }

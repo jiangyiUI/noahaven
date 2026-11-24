@@ -504,6 +504,8 @@ internal fun BookshelfScreenContent(
     if (showAddToShelfDialog) {
         AddToShelfDialog(
             groups = shelfGroups,
+            ungroupedId = shelfGroups.firstOrNull { it.isUngrouped }?.id,
+            ungroupedLabel = defaultGroupName,
             defaultGroupName = defaultGroupName,
             onDismiss = {
                 showAddToShelfDialog = false

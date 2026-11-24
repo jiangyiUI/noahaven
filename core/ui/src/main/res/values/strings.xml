@@ -18,6 +18,7 @@
     <string name="app_name" translatable="false">Noa Haven</string>
     <string name="about_description">Version, support, credits</string>
     <string name="about_name">About</string>
+    <string name="about_legacy_import_enabled">Legacy shelf import is now visible in General settings</string>
     <string name="check_update_name">Check for updates</string>
     <string name="check_update_description">Check for a new version</string>
     <string name="update_checking">Checking for updates…</string>
@@ -320,6 +321,7 @@
     <string name="played_progress">Played progress</string>
     <string name="date_added">Date added</string>
     <string name="last_read">Last read</string>
+    <string name="date_modified">Date modified</string>
     <string name="reading_progress">Reading progress</string>
     <string name="media_view_mode">Media view mode</string>
     <string name="enable_pip_from_settings">Picture-in-Picture is disabled. Enable it in Settings to use this feature.</string>
@@ -692,6 +694,15 @@
     <string name="book_shelf_group_count">%1$s %2$d</string>
     <string name="book_shelf_move_to_group">Move to group</string>
     <string name="book_shelf_copy_to_group">Copy to group</string>
+    <string name="book_shelf_ungrouped">Ungrouped</string>
+    <string name="book_shelf_add_subgroup">Add subgroup</string>
+    <string name="book_shelf_move_group">Move group</string>
+    <string name="book_shelf_copy_group">Copy group</string>
+    <string name="book_shelf_back">Back</string>
+    <string name="book_shelf_top_level">Top level</string>
+    <string name="book_shelf_move_group_to">Move group to</string>
+    <string name="book_shelf_copy_group_to">Copy group to</string>
+    <string name="book_shelf_delete_group_recursive_message">This will delete %1$d group(s) (including subgroups) and %2$d book record(s) in total. Files will not be deleted.</string>
 
     <!-- Reader -->
     <string name="reader_loading">Loading…</string>
@@ -756,4 +767,5 @@
     <string name="reader_show_time_battery">Show time &amp; battery</string>
 
     <string name="reader_untitled_chapter">Untitled chapter</string>
+    <string name="reader_chapter_delete">Remove from contents</string>
 </resources>

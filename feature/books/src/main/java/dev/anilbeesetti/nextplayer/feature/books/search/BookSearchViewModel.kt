@@ -12,6 +12,7 @@ import dev.anilbeesetti.nextplayer.core.model.ApplicationPreferences
 import dev.anilbeesetti.nextplayer.core.model.BookFile
 import dev.anilbeesetti.nextplayer.core.model.Folder
 import dev.anilbeesetti.nextplayer.core.ui.base.MviViewModel
+import dev.anilbeesetti.nextplayer.feature.books.data.BookShelfGroup
 import dev.anilbeesetti.nextplayer.feature.books.data.BookShelfRepository
 import java.io.File
 import kotlinx.coroutines.CoroutineDispatcher
@@ -46,7 +47,11 @@ class BookSearchViewModel(
     @InjectedParam private val shelfRepository: BookShelfRepository? = null,
 ) : MviViewModel<BookSearchUiState, BookSearchUiEvent>() {
 
-    data class Output(val navigateUp: () -> Unit, val openFolder: (String) -> Unit)
+    data class Output(
+        val navigateUp: () -> Unit,
+        val openFolder: (String) -> Unit,
+        val defaultGroupName: String = "",
+    )
 
     private val stateInternal = MutableStateFlow(value = BookSearchUiState(shelfOnly = shelfOnly))
     override val state: StateFlow<BookSearchUiState> = stateInternal.asStateFlow()
@@ -58,6 +63,16 @@ class BookSearchViewModel(
         collectPopularFolders()
         collectPreferences()
         collectSearchResults()
+        collectShelfGroups()
+    }
+
+    private fun collectShelfGroups() {
+        val repo = shelfRepository ?: return
+        viewModelScope.launch {
+            repo.groups.collect { groups ->
+                stateInternal.update { it.copy(shelfGroups = groups) }
+            }
+        }
     }
 
     private fun collectSearchHistory() {
@@ -202,6 +217,20 @@ class BookSearchViewModel(
         viewModelScope.launch { searchHistoryRepository.clearHistory() }
     }
 
+    /** 搜索结果加入书架：已有分组直接用，否则用输入的名字在顶级新建，都没给就进「未分组」。 */
+    fun addToShelf(groupId: Long?, newGroupName: String, paths: List<String>) {
+        val repo = shelfRepository ?: return
+        if (paths.isEmpty()) return
+        viewModelScope.launch {
+            val targetGroupId = when {
+                groupId != null -> groupId
+                newGroupName.isNotBlank() -> repo.createGroup(name = newGroupName, parentId = null)
+                else -> repo.ensureDefaultGroup(output.defaultGroupName)
+            }
+            repo.addPaths(groupId = targetGroupId, paths = paths)
+        }
+    }
+
     private fun List<BookFile>.filterBooks(preferences: ApplicationPreferences): List<BookFile> {
         val roots = preferences.bookFolders.map(::normalizePath).toSet()
         return filter {
@@ -272,6 +301,8 @@ data class BookSearchUiState(
     val searchResults: BookSearchResults = BookSearchResults(),
     val isSearching: Boolean = false,
     val preferences: ApplicationPreferences = ApplicationPreferences(),
+    /** 加入书架弹窗用的分组列表（含未分组），从书架仓库实时收集。 */
+    val shelfGroups: List<BookShelfGroup> = emptyList(),
     /** true = 书架专用搜索，不搜文件夹。 */
     val shelfOnly: Boolean = false,
 )

@@ -51,7 +51,7 @@ fun EntryProviderScope<NavKey>.bookshelfEntry(
 ) {
     entry<BookshelfRoute> {
         val context = LocalContext.current
-        val defaultGroupName = context.getString(R.string.book_shelf_default_group)
+        val defaultGroupName = context.getString(R.string.book_shelf_ungrouped)
         val browseViewModel = koinViewModel<BookshelfViewModel>()
         val shelfViewModel = koinViewModel<ShelfViewModel>()
         val tabsViewModel = koinViewModel<BookTabsViewModel>()
@@ -85,20 +85,18 @@ fun EntryProviderScope<NavKey>.bookSearchEntry(
     onOpenBook: (String) -> Unit,
 ) {
     entry<BookSearchRoute> { route ->
+        val context = LocalContext.current
+        val defaultGroupName = context.getString(R.string.book_shelf_ungrouped)
         val output = BookSearchViewModel.Output(
             navigateUp = onNavigateUp,
             openFolder = onOpenFolder,
+            defaultGroupName = defaultGroupName,
         )
-        val viewModel = if (route.shelfOnly) {
-            val shelfRepo = org.koin.compose.koinInject<dev.anilbeesetti.nextplayer.feature.books.data.BookShelfRepository>()
-            koinViewModel<BookSearchViewModel>(
-                parameters = { parametersOf(output, true, shelfRepo) },
-            )
-        } else {
-            koinViewModel<BookSearchViewModel>(
-                parameters = { parametersOf(output, false, null) },
-            )
-        }
+        // 浏览 tab 搜索也要支持「加入书架」，所以两种模式都注入书架仓库。
+        val shelfRepo = org.koin.compose.koinInject<dev.anilbeesetti.nextplayer.feature.books.data.BookShelfRepository>()
+        val viewModel = koinViewModel<BookSearchViewModel>(
+            parameters = { parametersOf(output, route.shelfOnly, shelfRepo) },
+        )
         SideEffect { viewModel.output = output }
         BookSearchScreen(viewModel = viewModel, onOpenBook = onOpenBook)
     }

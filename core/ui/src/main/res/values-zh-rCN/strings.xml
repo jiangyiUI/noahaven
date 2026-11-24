@@ -16,6 +16,7 @@
     <string name="settings_import_failed">无法完成设置导入。请重试。</string>
     <string name="settings_import_invalid">无法读取此文件，或其不包含支持的 JSON 设置</string>
     <string name="about_name">关于</string>
+    <string name="about_legacy_import_enabled">已在常规设置中显示导入书架入口</string>
     <string name="menu">菜单</string>
     <string name="player_name">播放器</string>
     <string name="settings">设置</string>
@@ -285,6 +286,7 @@
     <string name="played_progress">播放进度</string>
     <string name="date_added">加入日期</string>
     <string name="last_read">最近阅读</string>
+    <string name="date_modified">修改日期</string>
     <string name="reading_progress">阅读进度</string>
     <string name="media_view_mode">媒体浏览模式</string>
     <string name="control_buttons_alignment_left">左</string>
@@ -669,6 +671,15 @@
     <string name="book_shelf_group_count">%1$s %2$d</string>
     <string name="book_shelf_move_to_group">移动到分组</string>
     <string name="book_shelf_copy_to_group">复制到分组</string>
+    <string name="book_shelf_ungrouped">未分组</string>
+    <string name="book_shelf_add_subgroup">添加子分组</string>
+    <string name="book_shelf_move_group">移动分组</string>
+    <string name="book_shelf_copy_group">复制分组</string>
+    <string name="book_shelf_back">返回</string>
+    <string name="book_shelf_top_level">顶级</string>
+    <string name="book_shelf_move_group_to">移动分组到</string>
+    <string name="book_shelf_copy_group_to">复制分组到</string>
+    <string name="book_shelf_delete_group_recursive_message">将一并删除 %1$d 个分组（含子分组）和 %2$d 条书籍记录，不会删除磁盘文件。</string>
 
     <!-- Reader -->
     <string name="reader_loading">正在加载…</string>
@@ -732,4 +743,5 @@
     <string name="reader_show_chapter_title">显示顶部章节名</string>
     <string name="reader_show_time_battery">显示时间电量</string>
     <string name="reader_untitled_chapter">未命名章节</string>
+    <string name="reader_chapter_delete">从目录移除</string>
 </resources>

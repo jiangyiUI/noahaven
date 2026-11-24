@@ -8,6 +8,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -125,6 +126,7 @@ private fun AboutPreferencesScreenContent(
         ) {
             AboutApp(
                 appVersion = state.appVersion,
+                onAppNameClick = { onAction(AboutPreferencesAction.AppNameClicked) },
                 onGithubClick = {
                     uriHandler.openUriOrShowToast(
                         uri = GITHUB_URL,
@@ -158,6 +160,7 @@ private fun AboutPreferencesScreenContent(
 fun AboutApp(
     appVersion: String,
     modifier: Modifier = Modifier,
+    onAppNameClick: () -> Unit,
     onGithubClick: () -> Unit,
     onNextPlayerClick: () -> Unit,
 ) {
@@ -231,6 +234,7 @@ fun AboutApp(
                     text = stringResource(id = R.string.app_name),
                     fontSize = 22.sp,
                     color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.clickable(onClick = onAppNameClick),
                 )
 
                 Row(

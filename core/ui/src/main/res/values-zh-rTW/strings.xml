@@ -143,6 +143,7 @@
     <string name="video_orientation">影片方向</string>
     <string name="best_fit">最適合</string>
     <string name="about_name">關於</string>
+    <string name="about_legacy_import_enabled">已在常規設定中顯示導入書架入口</string>
     <string name="subtitle">字幕</string>
     <string name="title_activity_player">Next Player 活動</string>
     <string name="serif">襯線字型</string>
@@ -202,6 +203,7 @@
     <string name="played_progress">播放進度</string>
     <string name="date_added">加入日期</string>
     <string name="last_read">最近閱讀</string>
+    <string name="date_modified">修改日期</string>
     <string name="reading_progress">閱讀進度</string>
     <string name="media_view_mode">媒體檢視模式</string>
     <string name="control_buttons_alignment_left">左</string>
@@ -566,6 +568,15 @@
     <string name="book_shelf_group_count">%1$s %2$d</string>
     <string name="book_shelf_move_to_group">移動到分組</string>
     <string name="book_shelf_copy_to_group">複製到分組</string>
+    <string name="book_shelf_ungrouped">未分組</string>
+    <string name="book_shelf_add_subgroup">新增子分組</string>
+    <string name="book_shelf_move_group">移動分組</string>
+    <string name="book_shelf_copy_group">複製分組</string>
+    <string name="book_shelf_back">返回</string>
+    <string name="book_shelf_top_level">頂層</string>
+    <string name="book_shelf_move_group_to">移動分組到</string>
+    <string name="book_shelf_copy_group_to">複製分組到</string>
+    <string name="book_shelf_delete_group_recursive_message">將一併刪除 %1$d 個分組（含子分組）和 %2$d 條書籍記錄，不會刪除磁碟檔案。</string>
 
     <!-- Reader -->
     <string name="reader_loading">正在載入…</string>
@@ -629,4 +640,5 @@
     <string name="reader_show_chapter_title">顯示頂部章節名</string>
     <string name="reader_show_time_battery">顯示時間電量</string>
     <string name="reader_untitled_chapter">未命名章節</string>
+    <string name="reader_chapter_delete">從目錄移除</string>
 </resources>

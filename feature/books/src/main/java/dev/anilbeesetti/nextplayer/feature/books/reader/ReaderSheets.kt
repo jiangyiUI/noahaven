@@ -73,6 +73,8 @@ fun ReaderTocSheet(
     onOpenBookmark: (Bookmark) -> Unit,
     onDeleteBookmark: (Long) -> Unit,
     onRechapter: () -> Unit,
+    onRemoveChapter: (Int) -> Unit,
+    removable: Boolean,
     onDismiss: () -> Unit,
 ) {
     var tab by remember { mutableIntStateOf(0) }
@@ -143,7 +145,9 @@ fun ReaderTocSheet(
                     theme = theme,
                     content = content,
                     currentChapter = currentChapter,
+                    removable = removable,
                     onSelect = onSelectChapter,
+                    onRemove = onRemoveChapter,
                 )
                 else -> ReaderBookmarkList(
                     theme = theme,
@@ -189,8 +193,11 @@ private fun ReaderChapterList(
     theme: ReaderTheme,
     content: BookContent,
     currentChapter: Int,
+    removable: Boolean,
     onSelect: (Int) -> Unit,
+    onRemove: (Int) -> Unit,
 ) {
+    val canRemove = removable && content.chapters.size > 1
     LazyColumn(
         modifier = Modifier
             .fillMaxWidth()
@@ -241,6 +248,15 @@ private fun ReaderChapterList(
                         text = "$percent%",
                         style = TextStyle(color = theme.panelSub, fontSize = 11.sp),
                     )
+                }
+                if (canRemove) {
+                    IconButton(onClick = { onRemove(index) }) {
+                        Icon(
+                            imageVector = NextIcons.Delete,
+                            contentDescription = stringResource(R.string.reader_chapter_delete),
+                            tint = theme.panelSub,
+                        )
+                    }
                 }
             }
         }

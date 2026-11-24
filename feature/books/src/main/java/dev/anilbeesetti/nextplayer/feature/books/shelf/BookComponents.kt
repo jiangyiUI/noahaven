@@ -95,6 +95,7 @@ fun BookLibraryView(
     onBookClick: (BookFile) -> Unit,
     onFolderLongClick: (Folder) -> Unit = {},
     onBookLongClick: (BookFile) -> Unit = {},
+    showBookPath: Boolean = false,
 ) {
     val isTv = LocalContext.current.isTelevision
     val layoutDirection = LocalLayoutDirection.current
@@ -183,6 +184,7 @@ fun BookLibraryView(
                     isFirstItem = index == 0,
                     isLastItem = index == books.lastIndex,
                     selected = Uri.fromFile(File(book.path)).toString() in selectedIds,
+                    showPath = showBookPath,
                     onClick = { onBookClick(book) },
                     onLongClick = { onBookLongClick(book) },
                 )
@@ -285,6 +287,7 @@ fun BookItem(
     isFirstItem: Boolean = false,
     isLastItem: Boolean = false,
     selected: Boolean = false,
+    showPath: Boolean = false,
     onClick: () -> Unit = {},
     onLongClick: (() -> Unit)? = null,
 ) {
@@ -297,6 +300,7 @@ fun BookItem(
             isFirstItem = isFirstItem,
             isLastItem = isLastItem,
             selected = selected,
+            showPath = showPath,
             onClick = onClick,
             onLongClick = onLongClick,
         )
@@ -309,6 +313,7 @@ fun BookItem(
             isFirstItem = isFirstItem,
             isLastItem = isLastItem,
             selected = selected,
+            showPath = showPath,
             onClick = onClick,
             onLongClick = onLongClick,
         )
@@ -475,6 +480,7 @@ private fun BookListItem(
     isFirstItem: Boolean,
     isLastItem: Boolean,
     selected: Boolean,
+    showPath: Boolean = false,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)?,
 ) {
@@ -525,15 +531,31 @@ private fun BookListItem(
                 },
             )
         },
-        supportingContent = if (details.isNotEmpty()) {
+        supportingContent = if (details.isNotEmpty() || showPath) {
             {
-                Text(
-                    text = details.joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
+                Column {
+                    if (details.isNotEmpty()) {
+                        Text(
+                            text = details.joinToString(" · "),
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
+                    if (showPath) {
+                        Text(
+                            text = book.path,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(
+                                top = if (details.isNotEmpty()) 2.dp else 4.dp,
+                            ),
+                        )
+                    }
+                }
             }
         } else {
             null
@@ -551,6 +573,7 @@ private fun BookGridItem(
     isFirstItem: Boolean,
     isLastItem: Boolean,
     selected: Boolean,
+    showPath: Boolean = false,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)?,
     showFields: Boolean = true,
@@ -654,6 +677,17 @@ private fun BookGridItem(
                         else -> MaterialTheme.colorScheme.onSurface
                     },
                 )
+                if (showPath) {
+                    Text(
+                        text = book.path,
+                        maxLines = 1,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
             }
         },
     )

@@ -1177,6 +1177,9 @@ fun SelectionActionsSheet(
     showShareAction: Boolean = true,
     showCopyAction: Boolean = true,
     showReorderAction: Boolean = false,
+    showAddSubGroupAction: Boolean = false,
+    showMoveGroupAction: Boolean = false,
+    showCopyGroupAction: Boolean = false,
     onPlayAction: () -> Unit,
     onAddToPlaylistAction: () -> Unit,
     onAddToShelfAction: () -> Unit = {},
@@ -1188,6 +1191,9 @@ fun SelectionActionsSheet(
     onHideAction: () -> Unit,
     onDeleteAction: () -> Unit,
     onReorderAction: () -> Unit = {},
+    onAddSubGroupAction: () -> Unit = {},
+    onMoveGroupAction: () -> Unit = {},
+    onCopyGroupAction: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val isTv = remember { context.isTelevision }
@@ -1278,6 +1284,30 @@ fun SelectionActionsSheet(
                         imageVector = NextIcons.Reorder,
                         title = stringResource(R.string.book_shelf_sort_group),
                         onClick = onReorderAction,
+                    )
+                }
+                if (showAddSubGroupAction) {
+                    SelectionAction(
+                        isTv = isTv,
+                        imageVector = NextIcons.CreateNewFolder,
+                        title = stringResource(R.string.book_shelf_add_subgroup),
+                        onClick = onAddSubGroupAction,
+                    )
+                }
+                if (showMoveGroupAction) {
+                    SelectionAction(
+                        isTv = isTv,
+                        imageVector = NextIcons.Move,
+                        title = stringResource(R.string.book_shelf_move_group),
+                        onClick = onMoveGroupAction,
+                    )
+                }
+                if (showCopyGroupAction) {
+                    SelectionAction(
+                        isTv = isTv,
+                        imageVector = NextIcons.Copy,
+                        title = stringResource(R.string.book_shelf_copy_group),
+                        onClick = onCopyGroupAction,
                     )
                 }
                 if (showShareAction) {

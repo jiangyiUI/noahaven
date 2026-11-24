@@ -104,6 +104,8 @@ data class ApplicationPreferences(
     val bookDefaultChapterRuleId: String? = null,
     /** 是否已播种过初始自建规则（避免用户删除后又被自动加回）。 */
     val bookChapterRulesSeeded: Boolean = false,
+    /** 是否显示「导入书架（临时）」入口：默认隐藏，关于页连点应用名 5 下后永久开启。 */
+    val showLegacyShelfImport: Boolean = false,
 
     // Update
     /** 启动时自动检查更新开关。 */

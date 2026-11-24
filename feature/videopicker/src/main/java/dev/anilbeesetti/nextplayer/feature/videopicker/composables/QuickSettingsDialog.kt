@@ -193,6 +193,7 @@ fun QuickSettingsDialog(
                     ),
                     onLayoutModeChange = { preferences = preferences.copy(mediaLayoutMode = it) },
                     showLayout = !imageMode,
+                    dateLabel = if (shelfMode) R.string.date_modified else R.string.date,
                     onSortChange = {
                         preferences = preferences.copy(
                             sortBy = it.by,
@@ -203,6 +204,7 @@ fun QuickSettingsDialog(
                         shelfMode -> listOf(
                             Sort.By.TITLE,
                             Sort.By.SHELF_ADDED,
+                            Sort.By.DATE,
                             Sort.By.LAST_VIEWED,
                         )
                         imageMode -> listOf(Sort.By.TITLE, Sort.By.DATE, Sort.By.SIZE)

@@ -48,7 +48,7 @@ import dev.anilbeesetti.nextplayer.core.database.entities.PlaylistItemEntity
         BookShelfGroupEntity::class,
         BookShelfItemEntity::class,
     ],
-    version = 26,
+    version = 27,
     exportSchema = true,
 )
 abstract class MediaDatabase : RoomDatabase() {
@@ -785,6 +785,26 @@ abstract class MediaDatabase : RoomDatabase() {
                     CREATE UNIQUE INDEX IF NOT EXISTS `index_book_shelf_item_group_id_path`
                     ON `book_shelf_item` (`group_id`, `path`)
                     """,
+                )
+            }
+        }
+
+        /**
+         * 书架分组支持多级嵌套：补 parent_id（可空，null=一级分组）和 is_ungrouped
+         * （固定「未分组」标记）两列。列类型/可空性/默认值必须与 Entity 声明一致，
+         * 否则 Room 迁移校验失败。
+         */
+        val MIGRATION_26_27 = object : Migration(
+            26,
+            27,
+        ) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    sql = "ALTER TABLE `book_shelf_group` ADD COLUMN `parent_id` INTEGER",
+                )
+                db.execSQL(
+                    sql = "ALTER TABLE `book_shelf_group` " +
+                        "ADD COLUMN `is_ungrouped` INTEGER NOT NULL DEFAULT 0",
                 )
             }
         }

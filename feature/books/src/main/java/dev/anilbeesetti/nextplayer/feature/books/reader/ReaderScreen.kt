@@ -637,6 +637,10 @@ private fun ReaderContent(
                     viewModel.onAction(ReaderAction.RemoveBookmark(id))
                 },
                 onRechapter = { showChapterRules = true },
+                onRemoveChapter = { index ->
+                    viewModel.onAction(ReaderAction.RemoveChapter(index))
+                },
+                removable = viewModel.isTxtBook,
                 onDismiss = { showToc = false },
             )
         }

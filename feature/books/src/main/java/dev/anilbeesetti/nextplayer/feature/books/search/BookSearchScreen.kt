@@ -1,9 +1,13 @@
 package dev.anilbeesetti.nextplayer.feature.books.search
 
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,13 +38,17 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
@@ -64,8 +72,13 @@ import dev.anilbeesetti.nextplayer.core.ui.components.tvFocusRing
 import dev.anilbeesetti.nextplayer.core.ui.designsystem.NextIcons
 import dev.anilbeesetti.nextplayer.core.ui.extensions.copy
 import dev.anilbeesetti.nextplayer.core.ui.extensions.plus
+import dev.anilbeesetti.nextplayer.feature.books.shelf.AddToShelfDialog
 import dev.anilbeesetti.nextplayer.feature.books.shelf.BookLibraryView
 import dev.anilbeesetti.nextplayer.feature.videopicker.composables.FolderItem
+import dev.anilbeesetti.nextplayer.feature.videopicker.screens.mediapicker.SelectionActionsSheet
+import dev.anilbeesetti.nextplayer.feature.videopicker.state.SelectionItem
+import dev.anilbeesetti.nextplayer.feature.videopicker.state.rememberSelectionManager
+import java.io.File
 
 /** 书籍搜索页，结构与漫画搜索页一致。 */
 @Composable
@@ -85,6 +98,7 @@ fun BookSearchScreen(
             viewModel.onAction(BookSearchUiEvent.OnSearch(state.query))
             onOpenBook(book.path)
         },
+        onAddToShelf = viewModel::addToShelf,
     )
 }
 
@@ -93,76 +107,182 @@ internal fun BookSearchScreenContent(
     state: BookSearchUiState,
     onAction: (BookSearchUiEvent) -> Unit,
     onBookClick: (BookFile) -> Unit,
+    onAddToShelf: (groupId: Long?, newGroupName: String, paths: List<String>) -> Unit,
 ) {
+    val context = LocalContext.current
+    val defaultGroupName = stringResource(R.string.book_shelf_ungrouped)
     val focusRequester = remember { FocusRequester() }
+    val contentFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
+    val selectionManager = rememberSelectionManager()
+    var showAddToShelfDialog by rememberSaveable { mutableStateOf(false) }
+    var addToShelfPaths by remember { mutableStateOf<List<String>>(emptyList()) }
 
     LaunchedEffect(key1 = Unit) { focusRequester.requestFocus() }
 
+    val selectedItemsSize = selectionManager.selectionItems.size
+    val totalBooksSize = state.searchResults.books.size
+    val allSelected = totalBooksSize > 0 && selectedItemsSize >= totalBooksSize
+
     Scaffold(
         topBar = {
-            NextTopAppBar(
-                title = {
-                    NextOutlinedTextField(
-                        value = state.query,
-                        onValueChange = { onAction(BookSearchUiEvent.OnQueryChange(query = it)) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusRequester(focusRequester = focusRequester)
-                            .tvFocusRing(shape = CircleShape),
-                        placeholder = {
+            if (selectionManager.isInSelectionMode) {
+                // 选择模式：顶栏换成关闭 + 已选数量 + 全选，与浏览/书架列表的多选样式一致，
+                // 同时避免选择过程中误改搜索词。
+                NextTopAppBar(
+                    title = { Text(text = "", maxLines = 1) },
+                    navigationIcon = {
+                        Row(
+                            modifier = Modifier
+                                .clip(shape = CircleShape)
+                                .background(MaterialTheme.colorScheme.secondaryContainer)
+                                .clickable { selectionManager.exitSelectionMode() }
+                                .padding(8.dp)
+                                .padding(end = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Icon(
+                                imageVector = NextIcons.Close,
+                                contentDescription = stringResource(R.string.navigate_up),
+                            )
                             Text(
                                 text = stringResource(
-                                    if (state.shelfOnly) R.string.search_books
-                                    else R.string.search_books_and_folders,
+                                    R.string.m_n_selected,
+                                    selectedItemsSize,
+                                    totalBooksSize,
                                 ),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                style = MaterialTheme.typography.labelLarge,
                             )
-                        },
-                        textStyle = MaterialTheme.typography.bodyLarge,
-                        trailingIcon = {
-                            if (state.query.isNotEmpty()) {
-                                IconButton(onClick = {
-                                    onAction(BookSearchUiEvent.OnQueryChange(query = ""))
-                                }) {
-                                    Icon(
-                                        imageVector = NextIcons.Close,
-                                        contentDescription = stringResource(R.string.clear_history),
+                        }
+                    },
+                    actions = {
+                        FilledTonalIconButton(
+                            onClick = {
+                                if (allSelected) {
+                                    selectionManager.clearSelection()
+                                } else {
+                                    selectionManager.selectAll(
+                                        state.searchResults.books.map { it.toSearchSelectionItem() },
                                     )
                                 }
-                            } else if (state.isSearching) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    strokeWidth = 2.dp,
-                                )
-                            }
-                        },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(
-                            onSearch = {
-                                onAction(BookSearchUiEvent.OnSearch(state.query))
-                                keyboardController?.hide()
                             },
-                        ),
-                        shape = CircleShape,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            unfocusedBorderColor = Color.Transparent,
-                            focusedBorderColor = Color.Transparent,
-                            errorBorderColor = Color.Transparent,
-                            disabledBorderColor = Color.Transparent,
-                        ),
-                    )
-                },
-                navigationIcon = {
-                    FilledTonalIconButton(onClick = { onAction(BookSearchUiEvent.NavigateUp) }) {
-                        Icon(
-                            imageVector = NextIcons.ArrowBack,
-                            contentDescription = stringResource(id = R.string.navigate_up),
+                        ) {
+                            Icon(
+                                imageVector = if (allSelected) {
+                                    NextIcons.DeselectAll
+                                } else {
+                                    NextIcons.SelectAll
+                                },
+                                contentDescription = if (allSelected) {
+                                    stringResource(R.string.deselect_all)
+                                } else {
+                                    stringResource(R.string.select_all)
+                                },
+                            )
+                        }
+                    },
+                )
+            } else {
+                NextTopAppBar(
+                    title = {
+                        NextOutlinedTextField(
+                            value = state.query,
+                            onValueChange = { onAction(BookSearchUiEvent.OnQueryChange(query = it)) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(focusRequester = focusRequester)
+                                .tvFocusRing(shape = CircleShape),
+                            placeholder = {
+                                Text(
+                                    text = stringResource(
+                                        if (state.shelfOnly) R.string.search_books
+                                        else R.string.search_books_and_folders,
+                                    ),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                )
+                            },
+                            textStyle = MaterialTheme.typography.bodyLarge,
+                            trailingIcon = {
+                                if (state.query.isNotEmpty()) {
+                                    IconButton(onClick = {
+                                        onAction(BookSearchUiEvent.OnQueryChange(query = ""))
+                                    }) {
+                                        Icon(
+                                            imageVector = NextIcons.Close,
+                                            contentDescription = stringResource(R.string.clear_history),
+                                        )
+                                    }
+                                } else if (state.isSearching) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        strokeWidth = 2.dp,
+                                    )
+                                }
+                            },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(
+                                onSearch = {
+                                    onAction(BookSearchUiEvent.OnSearch(state.query))
+                                    keyboardController?.hide()
+                                },
+                            ),
+                            shape = CircleShape,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedBorderColor = Color.Transparent,
+                                focusedBorderColor = Color.Transparent,
+                                errorBorderColor = Color.Transparent,
+                                disabledBorderColor = Color.Transparent,
+                            ),
                         )
+                    },
+                    navigationIcon = {
+                        FilledTonalIconButton(onClick = { onAction(BookSearchUiEvent.NavigateUp) }) {
+                            Icon(
+                                imageVector = NextIcons.ArrowBack,
+                                contentDescription = stringResource(id = R.string.navigate_up),
+                            )
+                        }
+                    },
+                )
+            }
+        },
+        bottomBar = {
+            // 搜索结果只提供「加入书架」这一个批量动作，复用浏览列表的底栏样式。
+            SelectionActionsSheet(
+                show = selectionManager.isInSelectionMode &&
+                    selectionManager.selectionItems.isNotEmpty(),
+                contentFocusRequester = contentFocusRequester,
+                showRenameAction = false,
+                showInfoAction = false,
+                showHideAction = false,
+                showPlayAction = false,
+                showAddToPlaylistAction = false,
+                showAddToShelfAction = true,
+                showShareAction = false,
+                showCopyAction = false,
+                showMoveAction = false,
+                showDeleteAction = false,
+                onPlayAction = {},
+                onAddToPlaylistAction = {},
+                onRenameAction = {},
+                onShareAction = {},
+                onCopyAction = {},
+                onMoveAction = {},
+                onInfoAction = {},
+                onHideAction = {},
+                onDeleteAction = {},
+                onAddToShelfAction = {
+                    val paths = selectionManager.selectionItems
+                        .mapNotNull { (it as? SelectionItem.Video)?.path }
+                        .distinct()
+                    if (paths.isNotEmpty()) {
+                        addToShelfPaths = paths
+                        showAddToShelfDialog = true
                     }
                 },
             )
@@ -211,11 +331,50 @@ internal fun BookSearchScreenContent(
                         isSearching = state.isSearching,
                         contentPadding = updatedScaffoldPadding,
                         onFolderClick = { onAction(BookSearchUiEvent.OpenFolder(path = it)) },
-                        onBookClick = onBookClick,
+                        selectedIds = selectionManager.selectionItems.map { it.id }.toSet(),
+                        onBookClick = { book ->
+                            if (selectionManager.isInSelectionMode) {
+                                selectionManager.toggleSelection(book.toSearchSelectionItem())
+                            } else {
+                                onBookClick(book)
+                            }
+                        },
+                        onBookLongClick = { book ->
+                            selectionManager.toggleSelection(book.toSearchSelectionItem())
+                        },
+                        showBookPath = true,
                     )
                 }
             }
         }
+    }
+
+    BackHandler(enabled = selectionManager.isInSelectionMode) {
+        selectionManager.exitSelectionMode()
+    }
+
+    if (showAddToShelfDialog) {
+        AddToShelfDialog(
+            groups = state.shelfGroups,
+            ungroupedId = state.shelfGroups.firstOrNull { it.isUngrouped }?.id,
+            ungroupedLabel = defaultGroupName,
+            defaultGroupName = defaultGroupName,
+            onDismiss = {
+                showAddToShelfDialog = false
+                addToShelfPaths = emptyList()
+            },
+            onConfirm = { groupId, newGroupName ->
+                onAddToShelf(groupId, newGroupName, addToShelfPaths)
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.book_shelf_added),
+                    Toast.LENGTH_SHORT,
+                ).show()
+                showAddToShelfDialog = false
+                addToShelfPaths = emptyList()
+                selectionManager.exitSelectionMode()
+            },
+        )
     }
 }
 
@@ -372,7 +531,10 @@ private fun SearchResultsContent(
     isSearching: Boolean,
     contentPadding: PaddingValues = PaddingValues(),
     onFolderClick: (String) -> Unit,
+    selectedIds: Set<String> = emptySet(),
     onBookClick: (BookFile) -> Unit,
+    onBookLongClick: (BookFile) -> Unit = {},
+    showBookPath: Boolean = false,
 ) {
     AnimatedVisibility(
         visible = isSearching,
@@ -418,9 +580,19 @@ private fun SearchResultsContent(
                 books = searchResults.books,
                 preferences = preferences.copy(mediaViewMode = MediaViewMode.FOLDER_TREE),
                 contentPadding = contentPadding,
+                selectedIds = selectedIds,
                 onFolderClick = onFolderClick,
                 onBookClick = onBookClick,
+                onBookLongClick = onBookLongClick,
+                showBookPath = showBookPath,
             )
         }
     }
 }
+
+/** 把书籍转换成选管理器可识别的条目（id 用文件 Uri，与书架列表保持一致）。 */
+private fun BookFile.toSearchSelectionItem(): SelectionItem.Video = SelectionItem.Video(
+    name = displayName,
+    uriString = Uri.fromFile(File(path)).toString(),
+    path = path,
+)

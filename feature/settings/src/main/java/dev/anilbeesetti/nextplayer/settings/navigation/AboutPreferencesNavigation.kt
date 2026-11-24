@@ -1,6 +1,8 @@
 package dev.anilbeesetti.nextplayer.settings.navigation
 
+import android.widget.Toast
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
@@ -28,8 +30,12 @@ fun NavBackStack<NavKey>.navigateToLibraries() {
 
 fun EntryProviderScope<NavKey>.aboutPreferencesEntry(onNavigateUp: () -> Unit) {
     entry<AboutPreferencesRoute> {
+        val context = LocalContext.current
         val output = AboutPreferencesViewModel.Output(
             navigateUp = onNavigateUp,
+            showMessage = {
+                Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            },
         )
         val viewModel = koinViewModel<AboutPreferencesViewModel>(
             parameters = { parametersOf(output) },

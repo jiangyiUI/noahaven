@@ -37,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -84,6 +85,14 @@ private data class GroupPickerRequest(
     val mode: GroupPickerMode,
 )
 
+/** 分组子树移动/复制：要搬的源分组 + 动作。 */
+private enum class GroupTargetMode { MOVE, COPY }
+
+private data class GroupTargetRequest(
+    val group: BookShelfGroup,
+    val mode: GroupTargetMode,
+)
+
 /**
  * 「书架」tab：按分组展示收藏的书籍，布局/字段开关与「浏览」共用同一份偏好。
  * 长按分组管理分组，长按书籍进入多选模式——选完用 SelectionActionsSheet 批量操作。
@@ -98,8 +107,10 @@ fun ShelfScreen(
     val state by viewModel.state.collectAsStateWithLifecycle(
         minActiveState = Lifecycle.State.RESUMED,
     )
+    // 屏幕启动时确保「未分组」存在（老用户升级会把第一个顶级分组提升为未分组）
+    LaunchedEffect(Unit) { viewModel.ensureUngrouped() }
     // 每个分组一套滚动位置，push/pop 阅读页也能记住
-    val shelfGridState = rememberPersistentLazyGridState(key = state.selectedGroupId)
+    val shelfGridState = rememberPersistentLazyGridState(key = state.displayedGroupId)
     val navigationBottomPadding = LocalNavigationBottomPadding.current
     val selectionManager = rememberSelectionManager()
     val contentFocusRequester = remember { FocusRequester() }
@@ -112,6 +123,8 @@ fun ShelfScreen(
     var groupPickerRequest by remember { mutableStateOf<GroupPickerRequest?>(null) }
     var showNewGroupDialog by rememberSaveable { mutableStateOf(false) }
     var showRenameBookDialog by remember { mutableStateOf(false) }
+    var subGroupParent by remember { mutableStateOf<BookShelfGroup?>(null) }
+    var groupTargetRequest by remember { mutableStateOf<GroupTargetRequest?>(null) }
 
     val groupMenuOpen = groupMenuTarget != null
     val selectMode = selectionManager.isInSelectionMode
@@ -145,8 +158,10 @@ fun ShelfScreen(
     BackHandler(enabled = groupMenuOpen) {
         groupMenuTarget = null
     }
-    BackHandler(enabled = state.selectedGroupId != null && !selectMode && !groupMenuOpen) {
-        viewModel.selectGroup(null)
+    val canGoBack = state.barParentId != null ||
+        (state.displayedGroupId != null && state.displayedGroupId != state.ungroupedId)
+    BackHandler(enabled = canGoBack && !selectMode && !groupMenuOpen) {
+        viewModel.onBack()
     }
 
     Scaffold(
@@ -276,13 +291,18 @@ fun ShelfScreen(
                 }
 
                 groupMenuOpen -> {
-                    // 分组长按底栏：保持原有单选逻辑
+                    // 分组长按底栏：未分组不可删除/重命名/排序/建子分组/移动，但可复制
+                    val target = groupMenuTarget
+                    val isUngrouped = target?.isUngrouped == true
                     SelectionActionsSheet(
                         show = true,
                         contentFocusRequester = contentFocusRequester,
-                        showDeleteAction = true,
-                        showRenameAction = true,
-                        showReorderAction = true,
+                        showDeleteAction = !isUngrouped,
+                        showRenameAction = !isUngrouped,
+                        showReorderAction = !isUngrouped,
+                        showAddSubGroupAction = !isUngrouped,
+                        showMoveGroupAction = !isUngrouped,
+                        showCopyGroupAction = true,
                         showCopyAction = false,
                         showMoveAction = false,
                         showPlayAction = false,
@@ -292,15 +312,31 @@ fun ShelfScreen(
                         showInfoAction = false,
                         showHideAction = false,
                         onDeleteAction = {
-                            groupMenuTarget?.let { deleteGroupTarget = it }
+                            target?.let { deleteGroupTarget = it }
                             groupMenuTarget = null
                         },
                         onRenameAction = {
-                            groupMenuTarget?.let { renameGroupTarget = it }
+                            target?.let { renameGroupTarget = it }
                             groupMenuTarget = null
                         },
                         onReorderAction = {
-                            groupMenuTarget?.let { reorderGroupTarget = it }
+                            target?.let { reorderGroupTarget = it }
+                            groupMenuTarget = null
+                        },
+                        onAddSubGroupAction = {
+                            target?.let { subGroupParent = it }
+                            groupMenuTarget = null
+                        },
+                        onMoveGroupAction = {
+                            target?.let {
+                                groupTargetRequest = GroupTargetRequest(it, GroupTargetMode.MOVE)
+                            }
+                            groupMenuTarget = null
+                        },
+                        onCopyGroupAction = {
+                            target?.let {
+                                groupTargetRequest = GroupTargetRequest(it, GroupTargetMode.COPY)
+                            }
                             groupMenuTarget = null
                         },
                         onCopyAction = {},
@@ -331,13 +367,20 @@ fun ShelfScreen(
         ) {
             ShelfGroupChips(
                 groups = state.groups,
-                selectedGroupId = state.selectedGroupId,
-                allCount = state.allCount,
+                ungroupedId = state.ungroupedId,
+                ungroupedLabel = stringResource(R.string.book_shelf_ungrouped),
+                barParentId = state.barParentId,
+                displayedGroupId = state.displayedGroupId,
                 groupCounts = state.groupCounts,
                 onSelectGroup = { groupId ->
                     selectionManager.exitSelectionMode()
                     groupMenuTarget = null
-                    viewModel.selectGroup(groupId)
+                    viewModel.onGroupClick(groupId)
+                },
+                onBack = {
+                    selectionManager.exitSelectionMode()
+                    groupMenuTarget = null
+                    viewModel.onBack()
                 },
                 onGroupLongClick = { group ->
                     selectionManager.exitSelectionMode()
@@ -461,6 +504,8 @@ fun ShelfScreen(
     groupPickerRequest?.let { request ->
         AddToShelfDialog(
             groups = state.groups,
+            ungroupedId = state.ungroupedId,
+            ungroupedLabel = stringResource(R.string.book_shelf_ungrouped),
             defaultGroupName = viewModel.output.defaultGroupName,
             title = stringResource(
                 when (request.mode) {
@@ -532,7 +577,16 @@ fun ShelfScreen(
         AlertDialog(
             onDismissRequest = { deleteGroupTarget = null },
             title = { Text(text = stringResource(R.string.book_shelf_delete_group)) },
-            text = { Text(text = stringResource(R.string.book_shelf_delete_group_message)) },
+            text = {
+                val (groupCount, bookCount) = viewModel.deleteImpact(group.id)
+                Text(
+                    text = stringResource(
+                        R.string.book_shelf_delete_group_recursive_message,
+                        groupCount,
+                        bookCount,
+                    ),
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -554,11 +608,56 @@ fun ShelfScreen(
     reorderGroupTarget?.let { group ->
         GroupOrderDialog(
             group = group,
-            groups = state.groups,
+            groups = state.groups
+                .filter { it.parentId == group.parentId && !it.isUngrouped }
+                .sortedBy { it.sortOrder },
             onDismiss = { reorderGroupTarget = null },
             onConfirm = { index ->
                 viewModel.moveGroupTo(group.id, index)
                 reorderGroupTarget = null
+            },
+        )
+    }
+
+    // 长按分组 → 添加子分组
+    subGroupParent?.let { parent ->
+        TextInputDialog(
+            title = stringResource(R.string.book_shelf_add_subgroup),
+            stateKey = "sub_group_${parent.id}",
+            onDismiss = { subGroupParent = null },
+            onDone = { name ->
+                viewModel.createSubGroup(parent.id, name)
+                subGroupParent = null
+            },
+        )
+    }
+
+    // 移动/复制分组子树 → 选目标父分组（含「顶级」，排除自身/子孙）
+    groupTargetRequest?.let { request ->
+        GroupTargetPickerDialog(
+            groups = state.groups,
+            ungroupedId = state.ungroupedId,
+            sourceGroupId = request.group.id,
+            title = stringResource(
+                when (request.mode) {
+                    GroupTargetMode.MOVE -> R.string.book_shelf_move_group_to
+                    GroupTargetMode.COPY -> R.string.book_shelf_copy_group_to
+                },
+            ),
+            onDismiss = { groupTargetRequest = null },
+            onConfirm = { targetParentId ->
+                when (request.mode) {
+                    GroupTargetMode.MOVE -> viewModel.moveGroupSubtreeTo(
+                        groupId = request.group.id,
+                        targetParentId = targetParentId,
+                    )
+
+                    GroupTargetMode.COPY -> viewModel.copyGroupSubtreeTo(
+                        groupId = request.group.id,
+                        targetParentId = targetParentId,
+                    )
+                }
+                groupTargetRequest = null
             },
         )
     }
@@ -578,17 +677,30 @@ private fun dev.anilbeesetti.nextplayer.core.model.BookFile.toSelectionItem() =
         path = path,
     )
 
-/** 分组选择：全部 + 各分组（带数量），末尾是「新建分组」加号，加号固定在右侧不随滚动。 */
+/**
+ * 分组栏：顶级显示 [未分组] + 一级分组 + [＋添加]；
+ * 进入某分组的子层后显示 [←返回] + 该分组的子分组 + [＋添加]。
+ * 有子分组的分组点击会下钻，无子分组的仅同层选中。
+ */
 @Composable
 private fun ShelfGroupChips(
     groups: List<BookShelfGroup>,
-    selectedGroupId: Long?,
-    allCount: Int,
+    ungroupedId: Long?,
+    ungroupedLabel: String,
+    barParentId: Long?,
+    displayedGroupId: Long?,
     groupCounts: Map<Long, Int>,
-    onSelectGroup: (Long?) -> Unit,
+    onSelectGroup: (Long) -> Unit,
+    onBack: () -> Unit,
     onGroupLongClick: (BookShelfGroup) -> Unit,
     onCreateGroup: () -> Unit,
 ) {
+    val isTopLevel = barParentId == null
+    val visibleGroups = if (isTopLevel) {
+        groups.filter { it.parentId == null && !it.isUngrouped }
+    } else {
+        groups.filter { it.parentId == barParentId }
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -603,20 +715,31 @@ private fun ShelfGroupChips(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            item(key = "all") {
-                ShelfChip(
-                    selected = selectedGroupId == null,
-                    label = stringResource(
-                        R.string.book_shelf_group_count,
-                        stringResource(R.string.book_shelf_group_all),
-                        allCount,
-                    ),
-                    onClick = { onSelectGroup(null) },
-                )
+            if (!isTopLevel) {
+                item(key = "back") {
+                    BackChip(onClick = onBack)
+                }
             }
-            items(items = groups, key = { it.id }) { group ->
+            if (isTopLevel && ungroupedId != null) {
+                val uid = ungroupedId
+                item(key = "ungrouped") {
+                    ShelfChip(
+                        selected = displayedGroupId == uid,
+                        label = stringResource(
+                            R.string.book_shelf_group_count,
+                            ungroupedLabel,
+                            groupCounts[uid] ?: 0,
+                        ),
+                        onClick = { onSelectGroup(uid) },
+                        onLongClick = {
+                            groups.firstOrNull { it.id == uid }?.let(onGroupLongClick)
+                        },
+                    )
+                }
+            }
+            items(items = visibleGroups, key = { it.id }) { group ->
                 ShelfChip(
-                    selected = selectedGroupId == group.id,
+                    selected = displayedGroupId == group.id,
                     label = stringResource(
                         R.string.book_shelf_group_count,
                         group.name,
@@ -707,6 +830,40 @@ private fun CreateGroupChip(
     }
 }
 
+/** 子层的返回入口：← 返回，与分组胶囊同一视觉语言。 */
+@Composable
+private fun BackChip(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    ) {
+        Row(
+            modifier = Modifier
+                .clickable(onClick = onClick)
+                .height(36.dp)
+                .padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Icon(
+                imageVector = NextIcons.ArrowBack,
+                contentDescription = stringResource(R.string.book_shelf_back),
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = stringResource(R.string.book_shelf_back),
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
 /** 调整分组位置：选中要放到这一行的第几个。 */
 @Composable
 private fun GroupOrderDialog(
@@ -758,4 +915,106 @@ private fun GroupOrderDialog(
             CancelButton(onClick = onDismiss)
         },
     )
+}
+
+/**
+ * 移动/复制分组子树时选目标父分组：顶部是「顶级」，下面按层级缩进列出各分组；
+ * 自身与自身子孙不可选（避免循环），「未分组」不出现在列表里（不允许有子分组）。
+ */
+@Composable
+private fun GroupTargetPickerDialog(
+    groups: List<BookShelfGroup>,
+    ungroupedId: Long?,
+    sourceGroupId: Long,
+    title: String,
+    onDismiss: () -> Unit,
+    onConfirm: (targetParentId: Long?) -> Unit,
+) {
+    // 自身 + 子孙不能作为目标（避免循环）
+    val blocked = subtreeGroupIds(groups, rootId = sourceGroupId, includeSelf = true)
+    // 「顶级」用一个不可能与真实 id 冲突的哨兵值表示
+    val topLevelSentinel = Long.MIN_VALUE
+    var selectedId by rememberSaveable(sourceGroupId) { mutableStateOf(topLevelSentinel) }
+    val ordered = remember(groups, ungroupedId) { groupsInDisplayOrder(groups, ungroupedId) }
+    NextDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = title) },
+        content = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 320.dp)
+                    .verticalScroll(state = rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .selectable(
+                            selected = selectedId == topLevelSentinel,
+                            role = Role.RadioButton,
+                            onClick = { selectedId = topLevelSentinel },
+                        )
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(selected = selectedId == topLevelSentinel, onClick = null)
+                    Text(
+                        text = stringResource(R.string.book_shelf_top_level),
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
+                }
+                ordered.forEach { (group, depth) ->
+                    if (group.id in blocked) return@forEach
+                    val selected = selectedId == group.id
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = selected,
+                                role = Role.RadioButton,
+                                onClick = { selectedId = group.id },
+                            )
+                            .padding(
+                                start = (8 + depth * 16).dp,
+                                top = 8.dp,
+                                bottom = 8.dp,
+                                end = 8.dp,
+                            ),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = selected, onClick = null)
+                        Text(
+                            text = group.name,
+                            modifier = Modifier.padding(start = 8.dp),
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            DoneButton(
+                onClick = {
+                    onConfirm(if (selectedId == topLevelSentinel) null else selectedId)
+                },
+            )
+        },
+        dismissButton = { CancelButton(onClick = onDismiss) },
+    )
+}
+
+/** 按层级顺序（父在前、子缩进）列出非「未分组」的分组，返回分组与深度。 */
+internal fun groupsInDisplayOrder(
+    groups: List<BookShelfGroup>,
+    ungroupedId: Long?,
+): List<Pair<BookShelfGroup, Int>> {
+    val byParent = groups.filter { it.id != ungroupedId }.groupBy { it.parentId }
+    val result = mutableListOf<Pair<BookShelfGroup, Int>>()
+    fun walk(parentId: Long?, depth: Int) {
+        for (child in byParent[parentId].orEmpty()) {
+            result += child to depth
+            walk(child.id, depth + 1)
+        }
+    }
+    walk(null, 0)
+    return result
 }

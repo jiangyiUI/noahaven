@@ -11,6 +11,12 @@ data class BookShelfGroupEntity(
     val id: Long = 0,
     @ColumnInfo(name = "name")
     val name: String,
+    /** 父分组 id，null 表示一级分组。 */
+    @ColumnInfo(name = "parent_id")
+    val parentId: Long? = null,
+    /** 固定的「未分组」分组标记，不可删除/重命名/加子分组/移动。 */
+    @ColumnInfo(name = "is_ungrouped", defaultValue = "0")
+    val isUngrouped: Boolean = false,
     @ColumnInfo(name = "sort_order")
     val sortOrder: Int = 0,
     @ColumnInfo(name = "created_at")
