@@ -286,6 +286,9 @@
     <string name="played_progress">播放进度</string>
     <string name="date_added">加入日期</string>
     <string name="last_read">最近阅读</string>
+    <string name="default_sort">默认</string>
+    <string name="shelf_sort_recent_then_modified">最近阅读+修改时间</string>
+    <string name="shelf_sort_recent_then_added">最近阅读+加入时间</string>
     <string name="date_modified">修改日期</string>
     <string name="reading_progress">阅读进度</string>
     <string name="media_view_mode">媒体浏览模式</string>
@@ -318,6 +321,7 @@
     <string name="image_layout">图片布局</string>
     <string name="comic_layout">漫画布局</string>
     <string name="book_layout">书籍布局</string>
+    <string name="book_shelf_group_layout">分组布局</string>
     <string name="continue_reading">继续阅读</string>
     <string name="info">信息</string>
     <string name="play">播放</string>
@@ -706,6 +710,12 @@
     <string name="reader_bookmark_add">添加书签</string>
     <string name="reader_bookmark_remove">删除书签</string>
     <string name="reader_bookmark_delete">删除书签</string>
+    <string name="reader_search">全文搜索</string>
+    <string name="reader_search_history">搜索历史</string>
+    <string name="reader_search_hint">搜索书籍内容…</string>
+    <string name="reader_search_found">找到 %1$d 条结果</string>
+    <string name="reader_search_no_results">未找到匹配内容</string>
+    <string name="reader_search_clear">清除搜索</string>
     <string name="reader_settings">阅读设置</string>
     <string name="reader_settings_desc">书籍阅读选项</string>
     <string name="reader_theme_light">浅色主题</string>

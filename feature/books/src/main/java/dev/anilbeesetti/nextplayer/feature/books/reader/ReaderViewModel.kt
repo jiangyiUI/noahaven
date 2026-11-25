@@ -72,6 +72,37 @@ class ReaderViewModel(
         }
     }
 
+    /** 记录一次阅读器全文搜索（去重并提到最前，最多保留 30 条）。 */
+    fun addReaderSearchQuery(query: String) {
+        val q = query.trim()
+        if (q.isEmpty()) return
+        viewModelScope.launch {
+            preferencesRepository.updateApplicationPreferences { prefs ->
+                val current = prefs.bookSearchHistory[bookPath].orEmpty()
+                val updated = (listOf(q) + current.filterNot { it.equals(q, ignoreCase = true) }).take(30)
+                prefs.copy(bookSearchHistory = prefs.bookSearchHistory + (bookPath to updated))
+            }
+        }
+    }
+
+    fun removeReaderSearchQuery(query: String) {
+        viewModelScope.launch {
+            preferencesRepository.updateApplicationPreferences { prefs ->
+                val current = prefs.bookSearchHistory[bookPath].orEmpty()
+                val updated = current.filterNot { it == query }
+                prefs.copy(bookSearchHistory = prefs.bookSearchHistory + (bookPath to updated))
+            }
+        }
+    }
+
+    fun clearReaderSearchHistory() {
+        viewModelScope.launch {
+            preferencesRepository.updateApplicationPreferences { prefs ->
+                prefs.copy(bookSearchHistory = prefs.bookSearchHistory - bookPath)
+            }
+        }
+    }
+
     private var saveJob: Job? = null
 
     init {
@@ -94,7 +125,8 @@ class ReaderViewModel(
         viewModelScope.launch {
             preferencesRepository.applicationPreferences.collect { prefs ->
                 val list = prefs.bookBookmarks[bookPath].orEmpty().sortedBy { it.createdAt }
-                stateInternal.update { it.copy(bookmarks = list) }
+                val history = prefs.bookSearchHistory[bookPath].orEmpty()
+                stateInternal.update { it.copy(bookmarks = list, searchHistory = history) }
             }
         }
         viewModelScope.launch {
@@ -161,6 +193,8 @@ class ReaderViewModel(
 
             is ReaderAction.SaveChapterRule -> viewModelScope.launch {
                 chapterRuleRepository.upsertCustomRule(action.rule, action.setAsDefault)
+                // 保存后立刻重算当前书的章数预览，新/改规则不必等下次打开列表才显示计数，否则会一直转圈。
+                previewChapterCounts()
             }
 
             is ReaderAction.DeleteChapterRule -> viewModelScope.launch {
@@ -396,6 +430,8 @@ data class ReaderUiState(
     val finished: Boolean = false,
     /** 当前书籍的书签，按创建时间升序。 */
     val bookmarks: List<Bookmark> = emptyList(),
+    /** 当前书籍的阅读器全文搜索历史，最近使用在前。 */
+    val searchHistory: List<String> = emptyList(),
 )
 
 sealed interface ReaderAction {

@@ -77,6 +77,8 @@ data class ApplicationPreferences(
     val bookShowSizeField: Boolean = false,
     val bookShowExtensionField: Boolean = false,
     val bookShowResolutionField: Boolean = false,
+    /** 书架 tab 的分组文件夹布局（列表/网格，与浏览 tab 分开记忆）。 */
+    val shelfGroupLayoutMode: MediaLayoutMode = MediaLayoutMode.LIST,
     /** 书架 tab 的布局/排序（与浏览 tab 分开记忆）。 */
     val shelfLayoutMode: ImageLayoutMode = ImageLayoutMode.NINE_GRID,
     val shelfSortBy: Sort.By = Sort.By.TITLE,
@@ -92,6 +94,8 @@ data class ApplicationPreferences(
     val bookLastViewedAt: Map<String, Long> = emptyMap(),
     /** 每本书的书签列表，key = 书籍绝对路径。 */
     val bookBookmarks: Map<String, List<Bookmark>> = emptyMap(),
+    /** 每本书的阅读器全文搜索历史，key = 书籍绝对路径，列表按最近使用排序（最新在前）。 */
+    val bookSearchHistory: Map<String, List<String>> = emptyMap(),
     /** 书籍页顶部 tab（书架/浏览）的顺序，可在 tab 上长按拖动调整。 */
     val bookLibraryTabOrder: List<BookLibraryTab> = BookLibraryTab.defaultOrder,
     /**

@@ -229,6 +229,14 @@ class ChapterPaginator(
             if (fitLines < layout.lineCount) break
         }
 
+        // 页内最后一段后面没有内容，不再预留其尾部间距，把这部分高度还给正文，减少页底留白。
+        if (blocks.isNotEmpty()) {
+            val lastSpacing = when (blocks.last()) {
+                is PageBlock.Heading -> headingSpacingPx
+                else -> paragraphSpacingPx
+            }
+            used = (used - lastSpacing).coerceAtLeast(0f)
+        }
         return FillResult(blocks = blocks, consumed = cursor.coerceAtLeast(start), used = used)
     }
 

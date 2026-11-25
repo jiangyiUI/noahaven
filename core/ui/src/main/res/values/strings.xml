@@ -321,6 +321,9 @@
     <string name="played_progress">Played progress</string>
     <string name="date_added">Date added</string>
     <string name="last_read">Last read</string>
+    <string name="default_sort">Default</string>
+    <string name="shelf_sort_recent_then_modified">Recent + modified</string>
+    <string name="shelf_sort_recent_then_added">Recent + added</string>
     <string name="date_modified">Date modified</string>
     <string name="reading_progress">Reading progress</string>
     <string name="media_view_mode">Media view mode</string>
@@ -355,6 +358,7 @@
     <string name="image_layout">Image layout</string>
     <string name="comic_layout">Comic layout</string>
     <string name="book_layout">Book layout</string>
+    <string name="book_shelf_group_layout">Group layout</string>
     <string name="continue_reading">Continue reading</string>
     <string name="info">Info</string>
     <string name="play">Play</string>
@@ -729,6 +733,12 @@
     <string name="reader_bookmark_add">Add bookmark</string>
     <string name="reader_bookmark_remove">Remove bookmark</string>
     <string name="reader_bookmark_delete">Delete bookmark</string>
+    <string name="reader_search">Search in book</string>
+    <string name="reader_search_history">Search history</string>
+    <string name="reader_search_hint">Search in book…</string>
+    <string name="reader_search_found">%1$d result(s) found</string>
+    <string name="reader_search_no_results">No matches found</string>
+    <string name="reader_search_clear">Clear search</string>
     <string name="reader_settings">Reading settings</string>
     <string name="reader_settings_desc">Book reading options</string>
     <string name="reader_theme_light">Light theme</string>

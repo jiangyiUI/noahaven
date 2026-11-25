@@ -475,11 +475,19 @@ internal fun sortShelfBooks(
         }
 
         Sort.By.LAST_VIEWED -> {
+            // 「默认」排序：先按最近阅读从新到旧（从未阅读的统一排最后），次级键由下方胶囊选择——
+            // ASCENDING → 文件修改时间，DESCENDING → 加入书架时间，两者都从新到旧。
             val lastViewed = preferences.bookLastViewedAt
+            val entryAddedAt = entries.groupBy { it.path }
+                .mapValues { (_, es) -> es.minOf { it.addedAt } }
+            val secondary: (ShelfBook) -> Long = if (sort.order == Sort.Order.DESCENDING) {
+                { entryAddedAt[it.book.path] ?: 0L }
+            } else {
+                { it.book.dateModified }
+            }
             books.sortedWith(
-                compareBy<ShelfBook> { lastViewed[it.book.path] ?: Long.MIN_VALUE }
-                    .then(baseComparator)
-                    .run { if (sort.order == Sort.Order.DESCENDING) reversed() else this },
+                compareByDescending<ShelfBook> { lastViewed[it.book.path] ?: 0L }
+                    .thenByDescending(secondary),
             )
         }
 
@@ -509,8 +517,8 @@ internal fun subtreeGroupIds(
 /** 把书架 tab 专属字段映射成通用 ApplicationPreferences，供 QuickSettingsDialog 绑定。 */
 internal fun ApplicationPreferences.toShelfPreferences(): ApplicationPreferences = copy(
     mediaViewMode = MediaViewMode.VIDEOS,
-    mediaLayoutMode = MediaLayoutMode.LIST,
-    imageFolderLayoutMode = MediaLayoutMode.LIST,
+    mediaLayoutMode = shelfGroupLayoutMode,
+    imageFolderLayoutMode = shelfGroupLayoutMode,
     imageLayoutMode = shelfLayoutMode,
     sortBy = shelfSortBy,
     sortOrder = shelfSortOrder,
@@ -527,6 +535,7 @@ internal fun ApplicationPreferences.toShelfPreferences(): ApplicationPreferences
 internal suspend fun PreferencesRepository.updateShelfPreferences(preferences: ApplicationPreferences) {
     updateApplicationPreferences {
         it.copy(
+            shelfGroupLayoutMode = preferences.mediaLayoutMode,
             shelfLayoutMode = preferences.imageLayoutMode,
             shelfSortBy = preferences.sortBy,
             shelfSortOrder = preferences.sortOrder,

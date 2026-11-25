@@ -111,9 +111,16 @@ class ChapterRuleRepository(
 
     private fun combineRules(prefs: ApplicationPreferences): List<ChapterRule> {
         val custom = parseCustom(prefs)
-        // 内置按 sortOrder，自建按 sortOrder；同 sortOrder 内置在前，保持稳定。
+        val defaultId = prefs.bookDefaultChapterRuleId
+        // 排序：默认规则置顶 → 自定义规则 → 内置规则；同组内按 sortOrder 升序，保持稳定。
+        fun rank(rule: ChapterRule): Int = when {
+            defaultId != null && rule.id == defaultId -> 0
+            !rule.isBuiltin -> 1
+            else -> 2
+        }
         return (builtinRules + custom).sortedWith(
-            compareBy<ChapterRule> { it.sortOrder }
+            compareBy<ChapterRule> { rank(it) }
+                .thenBy { it.sortOrder }
                 .thenBy { if (it.isBuiltin) 0 else 1 },
         )
     }

@@ -203,6 +203,9 @@
     <string name="played_progress">播放進度</string>
     <string name="date_added">加入日期</string>
     <string name="last_read">最近閱讀</string>
+    <string name="default_sort">預設</string>
+    <string name="shelf_sort_recent_then_modified">最近閱讀+修改時間</string>
+    <string name="shelf_sort_recent_then_added">最近閱讀+加入時間</string>
     <string name="date_modified">修改日期</string>
     <string name="reading_progress">閱讀進度</string>
     <string name="media_view_mode">媒體檢視模式</string>
@@ -582,6 +585,7 @@
     <string name="book_shelf_no_group">不分組</string>
     <string name="book_shelf_root_directory">根目錄</string>
     <string name="book_shelf_clear">清除</string>
+    <string name="book_shelf_group_layout">分組佈局</string>
     <string name="book_shelf_mark_read">標記為已讀</string>
     <string name="book_shelf_mark_unread">標記為未讀</string>
     <string name="book_shelf_empty_unread">沒有未讀的書</string>
@@ -603,6 +607,12 @@
     <string name="reader_bookmark_add">加入書籤</string>
     <string name="reader_bookmark_remove">移除書籤</string>
     <string name="reader_bookmark_delete">刪除書籤</string>
+    <string name="reader_search">全文搜尋</string>
+    <string name="reader_search_history">搜尋歷史</string>
+    <string name="reader_search_hint">搜尋書籍內容…</string>
+    <string name="reader_search_found">找到 %1$d 條結果</string>
+    <string name="reader_search_no_results">未找到匹配內容</string>
+    <string name="reader_search_clear">清除搜尋</string>
     <string name="reader_settings">閱讀設定</string>
     <string name="reader_settings_desc">書籍閱讀選項</string>
     <string name="reader_theme_light">淺色主題</string>

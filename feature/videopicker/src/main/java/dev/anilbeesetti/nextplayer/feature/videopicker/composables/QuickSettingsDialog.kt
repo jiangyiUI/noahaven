@@ -109,43 +109,58 @@ fun QuickSettingsDialog(
                     }
                 }
                 if (imageMode) {
-                    // shelfMode（书架 tab）没有文件夹概念，跳过文件夹布局
-                    if (!shelfMode) {
-                        DialogSectionTitle(text = stringResource(R.string.folder_layout))
-                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                            MediaLayoutMode.entries.forEachIndexed { index, mode ->
-                                SegmentedButton(
-                                    selected = preferences.imageFolderLayoutMode == mode,
-                                    onClick = {
-                                        preferences =
-                                            preferences.copy(imageFolderLayoutMode = mode)
-                                    },
-                                    shape = SegmentedButtonDefaults.itemShape(
-                                        index = index,
-                                        count = MediaLayoutMode.entries.size,
+                    // 书架 tab 显示「分组布局」（绑定 mediaLayoutMode，映射到 shelfGroupLayoutMode）；
+                    // 其他图片/漫画 tab 显示「文件夹布局」（绑定 imageFolderLayoutMode）。
+                    DialogSectionTitle(
+                        text = stringResource(
+                            id = if (shelfMode) {
+                                R.string.book_shelf_group_layout
+                            } else {
+                                R.string.folder_layout
+                            },
+                        ),
+                    )
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        MediaLayoutMode.entries.forEachIndexed { index, mode ->
+                            val selected = if (shelfMode) {
+                                preferences.mediaLayoutMode == mode
+                            } else {
+                                preferences.imageFolderLayoutMode == mode
+                            }
+                            SegmentedButton(
+                                selected = selected,
+                                onClick = {
+                                    preferences = if (shelfMode) {
+                                        preferences.copy(mediaLayoutMode = mode)
+                                    } else {
+                                        preferences.copy(imageFolderLayoutMode = mode)
+                                    }
+                                },
+                                shape = SegmentedButtonDefaults.itemShape(
+                                    index = index,
+                                    count = MediaLayoutMode.entries.size,
+                                ),
+                                colors = SegmentedButtonDefaults.colors(
+                                    activeContentColor = MaterialTheme.colorScheme.primary,
+                                    activeBorderColor = MaterialTheme.colorScheme.primary,
+                                ),
+                            ) {
+                                Text(
+                                    text = stringResource(
+                                        id = if (mode == MediaLayoutMode.LIST) {
+                                            R.string.list
+                                        } else {
+                                            R.string.grid
+                                        },
                                     ),
-                                    colors = SegmentedButtonDefaults.colors(
-                                        activeContentColor = MaterialTheme.colorScheme.primary,
-                                        activeBorderColor = MaterialTheme.colorScheme.primary,
-                                    ),
-                                ) {
-                                    Text(
-                                        text = stringResource(
-                                            id = if (mode == MediaLayoutMode.LIST) {
-                                                R.string.list
-                                            } else {
-                                                R.string.grid
-                                            },
-                                        ),
-                                    )
-                                }
+                                )
                             }
                         }
                     }
                     DialogSectionTitle(
                         text = stringResource(
                             when {
-                                shelfMode -> R.string.book_layout
+                                shelfMode || bookMode -> R.string.book_layout
                                 comicMode -> R.string.comic_layout
                                 else -> R.string.image_layout
                             },
@@ -194,6 +209,8 @@ fun QuickSettingsDialog(
                     onLayoutModeChange = { preferences = preferences.copy(mediaLayoutMode = it) },
                     showLayout = !imageMode,
                     dateLabel = if (shelfMode) R.string.date_modified else R.string.date,
+                    // 书架「默认（最近阅读）」排序：下方胶囊换成两个长文本次级选项（无图标）。
+                    shelfLastViewedMode = shelfMode,
                     onSortChange = {
                         preferences = preferences.copy(
                             sortBy = it.by,
@@ -202,10 +219,10 @@ fun QuickSettingsDialog(
                     },
                     sortOptions = when {
                         shelfMode -> listOf(
+                            Sort.By.LAST_VIEWED,
                             Sort.By.TITLE,
                             Sort.By.SHELF_ADDED,
                             Sort.By.DATE,
-                            Sort.By.LAST_VIEWED,
                         )
                         imageMode -> listOf(Sort.By.TITLE, Sort.By.DATE, Sort.By.SIZE)
                         else -> listOf(

@@ -60,6 +60,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -107,6 +108,7 @@ import java.util.Locale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -256,13 +258,21 @@ private fun ReaderContent(
         }
     }
 
-    var barsVisible by remember { mutableStateOf(true) }
+    var barsVisible by remember { mutableStateOf(false) }
     var showToc by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var showChapterRules by remember { mutableStateOf(false) }
     var editingRule by remember { mutableStateOf<ChapterRule?>(null) }
     var revision by remember { mutableIntStateOf(0) }
     var pager by remember { mutableStateOf<ReaderPager?>(null) }
+
+    // 全文搜索：搜索词与结果保留到退出本书或按清除，跨面板开关不丢失。
+    var showSearch by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    var searchResults by remember { mutableStateOf<List<SearchHit>>(emptyList()) }
+    var searching by remember { mutableStateOf(false) }
+    var paginatorState by remember { mutableStateOf<ChapterPaginator?>(null) }
+    val searchScope = rememberCoroutineScope()
 
     val latestPosition = rememberUpdatedState(state.positionChapter to state.positionOffset)
 
@@ -313,6 +323,7 @@ private fun ReaderContent(
             if (!created.openAt(chapterIndex = chapter, charOffset = offset)) {
                 created.open(chapterIndex = 0, charOffset = 0)
             }
+            paginatorState = paginator
             pager = created
             revision++
         }
@@ -364,6 +375,83 @@ private fun ReaderContent(
             }
         }
 
+        /** 全文搜索：遍历各章正文，忽略大小写；结果与页码在 Default 调度器计算，避免卡 UI。 */
+        fun performSearch(rawQuery: String) {
+            val q = rawQuery.trim()
+            if (q.isEmpty()) {
+                searchResults = emptyList()
+                searching = false
+                return
+            }
+            searching = true
+            val currentPaginator = paginatorState
+            searchScope.launch {
+                val hits = withContext(Dispatchers.Default) {
+                    val localCache = HashMap<Int, List<ReaderPage>>()
+                    val queryLower = q.lowercase()
+                    val queryLen = q.length
+                    val out = ArrayList<SearchHit>()
+                    val maxHits = 500
+                    for ((index, chapter) in content.chapters.withIndex()) {
+                        if (out.size >= maxHits) break
+                        val text = chapter.text
+                        if (text.isEmpty()) continue
+                        val textLower = text.lowercase()
+                        val pages = if (currentPaginator != null) {
+                            localCache.getOrPut(index) {
+                                currentPaginator.paginate(
+                                    chapterIndex = index,
+                                    chapter = chapter,
+                                    startOffset = 0,
+                                    nextChapterIndex = null,
+                                    nextChapter = null,
+                                )
+                            }
+                        } else {
+                            emptyList()
+                        }
+                        var from = 0
+                        while (out.size < maxHits) {
+                            val found = textLower.indexOf(queryLower, from)
+                            if (found < 0) break
+                            val pageNumber = if (pages.isNotEmpty()) {
+                                (pages.indexOfLast { it.startOffset <= found } + 1)
+                                    .coerceAtLeast(1)
+                            } else {
+                                0
+                            }
+                            val prevLen = 16
+                            val nextLen = 28
+                            val prevStart = (found - prevLen).coerceAtLeast(0)
+                            val nextEnd = (found + queryLen + nextLen).coerceAtMost(text.length)
+                            val preview = text.substring(prevStart, nextEnd)
+                            out += SearchHit(
+                                chapterIndex = index,
+                                chapterTitle = chapter.title,
+                                charOffset = found,
+                                preview = preview,
+                                highlightStart = found - prevStart,
+                                highlightEnd = found - prevStart + queryLen,
+                                pageNumber = pageNumber,
+                            )
+                            from = found + queryLen
+                        }
+                    }
+                    out
+                }
+                searchResults = hits
+                searching = false
+            }
+        }
+
+        fun jumpToSearchResult(chapterIndex: Int, charOffset: Int) {
+            val current = pager ?: return
+            if (current.openAt(chapterIndex = chapterIndex, charOffset = charOffset)) {
+                revision++
+                notifyPosition()
+            }
+        }
+
         fun jumpToPageInChapter(progress: Float) {
             val current = pager ?: return
             if (current.jumpToPageInChapter(progress)) {
@@ -378,6 +466,14 @@ private fun ReaderContent(
                 revision++
                 notifyPosition()
             }
+        }
+
+        // 仅显式提交（按键盘搜索键 / 点历史词）时才搜索并记录历史，避免边打字边搜导致拼音片段污染历史。
+        fun submitSearch() {
+            val q = searchQuery.trim()
+            if (q.isEmpty()) return
+            viewModel.addReaderSearchQuery(q)
+            performSearch(searchQuery)
         }
 
         fun jumpToPreviousChapter() {
@@ -604,6 +700,7 @@ private fun ReaderContent(
                         )
                     }
                 },
+                onSearch = { showSearch = true },
             )
 
             ReaderBottomBar(
@@ -647,6 +744,40 @@ private fun ReaderContent(
                 },
                 removable = viewModel.isTxtBook,
                 onDismiss = { showToc = false },
+            )
+        }
+
+        if (showSearch) {
+            ReaderSearchSheet(
+                theme = theme,
+                query = searchQuery,
+                results = searchResults,
+                searching = searching,
+                history = state.searchHistory,
+                onHistoryClick = { q ->
+                    viewModel.addReaderSearchQuery(q)
+                    searchQuery = q
+                    performSearch(q)
+                },
+                onRemoveHistory = viewModel::removeReaderSearchQuery,
+                onClearHistory = viewModel::clearReaderSearchHistory,
+                onQueryChange = {
+                    searchQuery = it
+                    if (it.isEmpty()) {
+                        searchResults = emptyList()
+                        searching = false
+                    }
+                },
+                onSearch = { submitSearch() },
+                onClear = {
+                    searchQuery = ""
+                    searchResults = emptyList()
+                },
+                onSelect = { hit ->
+                    showSearch = false
+                    jumpToSearchResult(hit.chapterIndex, hit.charOffset)
+                },
+                onDismiss = { showSearch = false },
             )
         }
 
@@ -842,13 +973,15 @@ private fun ReaderPageLayout(
                 )
                 .clipToBounds(),
         ) {
-            snapshot?.page?.blocks?.forEach { block ->
+            val pageBlocks = snapshot?.page?.blocks
+            pageBlocks?.forEachIndexed { index, block ->
+                val isLast = index == pageBlocks.lastIndex
                 when (block) {
                     is PageBlock.Heading -> {
                         Text(
                             text = block.text,
                             style = headingStyle,
-                            modifier = Modifier.padding(bottom = headingSpacing),
+                            modifier = Modifier.padding(bottom = if (isLast) 0.dp else headingSpacing),
                         )
                     }
 
@@ -878,12 +1011,16 @@ private fun ReaderPageLayout(
                             }
                         }
                         Text(text = annotated, style = bodyStyle)
-                        Spacer(modifier = Modifier.height(paragraphSpacing))
+                        if (!isLast) {
+                            Spacer(modifier = Modifier.height(paragraphSpacing))
+                        }
                     }
 
                     is PageBlock.Image -> {
                         BookImageBlock(path = block.path, heightPx = block.heightPx, content = content)
-                        Spacer(modifier = Modifier.height(paragraphSpacing))
+                        if (!isLast) {
+                            Spacer(modifier = Modifier.height(paragraphSpacing))
+                        }
                     }
 
                     PageBlock.Divider -> {
@@ -896,7 +1033,9 @@ private fun ReaderPageLayout(
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth(),
                         )
-                        Spacer(modifier = Modifier.height(paragraphSpacing))
+                        if (!isLast) {
+                            Spacer(modifier = Modifier.height(paragraphSpacing))
+                        }
                     }
                 }
             }
@@ -1038,6 +1177,7 @@ private fun BoxScope.ReaderTopBar(
     onBack: () -> Unit,
     isBookmarked: Boolean,
     onToggleBookmark: () -> Unit,
+    onSearch: () -> Unit,
 ) {
     AnimatedVisibility(
         visible = visible,
@@ -1068,6 +1208,13 @@ private fun BoxScope.ReaderTopBar(
                     style = TextStyle(color = theme.secondaryText, fontSize = 12.sp),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                )
+            }
+            IconButton(onClick = onSearch) {
+                Icon(
+                    imageVector = NextIcons.Search,
+                    contentDescription = stringResource(R.string.reader_search),
+                    tint = theme.text,
                 )
             }
             IconButton(onClick = onToggleBookmark) {
@@ -1213,5 +1360,5 @@ private fun BoxScope.ReaderBottomBar(
 }
 
 private val PageTopPadding = 36.dp
-private val PageBottomPadding = 30.dp
+private val PageBottomPadding = 14.dp
 private val PageFooterHeight = 22.dp

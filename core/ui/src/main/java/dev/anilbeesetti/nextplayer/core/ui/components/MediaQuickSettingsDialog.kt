@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import dev.anilbeesetti.nextplayer.core.model.MediaLayoutMode
 import dev.anilbeesetti.nextplayer.core.model.Sort
 import dev.anilbeesetti.nextplayer.core.ui.R
@@ -89,6 +90,7 @@ fun MediaLayoutAndSortSettings(
         ),
     dateLabel: Int = R.string.date,
     showLayout: Boolean = true,
+    shelfLastViewedMode: Boolean = false,
 ) {
     if (showLayout) {
         SectionTitle(text = stringResource(R.string.media_layout))
@@ -133,7 +135,7 @@ fun MediaLayoutAndSortSettings(
                 Sort.By.SIZE -> R.string.size to NextIcons.Size
                 Sort.By.PATH -> R.string.location to NextIcons.Location
                 Sort.By.SHELF_ADDED -> R.string.date_added to NextIcons.Calendar
-                Sort.By.LAST_VIEWED -> R.string.last_read to NextIcons.History
+                Sort.By.LAST_VIEWED -> R.string.default_sort to NextIcons.History
             }
             TextIconToggleButton(
                 text = stringResource(id = label),
@@ -144,39 +146,70 @@ fun MediaLayoutAndSortSettings(
         }
     }
     Spacer(modifier = Modifier.height(8.dp))
-    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-        Sort.Order.entries.forEachIndexed { index, order ->
-            SegmentedButton(
-                selected = sort.order == order,
-                onClick = { onSortChange(sort.copy(order = order)) },
-                shape = SegmentedButtonDefaults.itemShape(
-                    index = index,
-                    Sort.Order.entries.size,
-                ),
-                colors = SegmentedButtonDefaults.colors(
-                    activeContentColor = MaterialTheme.colorScheme.primary,
-                    activeBorderColor = MaterialTheme.colorScheme.primary,
-                ),
-                icon = {
-                    Icon(
-                        imageVector = if (order == Sort.Order.ASCENDING) {
-                            NextIcons.ArrowUpward
-                        } else {
-                            NextIcons.ArrowDownward
-                        },
-                        contentDescription = null,
+    if (shelfLastViewedMode && sort.by == Sort.By.LAST_VIEWED) {
+        // 「默认」排序主排序固定为最近阅读从新到旧；下方胶囊切换次级键，去掉图标并强制单行显示。
+        val secondaryOptions = listOf(
+            Sort.Order.ASCENDING to R.string.shelf_sort_recent_then_modified,
+            Sort.Order.DESCENDING to R.string.shelf_sort_recent_then_added,
+        )
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            secondaryOptions.forEachIndexed { index, (order, labelRes) ->
+                SegmentedButton(
+                    selected = sort.order == order,
+                    onClick = { onSortChange(sort.copy(order = order)) },
+                    shape = SegmentedButtonDefaults.itemShape(
+                        index = index,
+                        count = secondaryOptions.size,
+                    ),
+                    colors = SegmentedButtonDefaults.colors(
+                        activeContentColor = MaterialTheme.colorScheme.primary,
+                        activeBorderColor = MaterialTheme.colorScheme.primary,
+                    ),
+                ) {
+                    Text(
+                        text = stringResource(id = labelRes),
+                        maxLines = 1,
+                        softWrap = false,
+                        fontSize = 12.sp,
                     )
-                },
-            ) {
-                val ascending = order == Sort.Order.ASCENDING
-                val label = when (sort.by) {
-                    Sort.By.TITLE, Sort.By.PATH -> if (ascending) R.string.a_z else R.string.z_a
-                    Sort.By.LENGTH -> if (ascending) R.string.shortest else R.string.longest
-                    Sort.By.SIZE -> if (ascending) R.string.smallest else R.string.largest
-                    Sort.By.DATE, Sort.By.SHELF_ADDED, Sort.By.LAST_VIEWED ->
-                        if (ascending) R.string.oldest else R.string.newest
                 }
-                Text(text = stringResource(id = label))
+            }
+        }
+    } else {
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            Sort.Order.entries.forEachIndexed { index, order ->
+                SegmentedButton(
+                    selected = sort.order == order,
+                    onClick = { onSortChange(sort.copy(order = order)) },
+                    shape = SegmentedButtonDefaults.itemShape(
+                        index = index,
+                        Sort.Order.entries.size,
+                    ),
+                    colors = SegmentedButtonDefaults.colors(
+                        activeContentColor = MaterialTheme.colorScheme.primary,
+                        activeBorderColor = MaterialTheme.colorScheme.primary,
+                    ),
+                    icon = {
+                        Icon(
+                            imageVector = if (order == Sort.Order.ASCENDING) {
+                                NextIcons.ArrowUpward
+                            } else {
+                                NextIcons.ArrowDownward
+                            },
+                            contentDescription = null,
+                        )
+                    },
+                ) {
+                    val ascending = order == Sort.Order.ASCENDING
+                    val label = when (sort.by) {
+                        Sort.By.TITLE, Sort.By.PATH -> if (ascending) R.string.a_z else R.string.z_a
+                        Sort.By.LENGTH -> if (ascending) R.string.shortest else R.string.longest
+                        Sort.By.SIZE -> if (ascending) R.string.smallest else R.string.largest
+                        Sort.By.DATE, Sort.By.SHELF_ADDED, Sort.By.LAST_VIEWED ->
+                            if (ascending) R.string.oldest else R.string.newest
+                    }
+                    Text(text = stringResource(id = label))
+                }
             }
         }
     }
