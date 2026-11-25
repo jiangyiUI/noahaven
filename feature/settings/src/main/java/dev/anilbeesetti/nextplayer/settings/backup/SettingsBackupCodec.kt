@@ -372,6 +372,7 @@ internal data class ReaderSettingsBackup(
     val firstLineIndent: Boolean,
     val showChapterTitle: Boolean,
     val showTimeBattery: Boolean,
+    val justifyText: Boolean = true,
 )
 
 internal fun ReaderSettings.toBackup(): ReaderSettingsBackup = ReaderSettingsBackup(
@@ -389,6 +390,7 @@ internal fun ReaderSettings.toBackup(): ReaderSettingsBackup = ReaderSettingsBac
     firstLineIndent = firstLineIndent,
     showChapterTitle = showChapterTitle,
     showTimeBattery = showTimeBattery,
+    justifyText = justifyText,
 )
 
 /**
@@ -414,4 +416,5 @@ internal fun ReaderSettingsBackup.toReaderSettings(
     firstLineIndent = firstLineIndent,
     showChapterTitle = showChapterTitle,
     showTimeBattery = showTimeBattery,
+    justifyText = justifyText,
 )

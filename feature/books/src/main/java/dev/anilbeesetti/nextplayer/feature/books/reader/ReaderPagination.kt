@@ -5,6 +5,7 @@ import androidx.compose.ui.text.ParagraphStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextIndent
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
@@ -49,6 +50,7 @@ class ChapterPaginator(
     private val headingSpacingPx: Float,
     private val imageAspect: (String) -> Float,
     private val firstLineIndent: Boolean = true,
+    private val justifyText: Boolean = true,
 ) {
 
     private class Paragraph(
@@ -297,15 +299,28 @@ class ChapterPaginator(
 
     private fun measure(text: String, style: TextStyle, indent: Boolean): TextLayoutResult {
         // 关闭首行缩进时，分页测量也不能按缩进算，否则首行宽度会与实际渲染不一致。
-        val annotated = if (indent && firstLineIndent) {
-            AnnotatedString(
+        // 两端对齐必须测量与渲染同时开/关（对齐不改变行数，但保持一致最稳妥）。
+        val indentEnabled = indent && firstLineIndent
+        val annotated = when {
+            indentEnabled && justifyText -> AnnotatedString(
                 text = text,
                 paragraphStyle = ParagraphStyle(
                     textIndent = TextIndent(firstLine = 2.em),
+                    textAlign = TextAlign.Justify,
                 ),
             )
-        } else {
-            AnnotatedString(text = text)
+
+            indentEnabled -> AnnotatedString(
+                text = text,
+                paragraphStyle = ParagraphStyle(textIndent = TextIndent(firstLine = 2.em)),
+            )
+
+            justifyText -> AnnotatedString(
+                text = text,
+                paragraphStyle = ParagraphStyle(textAlign = TextAlign.Justify),
+            )
+
+            else -> AnnotatedString(text = text)
         }
         return textMeasurer.measure(
             text = annotated,

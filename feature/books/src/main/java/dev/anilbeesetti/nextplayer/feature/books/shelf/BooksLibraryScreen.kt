@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.anilbeesetti.nextplayer.core.model.BookLibraryTab
 import dev.anilbeesetti.nextplayer.core.ui.R
+import dev.anilbeesetti.nextplayer.feature.books.data.BookShelfGroup
 import kotlinx.coroutines.launch
 
 /** 横滑切换 tab 的最小距离，按屏幕宽度的比例计算，避免竖直滚动时误触。 */
@@ -55,8 +56,28 @@ fun BooksLibraryScreen(
     val currentTab = selectedTab?.takeIf { it in order } ?: order.first()
     val currentIndex = order.indexOf(currentTab)
 
-    // 加入书架完成后提示数量
-    LaunchedEffect(shelfViewModel) {
+    // 分组 id → 层级路径（如「分组1/子分组1」，未分组/找不到用本地化名称）。
+    val groupLabelFor: (Long) -> String = remember(shelfState.groups, defaultGroupName) {
+        val groupById = shelfState.groups.associateBy { it.id }
+        fun labelFor(groupId: Long): String {
+            val group = groupById[groupId] ?: return defaultGroupName
+            if (group.isUngrouped) return defaultGroupName
+            val chain = mutableListOf<String>()
+            var cur: BookShelfGroup? = group
+            while (cur != null) {
+                chain.add(cur.name)
+                cur = cur.parentId?.let { groupById[it] }
+            }
+            return chain.asReversed().joinToString("/")
+        }
+        ::labelFor
+    }
+
+    // 已在书架的书（合并展示）：非空时弹出一个对话框列出每本书所在分组。
+    var alreadyInShelf by remember { mutableStateOf<Map<String, Long>?>(null) }
+
+    // 加入书架完成后提示数量；已在书架的书合并成一个对话框展示。
+    LaunchedEffect(shelfViewModel, shelfState.groups, defaultGroupName) {
         shelfViewModel.events.collect { event ->
             when (event) {
                 is ShelfEvent.Added -> Toast.makeText(
@@ -64,6 +85,7 @@ fun BooksLibraryScreen(
                     context.getString(R.string.book_shelf_added) + " (${event.count})",
                     Toast.LENGTH_SHORT,
                 ).show()
+                is ShelfEvent.AlreadyInShelf -> alreadyInShelf = event.pathToGroup
             }
         }
     }
@@ -163,6 +185,14 @@ fun BooksLibraryScreen(
                 shelfGroups = shelfState.groups,
                 defaultGroupName = defaultGroupName,
                 onAddToShelf = shelfViewModel::addToShelf,
+            )
+        }
+
+        alreadyInShelf?.let { mapping ->
+            AlreadyInShelfDialog(
+                pathToGroup = mapping,
+                groupLabelFor = groupLabelFor,
+                onDismiss = { alreadyInShelf = null },
             )
         }
     }

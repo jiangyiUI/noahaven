@@ -682,6 +682,7 @@
     <string name="book_shelf_group_name">Group name</string>
     <string name="book_shelf_default_group">Default</string>
     <string name="book_shelf_added">Added to shelf</string>
+    <string name="book_shelf_already_in_shelf_title">Already in shelf</string>
     <string name="book_shelf_remove">Remove from shelf</string>
     <string name="book_shelf_remove_message">Only the shelf entry will be removed. The file will not be deleted.</string>
     <string name="book_shelf_empty">Your shelf is empty. Long-press a book or folder in Browse to add it.</string>
@@ -699,7 +700,20 @@
     <string name="book_shelf_move_group">Move group</string>
     <string name="book_shelf_copy_group">Copy group</string>
     <string name="book_shelf_back">Back</string>
-    <string name="book_shelf_top_level">Top level</string>
+    <string name="book_shelf_top_level">Root</string>
+    <string name="book_shelf_status_all">All</string>
+    <string name="book_shelf_status_unread">Unread</string>
+    <string name="book_shelf_status_reading">Reading</string>
+    <string name="book_shelf_status_finished">Finished</string>
+    <string name="book_shelf_no_group">No group</string>
+    <string name="book_shelf_root_directory">Root</string>
+    <string name="book_shelf_clear">Clear</string>
+    <string name="book_shelf_mark_read">Mark as read</string>
+    <string name="book_shelf_mark_unread">Mark as unread</string>
+    <string name="book_shelf_empty_unread">No unread books</string>
+    <string name="book_shelf_empty_reading">No books in progress</string>
+    <string name="book_shelf_empty_finished">No finished books</string>
+    <string name="book_shelf_empty_group">This group is empty</string>
     <string name="book_shelf_move_group_to">Move group to</string>
     <string name="book_shelf_copy_group_to">Copy group to</string>
     <string name="book_shelf_delete_group_recursive_message">This will delete %1$d group(s) (including subgroups) and %2$d book record(s) in total. Files will not be deleted.</string>
@@ -765,6 +779,7 @@
     <string name="reader_first_line_indent">First-line indent</string>
     <string name="reader_show_chapter_title">Chapter title at top</string>
     <string name="reader_show_time_battery">Show time &amp; battery</string>
+    <string name="reader_justify_text">Justify text</string>
 
     <string name="reader_untitled_chapter">Untitled chapter</string>
     <string name="reader_chapter_delete">Remove from contents</string>

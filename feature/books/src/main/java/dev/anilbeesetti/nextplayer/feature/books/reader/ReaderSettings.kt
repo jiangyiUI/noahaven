@@ -280,6 +280,8 @@ data class ReaderSettings(
     val firstLineIndent: Boolean = true,
     val showChapterTitle: Boolean = true,
     val showTimeBattery: Boolean = true,
+    /** 正文两端对齐：拉伸行内字距让左右都贴齐，段落最后一行不拉伸。 */
+    val justifyText: Boolean = true,
 ) {
     val fontSizeMin: Float get() = 14f
     val fontSizeMax: Float get() = 30f

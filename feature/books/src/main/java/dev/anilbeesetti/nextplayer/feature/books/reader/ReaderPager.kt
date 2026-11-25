@@ -61,6 +61,25 @@ class ReaderPager(
         return true
     }
 
+    /**
+     * 打开到某章节的指定字符偏移：对整章从 0 分页，再落到包含该偏移的页。
+     *
+     * 与 [open] 直接从锚点开始分页不同，这里保留锚点之前的页，因此：
+     * - 页脚页码是该偏移在整章中的真实页号（而不是恒为 1）；
+     * - 首次按「上一页」会回到上一页，而不是直接跳回上一章。
+     * 翻到下一章/上一章的接缝续读仍走 [open]，避免重复已读内容。
+     */
+    fun openAt(chapterIndex: Int, charOffset: Int): Boolean {
+        if (content.chapters.isEmpty()) return false
+        val target = chapterIndex.coerceIn(0, content.chapters.lastIndex)
+        if (!open(chapterIndex = target, charOffset = 0)) return false
+        val local = charOffset.coerceIn(0, content.chapters[target].text.length)
+        val index = pages.indexOfLast { it.startOffset <= local }
+        pageIndex = index.coerceIn(0, pages.lastIndex)
+        anchors[target] = local
+        return true
+    }
+
     fun goNext(): Boolean {
         if (pageIndex < pages.lastIndex) {
             pageIndex++

@@ -66,6 +66,7 @@ import dev.anilbeesetti.nextplayer.core.ui.components.NextTopAppBar
 import dev.anilbeesetti.nextplayer.core.ui.components.TopLevelFabKey
 import dev.anilbeesetti.nextplayer.core.ui.composables.rememberPersistentLazyGridState
 import dev.anilbeesetti.nextplayer.core.ui.designsystem.NextIcons
+import dev.anilbeesetti.nextplayer.core.model.Folder
 import dev.anilbeesetti.nextplayer.feature.books.data.BookShelfGroup
 import dev.anilbeesetti.nextplayer.feature.videopicker.composables.CenterCircularProgressBar
 import dev.anilbeesetti.nextplayer.feature.videopicker.composables.QuickSettingsDialog
@@ -77,16 +78,16 @@ import dev.anilbeesetti.nextplayer.feature.videopicker.state.SelectionItem
 import dev.anilbeesetti.nextplayer.feature.videopicker.state.rememberSelectionManager
 import java.io.File
 
-/** 底部分组弹窗要执行的移动/复制动作。 */
-private enum class GroupPickerMode { MOVE, COPY }
+/** 底部分组弹窗要执行的动作（书架已去重，同本书只一条记录，故仅保留移动）。 */
+private enum class GroupPickerMode { MOVE }
 
 private data class GroupPickerRequest(
     val books: List<ShelfBook>,
     val mode: GroupPickerMode,
 )
 
-/** 分组子树移动/复制：要搬的源分组 + 动作。 */
-private enum class GroupTargetMode { MOVE, COPY }
+/** 分组子树移动：要搬的源分组。 */
+private enum class GroupTargetMode { MOVE }
 
 private data class GroupTargetRequest(
     val group: BookShelfGroup,
@@ -109,8 +110,8 @@ fun ShelfScreen(
     )
     // 屏幕启动时确保「未分组」存在（老用户升级会把第一个顶级分组提升为未分组）
     LaunchedEffect(Unit) { viewModel.ensureUngrouped() }
-    // 每个分组一套滚动位置，push/pop 阅读页也能记住
-    val shelfGridState = rememberPersistentLazyGridState(key = state.displayedGroupId)
+    // 状态栏 / 进入分组各记一套滚动位置，切换不串
+    val shelfGridState = rememberPersistentLazyGridState(key = "${state.selectedStatus}_${state.navigatedGroupId}")
     val navigationBottomPadding = LocalNavigationBottomPadding.current
     val selectionManager = rememberSelectionManager()
     val contentFocusRequester = remember { FocusRequester() }
@@ -129,13 +130,13 @@ fun ShelfScreen(
     val groupMenuOpen = groupMenuTarget != null
     val selectMode = selectionManager.isInSelectionMode
 
-    // 分组长按底栏 + 多选底栏都要隐藏顶部级底栏
-    BindTopLevelBottomBarVisible(visible = !groupMenuOpen && !selectMode)
+    // 分组长按底栏 + 多选底栏 + 进入分组（与浏览 tab 进文件夹一致）都要隐藏顶级底栏
+    BindTopLevelBottomBarVisible(visible = state.navigatedGroupId == null && !groupMenuOpen && !selectMode)
 
     // 与「浏览」tab 同一个 FAB 槽位：点击续看书架上最近读过的一本。
     // 无条件注册（仅跟随底栏可见性），避免书架为空时残留浏览页的旧 FAB 导致点击串页；
     // 空书架下由 ViewModel 的空池判断兜底为无操作。
-    if (!groupMenuOpen && !selectMode) {
+    if (state.navigatedGroupId == null && !groupMenuOpen && !selectMode) {
         BindTopLevelFab(
             key = TopLevelFabKey.BOOKS,
             icon = NextIcons.Books,
@@ -151,6 +152,13 @@ fun ShelfScreen(
         ?.let { it as? SelectionItem.Video }
         ?.let { item -> state.books.firstOrNull { it.book.path == item.path } }
 
+    // 选中的书架书籍：用于底栏「标记已读/未读」与「移动」的目标计算
+    val selectedShelfBooks = selectionManager.selectionItems.toShelfBooks(state.books)
+    val allSelectedFinished = selectedShelfBooks.isNotEmpty() &&
+        selectedShelfBooks.all { it.book.finished }
+    val toggleFinishedLabelRes =
+        if (allSelectedFinished) R.string.book_shelf_mark_unread else R.string.book_shelf_mark_read
+
     // BackHandler 优先级：多选退出 > 分组菜单关闭 > 分组返回
     BackHandler(enabled = selectMode) {
         selectionManager.exitSelectionMode()
@@ -158,46 +166,64 @@ fun ShelfScreen(
     BackHandler(enabled = groupMenuOpen) {
         groupMenuTarget = null
     }
-    val canGoBack = state.barParentId != null ||
-        (state.displayedGroupId != null && state.displayedGroupId != state.ungroupedId)
+    val canGoBack = state.navigatedGroupId != null
     BackHandler(enabled = canGoBack && !selectMode && !groupMenuOpen) {
         viewModel.onBack()
     }
+
+    // 是否进入了某个分组（非首页）：顶栏显示 ←+分组名、内容走图1样式、状态栏隐藏
+    val currentGroup = state.groups.firstOrNull { it.id == state.navigatedGroupId }
+    val isInGroup = currentGroup != null
+    val isHome = state.navigatedGroupId == null
 
     Scaffold(
         topBar = {
             NextTopAppBar(
                 title = {
-                    if (selectMode) {
-                        Text(text = "", maxLines = 1)
-                    } else {
-                        tabBar()
+                    when {
+                        selectMode -> Text(text = "", maxLines = 1)
+                        isInGroup -> Text(
+                            text = currentGroup!!.name,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        else -> tabBar()
                     }
                 },
                 navigationIcon = {
-                    if (selectMode) {
-                        Row(
-                            modifier = Modifier
-                                .clip(shape = CircleShape)
-                                .background(MaterialTheme.colorScheme.secondaryContainer)
-                                .clickable { selectionManager.exitSelectionMode() }
-                                .padding(8.dp)
-                                .padding(end = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Icon(
-                                imageVector = NextIcons.Close,
-                                contentDescription = stringResource(R.string.navigate_up),
-                            )
-                            Text(
-                                text = stringResource(
-                                    R.string.m_n_selected,
-                                    selectedItemsSize,
-                                    totalItemsSize,
-                                ),
-                                style = MaterialTheme.typography.labelLarge,
-                            )
+                    when {
+                        selectMode -> {
+                            Row(
+                                modifier = Modifier
+                                    .clip(shape = CircleShape)
+                                    .background(MaterialTheme.colorScheme.secondaryContainer)
+                                    .clickable { selectionManager.exitSelectionMode() }
+                                    .padding(8.dp)
+                                    .padding(end = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Icon(
+                                    imageVector = NextIcons.Close,
+                                    contentDescription = stringResource(R.string.navigate_up),
+                                )
+                                Text(
+                                    text = stringResource(
+                                        R.string.m_n_selected,
+                                        selectedItemsSize,
+                                        totalItemsSize,
+                                    ),
+                                    style = MaterialTheme.typography.labelLarge,
+                                )
+                            }
+                        }
+                        isInGroup -> {
+                            FilledTonalIconButton(onClick = { viewModel.onBack() }) {
+                                Icon(
+                                    imageVector = NextIcons.ArrowBack,
+                                    contentDescription = stringResource(R.string.navigate_up),
+                                )
+                            }
                         }
                     }
                 },
@@ -253,14 +279,17 @@ fun ShelfScreen(
         bottomBar = {
             when {
                 selectMode -> {
-                    // 多选底栏：删除/移动/复制，只有单选时才能重命名
+                    // 多选底栏：清除/标记已读未读/移动，只有单选时才能重命名（已去重，无复制）
                     SelectionActionsSheet(
                         show = selectedItemsSize > 0,
                         contentFocusRequester = contentFocusRequester,
                         showRenameAction = singleSelectedBook != null,
                         showDeleteAction = true,
                         showMoveAction = true,
-                        showCopyAction = true,
+                        showToggleFinishedAction = selectedShelfBooks.isNotEmpty(),
+                        toggleFinishedLabelRes = toggleFinishedLabelRes,
+                        deleteLabelRes = R.string.book_shelf_clear,
+                        showCopyAction = false,
                         showShareAction = false,
                         showAddToShelfAction = false,
                         showAddToPlaylistAction = false,
@@ -270,18 +299,21 @@ fun ShelfScreen(
                         showHideAction = false,
                         onDeleteAction = { showDeleteConfirmation = true },
                         onRenameAction = { showRenameBookDialog = true },
+                        onToggleFinishedAction = {
+                            if (selectedShelfBooks.isNotEmpty()) {
+                                viewModel.setBooksFinished(
+                                    paths = selectedShelfBooks.map { it.book.path },
+                                    finished = !allSelectedFinished,
+                                )
+                            }
+                        },
                         onMoveAction = {
-                            val books = selectionManager.selectionItems.toShelfBooks(state.books)
-                            if (books.isNotEmpty()) {
-                                groupPickerRequest = GroupPickerRequest(books, GroupPickerMode.MOVE)
+                            if (selectedShelfBooks.isNotEmpty()) {
+                                groupPickerRequest =
+                                    GroupPickerRequest(selectedShelfBooks, GroupPickerMode.MOVE)
                             }
                         },
-                        onCopyAction = {
-                            val books = selectionManager.selectionItems.toShelfBooks(state.books)
-                            if (books.isNotEmpty()) {
-                                groupPickerRequest = GroupPickerRequest(books, GroupPickerMode.COPY)
-                            }
-                        },
+                        onCopyAction = {},
                         onShareAction = { /* 书架记录只是路径，不直接分享 */ },
                         onPlayAction = {},
                         onAddToPlaylistAction = {},
@@ -291,7 +323,7 @@ fun ShelfScreen(
                 }
 
                 groupMenuOpen -> {
-                    // 分组长按底栏：未分组不可删除/重命名/排序/建子分组/移动，但可复制
+                    // 分组长按底栏：未分组不可删除/重命名/排序/建子分组/移动（已去重，无复制）
                     val target = groupMenuTarget
                     val isUngrouped = target?.isUngrouped == true
                     SelectionActionsSheet(
@@ -302,7 +334,7 @@ fun ShelfScreen(
                         showReorderAction = !isUngrouped,
                         showAddSubGroupAction = !isUngrouped,
                         showMoveGroupAction = !isUngrouped,
-                        showCopyGroupAction = true,
+                        showCopyGroupAction = false,
                         showCopyAction = false,
                         showMoveAction = false,
                         showPlayAction = false,
@@ -333,12 +365,7 @@ fun ShelfScreen(
                             }
                             groupMenuTarget = null
                         },
-                        onCopyGroupAction = {
-                            target?.let {
-                                groupTargetRequest = GroupTargetRequest(it, GroupTargetMode.COPY)
-                            }
-                            groupMenuTarget = null
-                        },
+                        onCopyGroupAction = {},
                         onCopyAction = {},
                         onMoveAction = {},
                         onPlayAction = {},
@@ -365,34 +392,42 @@ fun ShelfScreen(
                 .background(MaterialTheme.colorScheme.background)
                 .then(contentModifier),
         ) {
-            ShelfGroupChips(
-                groups = state.groups,
-                ungroupedId = state.ungroupedId,
-                ungroupedLabel = stringResource(R.string.book_shelf_ungrouped),
-                barParentId = state.barParentId,
-                displayedGroupId = state.displayedGroupId,
-                groupCounts = state.groupCounts,
-                onSelectGroup = { groupId ->
-                    selectionManager.exitSelectionMode()
-                    groupMenuTarget = null
-                    viewModel.onGroupClick(groupId)
-                },
-                onBack = {
-                    selectionManager.exitSelectionMode()
-                    groupMenuTarget = null
-                    viewModel.onBack()
-                },
-                onGroupLongClick = { group ->
-                    selectionManager.exitSelectionMode()
-                    groupMenuTarget = group
-                },
-                onCreateGroup = {
-                    selectionManager.exitSelectionMode()
-                    groupMenuTarget = null
-                    showNewGroupDialog = true
-                },
-            )
+            // 状态栏只在书架首页显示；进入分组后整页走图1样式，状态栏隐藏
+            if (isHome) {
+                ShelfStatusBar(
+                    statusCounts = state.statusCounts,
+                    selected = state.selectedStatus,
+                    onSelect = { status ->
+                        selectionManager.exitSelectionMode()
+                        groupMenuTarget = null
+                        viewModel.onStatusSelected(status)
+                    },
+                    onCreateGroup = {
+                        selectionManager.exitSelectionMode()
+                        groupMenuTarget = null
+                        showNewGroupDialog = true
+                    },
+                )
+            }
             val contentPadding = PaddingValues(bottom = navigationBottomPadding)
+            // 可见分组文件夹：首页=顶级（排除未分组）；进入分组=该分组的子分组
+            val visibleGroups = if (isHome) {
+                state.groups.filter { it.parentId == null && !it.isUngrouped }
+            } else {
+                state.groups.filter { it.parentId == state.navigatedGroupId }
+            }
+            val folderList = visibleGroups.map { group ->
+                group.toFolder(
+                    groupCounts = state.groupCounts,
+                    groupSizes = state.groupSizes,
+                    childCount = state.groups.count { it.parentId == group.id },
+                )
+            }
+            val folderPathToId = visibleGroups.associate { "shelf_group_${it.id}" to it.id }
+            val displayBooks = state.books
+            val bookFiles = displayBooks.map { it.book }
+            val selectedIds = selectionManager.selectionItems.map { it.id }.toSet()
+            val isStatusFilter = isHome && state.selectedStatus != ShelfStatus.ALL
             if (state.isLoading) {
                 CenterCircularProgressBar()
             } else {
@@ -401,61 +436,91 @@ fun ShelfScreen(
                     onRefresh = { viewModel.refresh() },
                 ) {
                     when {
-                        state.books.isEmpty() -> {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(contentPadding),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center,
-                            ) {
-                                Icon(
-                                    imageVector = NextIcons.Books,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(64.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        // 态C：未读/阅读中/读完，只展示过滤后的书籍
+                        isStatusFilter -> {
+                            if (bookFiles.isEmpty()) {
+                                ShelfEmptyView(
+                                    text = stringResource(statusEmptyRes(state.selectedStatus)),
+                                    contentPadding = contentPadding,
                                 )
-                                Text(
-                                    text = stringResource(R.string.book_shelf_empty),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.padding(
-                                        start = 24.dp,
-                                        end = 24.dp,
-                                        top = 12.dp,
-                                    ),
+                            } else {
+                                BookShelfGrid(
+                                    books = bookFiles,
+                                    preferences = state.preferences,
+                                    lastViewedPath = state.lastViewedBookPath,
+                                    contentPadding = contentPadding,
+                                    state = shelfGridState,
+                                    selectedIds = selectedIds,
+                                    onBookClick = { book ->
+                                        val shelfBook = displayBooks.firstOrNull { it.book.path == book.path }
+                                        if (selectMode) {
+                                            shelfBook?.let {
+                                                selectionManager.toggleSelection(it.book.toSelectionItem())
+                                            }
+                                        } else {
+                                            viewModel.output.openBook(book.path)
+                                        }
+                                    },
+                                    onBookLongClick = { book ->
+                                        val shelfBook = displayBooks.firstOrNull { it.book.path == book.path }
+                                        if (shelfBook != null) {
+                                            selectionManager.toggleSelection(shelfBook.book.toSelectionItem())
+                                        }
+                                    },
                                 )
                             }
                         }
-
+                        // 态A 首页 / 态B 进入分组：分组文件夹 + 书籍（图1样式）
                         else -> {
-                            BookShelfGrid(
-                                books = state.books.map { it.book },
-                                preferences = state.preferences,
-                                lastViewedPath = state.lastViewedBookPath,
-                                contentPadding = contentPadding,
-                                state = shelfGridState,
-                                selectedIds = selectionManager.selectionItems
-                                    .map { it.id }
-                                    .toSet(),
-                                onBookClick = { book ->
-                                    val shelfBook = state.books.firstOrNull { it.book.path == book.path }
-                                    if (selectMode) {
-                                        shelfBook?.let {
-                                            selectionManager.toggleSelection(it.book.toSelectionItem())
-                                        }
+                            if (folderList.isEmpty() && bookFiles.isEmpty()) {
+                                ShelfEmptyView(
+                                    text = if (isHome) {
+                                        stringResource(R.string.book_shelf_empty)
                                     } else {
-                                        viewModel.output.openBook(book.path)
-                                    }
-                                },
-                                onBookLongClick = { book ->
-                                    val shelfBook = state.books.firstOrNull { it.book.path == book.path }
-                                    if (shelfBook != null) {
-                                        selectionManager.toggleSelection(shelfBook.book.toSelectionItem())
-                                    }
-                                },
-                            )
+                                        stringResource(R.string.book_shelf_empty_group)
+                                    },
+                                    contentPadding = contentPadding,
+                                )
+                            } else {
+                                BookLibraryView(
+                                    folders = folderList,
+                                    books = bookFiles,
+                                    preferences = state.preferences,
+                                    lastViewedPath = state.lastViewedBookPath,
+                                    contentPadding = contentPadding,
+                                    lazyGridState = shelfGridState,
+                                    selectedIds = selectedIds,
+                                    showFolderSectionHeader = false,
+                                    showBookSectionHeader = true,
+                                    onFolderClick = { path ->
+                                        selectionManager.exitSelectionMode()
+                                        groupMenuTarget = null
+                                        folderPathToId[path]?.let(viewModel::onGroupClick)
+                                    },
+                                    onFolderLongClick = { folder ->
+                                        folderPathToId[folder.path]?.let { id ->
+                                            state.groups.firstOrNull { it.id == id }
+                                                ?.let { groupMenuTarget = it }
+                                        }
+                                    },
+                                    onBookClick = { book ->
+                                        val shelfBook = displayBooks.firstOrNull { it.book.path == book.path }
+                                        if (selectMode) {
+                                            shelfBook?.let {
+                                                selectionManager.toggleSelection(it.book.toSelectionItem())
+                                            }
+                                        } else {
+                                            viewModel.output.openBook(book.path)
+                                        }
+                                    },
+                                    onBookLongClick = { book ->
+                                        val shelfBook = displayBooks.firstOrNull { it.book.path == book.path }
+                                        if (shelfBook != null) {
+                                            selectionManager.toggleSelection(shelfBook.book.toSelectionItem())
+                                        }
+                                    },
+                                )
+                            }
                         }
                     }
                 }
@@ -500,34 +565,21 @@ fun ShelfScreen(
         }
     }
 
-    // 分组移动/复制
+    // 分组移动（书架已去重，无复制）
     groupPickerRequest?.let { request ->
         AddToShelfDialog(
             groups = state.groups,
             ungroupedId = state.ungroupedId,
-            ungroupedLabel = stringResource(R.string.book_shelf_ungrouped),
+            ungroupedLabel = stringResource(R.string.book_shelf_root_directory),
             defaultGroupName = viewModel.output.defaultGroupName,
-            title = stringResource(
-                when (request.mode) {
-                    GroupPickerMode.MOVE -> R.string.book_shelf_move_to_group
-                    GroupPickerMode.COPY -> R.string.book_shelf_copy_to_group
-                },
-            ),
+            title = stringResource(R.string.book_shelf_move_to_group),
             onDismiss = { groupPickerRequest = null },
             onConfirm = { groupId, newGroupName ->
-                when (request.mode) {
-                    GroupPickerMode.MOVE -> viewModel.moveBooksToGroup(
-                        books = request.books,
-                        groupId = groupId,
-                        newGroupName = newGroupName,
-                    )
-
-                    GroupPickerMode.COPY -> viewModel.copyBooksToGroup(
-                        books = request.books,
-                        groupId = groupId,
-                        newGroupName = newGroupName,
-                    )
-                }
+                viewModel.moveBooksToGroup(
+                    books = request.books,
+                    groupId = groupId,
+                    newGroupName = newGroupName,
+                )
                 groupPickerRequest = null
                 selectionManager.exitSelectionMode()
             },
@@ -554,6 +606,8 @@ fun ShelfScreen(
             onDismiss = { showNewGroupDialog = false },
             onDone = { name ->
                 viewModel.createGroup(name)
+                // 非全部状态下新建分组后回到「全部」让新分组可见；取消则留在当前状态
+                viewModel.onStatusSelected(ShelfStatus.ALL)
                 showNewGroupDialog = false
             },
         )
@@ -632,31 +686,19 @@ fun ShelfScreen(
         )
     }
 
-    // 移动/复制分组子树 → 选目标父分组（含「顶级」，排除自身/子孙）
+    // 移动分组子树 → 选目标父分组（含「根目录」，排除自身/子孙）
     groupTargetRequest?.let { request ->
         GroupTargetPickerDialog(
             groups = state.groups,
             ungroupedId = state.ungroupedId,
             sourceGroupId = request.group.id,
-            title = stringResource(
-                when (request.mode) {
-                    GroupTargetMode.MOVE -> R.string.book_shelf_move_group_to
-                    GroupTargetMode.COPY -> R.string.book_shelf_copy_group_to
-                },
-            ),
+            title = stringResource(R.string.book_shelf_move_group_to),
             onDismiss = { groupTargetRequest = null },
             onConfirm = { targetParentId ->
-                when (request.mode) {
-                    GroupTargetMode.MOVE -> viewModel.moveGroupSubtreeTo(
-                        groupId = request.group.id,
-                        targetParentId = targetParentId,
-                    )
-
-                    GroupTargetMode.COPY -> viewModel.copyGroupSubtreeTo(
-                        groupId = request.group.id,
-                        targetParentId = targetParentId,
-                    )
-                }
+                viewModel.moveGroupSubtreeTo(
+                    groupId = request.group.id,
+                    targetParentId = targetParentId,
+                )
                 groupTargetRequest = null
             },
         )
@@ -677,34 +719,49 @@ private fun dev.anilbeesetti.nextplayer.core.model.BookFile.toSelectionItem() =
         path = path,
     )
 
+/** 状态栏标签文案资源。 */
+private fun statusLabelRes(status: ShelfStatus): Int = when (status) {
+    ShelfStatus.ALL -> R.string.book_shelf_status_all
+    ShelfStatus.UNREAD -> R.string.book_shelf_status_unread
+    ShelfStatus.READING -> R.string.book_shelf_status_reading
+    ShelfStatus.FINISHED -> R.string.book_shelf_status_finished
+}
+
+/** 态C（非全部）空状态文案资源。 */
+private fun statusEmptyRes(status: ShelfStatus): Int = when (status) {
+    ShelfStatus.UNREAD -> R.string.book_shelf_empty_unread
+    ShelfStatus.READING -> R.string.book_shelf_empty_reading
+    ShelfStatus.FINISHED -> R.string.book_shelf_empty_finished
+    else -> R.string.book_shelf_empty
+}
+
+/** 书架分组映射成浏览页同款 Folder 卡片（path 用合成值作唯一 key）。 */
+private fun BookShelfGroup.toFolder(
+    groupCounts: Map<Long, Int>,
+    groupSizes: Map<Long, Long>,
+    childCount: Int,
+): Folder = Folder(
+    name = name,
+    path = "shelf_group_$id",
+    dateModified = 0L,
+    videosCount = groupCounts[id] ?: 0,
+    foldersCount = childCount,
+    totalSize = groupSizes[id] ?: 0L,
+)
+
 /**
- * 分组栏：顶级显示 [未分组] + 一级分组 + [＋添加]；
- * 进入某分组的子层后显示 [←返回] + 该分组的子分组 + [＋添加]。
- * 有子分组的分组点击会下钻，无子分组的仅同层选中。
+ * 状态栏：[全部 N][未读 N][阅读中 N][读完 N] + [＋添加分组]，仅在书架首页显示，固定不可编辑。
  */
 @Composable
-private fun ShelfGroupChips(
-    groups: List<BookShelfGroup>,
-    ungroupedId: Long?,
-    ungroupedLabel: String,
-    barParentId: Long?,
-    displayedGroupId: Long?,
-    groupCounts: Map<Long, Int>,
-    onSelectGroup: (Long) -> Unit,
-    onBack: () -> Unit,
-    onGroupLongClick: (BookShelfGroup) -> Unit,
+private fun ShelfStatusBar(
+    statusCounts: Map<ShelfStatus, Int>,
+    selected: ShelfStatus,
+    onSelect: (ShelfStatus) -> Unit,
     onCreateGroup: () -> Unit,
 ) {
-    val isTopLevel = barParentId == null
-    val visibleGroups = if (isTopLevel) {
-        groups.filter { it.parentId == null && !it.isUngrouped }
-    } else {
-        groups.filter { it.parentId == barParentId }
-    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            // 上方 20dp，与下方（12dp + 书籍网格顶部 8dp）保持一致
             .padding(top = 20.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -715,44 +772,53 @@ private fun ShelfGroupChips(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (!isTopLevel) {
-                item(key = "back") {
-                    BackChip(onClick = onBack)
-                }
-            }
-            if (isTopLevel && ungroupedId != null) {
-                val uid = ungroupedId
-                item(key = "ungrouped") {
-                    ShelfChip(
-                        selected = displayedGroupId == uid,
-                        label = stringResource(
-                            R.string.book_shelf_group_count,
-                            ungroupedLabel,
-                            groupCounts[uid] ?: 0,
-                        ),
-                        onClick = { onSelectGroup(uid) },
-                        onLongClick = {
-                            groups.firstOrNull { it.id == uid }?.let(onGroupLongClick)
-                        },
-                    )
-                }
-            }
-            items(items = visibleGroups, key = { it.id }) { group ->
+            items(
+                items = listOf(ShelfStatus.ALL, ShelfStatus.UNREAD, ShelfStatus.READING, ShelfStatus.FINISHED),
+                key = { it.name },
+            ) { status ->
                 ShelfChip(
-                    selected = displayedGroupId == group.id,
+                    selected = selected == status,
                     label = stringResource(
                         R.string.book_shelf_group_count,
-                        group.name,
-                        groupCounts[group.id] ?: 0,
+                        stringResource(statusLabelRes(status)),
+                        statusCounts[status] ?: 0,
                     ),
-                    onClick = { onSelectGroup(group.id) },
-                    onLongClick = { onGroupLongClick(group) },
+                    onClick = { onSelect(status) },
                 )
             }
         }
         CreateGroupChip(
             modifier = Modifier.padding(end = 16.dp),
             onClick = onCreateGroup,
+        )
+    }
+}
+
+/** 空状态：居中图标 + 文案。 */
+@Composable
+private fun ShelfEmptyView(
+    text: String,
+    contentPadding: PaddingValues,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(contentPadding),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            imageVector = NextIcons.Books,
+            contentDescription = null,
+            modifier = Modifier.size(64.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 12.dp),
         )
     }
 }
@@ -825,40 +891,6 @@ private fun CreateGroupChip(
                 imageVector = NextIcons.Add,
                 contentDescription = stringResource(R.string.book_shelf_new_group),
                 modifier = Modifier.size(18.dp),
-            )
-        }
-    }
-}
-
-/** 子层的返回入口：← 返回，与分组胶囊同一视觉语言。 */
-@Composable
-private fun BackChip(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-    ) {
-        Row(
-            modifier = Modifier
-                .clickable(onClick = onClick)
-                .height(36.dp)
-                .padding(horizontal = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Icon(
-                imageVector = NextIcons.ArrowBack,
-                contentDescription = stringResource(R.string.book_shelf_back),
-                modifier = Modifier.size(18.dp),
-            )
-            Text(
-                text = stringResource(R.string.book_shelf_back),
-                style = MaterialTheme.typography.labelLarge,
-                maxLines = 1,
             )
         }
     }

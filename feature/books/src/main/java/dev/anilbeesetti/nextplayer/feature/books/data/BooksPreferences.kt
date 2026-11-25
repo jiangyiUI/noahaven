@@ -78,6 +78,7 @@ class BooksPreferences(context: Context) {
             .putBoolean(KEY_FIRST_LINE_INDENT, updated.firstLineIndent)
             .putBoolean(KEY_SHOW_CHAPTER_TITLE, updated.showChapterTitle)
             .putBoolean(KEY_SHOW_TIME_BATTERY, updated.showTimeBattery)
+            .putBoolean(KEY_JUSTIFY_TEXT, updated.justifyText)
             .putBoolean(KEY_ONE_HAND_MODE, updated.oneHandMode)
             .apply()
     }
@@ -118,6 +119,7 @@ class BooksPreferences(context: Context) {
             firstLineIndent = preferences.getBoolean(KEY_FIRST_LINE_INDENT, true),
             showChapterTitle = preferences.getBoolean(KEY_SHOW_CHAPTER_TITLE, true),
             showTimeBattery = preferences.getBoolean(KEY_SHOW_TIME_BATTERY, true),
+            justifyText = preferences.getBoolean(KEY_JUSTIFY_TEXT, true),
             oneHandMode = preferences.getBoolean(KEY_ONE_HAND_MODE, false),
         )
     }
@@ -281,6 +283,7 @@ class BooksPreferences(context: Context) {
         const val KEY_FIRST_LINE_INDENT = "first_line_indent"
         const val KEY_SHOW_CHAPTER_TITLE = "show_chapter_title"
         const val KEY_SHOW_TIME_BATTERY = "show_time_battery"
+        const val KEY_JUSTIFY_TEXT = "justify_text"
         const val KEY_ONE_HAND_MODE = "one_hand_mode"
     }
 }

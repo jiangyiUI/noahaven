@@ -96,12 +96,19 @@ fun BookLibraryView(
     onFolderLongClick: (Folder) -> Unit = {},
     onBookLongClick: (BookFile) -> Unit = {},
     showBookPath: Boolean = false,
+    subtitleOverride: (BookFile) -> String? = { null },
+    /** 非 null 时强制是否显示「文件夹 (N)」标题；null 时跟随 preferences.mediaViewMode。 */
+    showFolderSectionHeader: Boolean? = null,
+    /** 非 null 时强制是否显示「书籍 (N)」标题；null 时跟随 preferences.mediaViewMode。 */
+    showBookSectionHeader: Boolean? = null,
 ) {
     val isTv = LocalContext.current.isTelevision
     val layoutDirection = LocalLayoutDirection.current
     val folderMinWidth = if (isTv) 160.dp else 90.dp
     val bookMinWidth = if (isTv) 240.dp else 130.dp
-    val showHeaders = preferences.mediaViewMode == MediaViewMode.FOLDER_TREE
+    val derivedHeaders = preferences.mediaViewMode == MediaViewMode.FOLDER_TREE
+    val showFolderHeader = showFolderSectionHeader ?: derivedHeaders
+    val showBookHeader = showBookSectionHeader ?: derivedHeaders
     val booksLabel = stringResource(R.string.books)
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
@@ -138,7 +145,7 @@ fun BookLibraryView(
             verticalArrangement = Arrangement.spacedBy(itemSpacing),
             horizontalArrangement = Arrangement.spacedBy(itemSpacing),
         ) {
-            if (showHeaders && folders.isNotEmpty()) {
+            if (showFolderHeader && folders.isNotEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     ListSectionTitle(text = stringResource(R.string.folders) + " (${folders.size})")
                 }
@@ -161,12 +168,12 @@ fun BookLibraryView(
                     mediaCountLabel = booksLabel,
                 )
             }
-            if (showHeaders && folders.isNotEmpty() && books.isNotEmpty()) {
+            if (folders.isNotEmpty() && books.isNotEmpty() && (showFolderHeader || showBookHeader)) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Spacer(modifier = Modifier.size(8.dp))
                 }
             }
-            if (showHeaders && books.isNotEmpty()) {
+            if (showBookHeader && books.isNotEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     ListSectionTitle(text = booksLabel + " (${books.size})")
                 }
@@ -185,6 +192,7 @@ fun BookLibraryView(
                     isLastItem = index == books.lastIndex,
                     selected = Uri.fromFile(File(book.path)).toString() in selectedIds,
                     showPath = showBookPath,
+                    subtitleOverride = subtitleOverride(book),
                     onClick = { onBookClick(book) },
                     onLongClick = { onBookLongClick(book) },
                 )
@@ -288,6 +296,7 @@ fun BookItem(
     isLastItem: Boolean = false,
     selected: Boolean = false,
     showPath: Boolean = false,
+    subtitleOverride: String? = null,
     onClick: () -> Unit = {},
     onLongClick: (() -> Unit)? = null,
 ) {
@@ -301,6 +310,7 @@ fun BookItem(
             isLastItem = isLastItem,
             selected = selected,
             showPath = showPath,
+            subtitleOverride = subtitleOverride,
             onClick = onClick,
             onLongClick = onLongClick,
         )
@@ -314,6 +324,7 @@ fun BookItem(
             isLastItem = isLastItem,
             selected = selected,
             showPath = showPath,
+            subtitleOverride = subtitleOverride,
             onClick = onClick,
             onLongClick = onLongClick,
         )
@@ -481,6 +492,7 @@ private fun BookListItem(
     isLastItem: Boolean,
     selected: Boolean,
     showPath: Boolean = false,
+    subtitleOverride: String? = null,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)?,
 ) {
@@ -531,34 +543,50 @@ private fun BookListItem(
                 },
             )
         },
-        supportingContent = if (details.isNotEmpty() || showPath) {
-            {
-                Column {
-                    if (details.isNotEmpty()) {
-                        Text(
-                            text = details.joinToString(" · "),
-                            style = MaterialTheme.typography.bodySmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                    }
-                    if (showPath) {
-                        Text(
-                            text = book.path,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(
-                                top = if (details.isNotEmpty()) 2.dp else 4.dp,
-                            ),
-                        )
+        supportingContent = when {
+            // 搜索结果用：用外部传入的副文本（如分组·格式·大小·进度）整体接管第二行，避免与 details 重复。
+            subtitleOverride != null -> {
+                {
+                    Text(
+                        text = subtitleOverride,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
+
+            details.isNotEmpty() || showPath -> {
+                {
+                    Column {
+                        if (details.isNotEmpty()) {
+                            Text(
+                                text = details.joinToString(" · "),
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
+                        if (showPath) {
+                            Text(
+                                text = book.path,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(
+                                    top = if (details.isNotEmpty()) 2.dp else 4.dp,
+                                ),
+                            )
+                        }
                     }
                 }
             }
-        } else {
-            null
+
+            else -> null
         },
     )
 }
@@ -574,6 +602,7 @@ private fun BookGridItem(
     isLastItem: Boolean,
     selected: Boolean,
     showPath: Boolean = false,
+    subtitleOverride: String? = null,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)?,
     showFields: Boolean = true,
@@ -677,9 +706,11 @@ private fun BookGridItem(
                         else -> MaterialTheme.colorScheme.onSurface
                     },
                 )
-                if (showPath) {
+                // 搜索结果用：subtitleOverride 优先接管（分组·格式·大小·进度），否则按 showPath 显示路径。
+                val subtitleText = subtitleOverride ?: if (showPath) book.path else null
+                if (subtitleText != null) {
                     Text(
-                        text = book.path,
+                        text = subtitleText,
                         maxLines = 1,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

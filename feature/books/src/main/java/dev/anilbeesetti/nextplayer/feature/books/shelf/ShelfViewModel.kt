@@ -33,18 +33,28 @@ data class ShelfBook(
     val entryIds: List<Long>,
 )
 
+/** 状态栏筛选：全部 / 未读 / 阅读中 / 读完。判定依据见 [ShelfViewModel.statusOf]。 */
+enum class ShelfStatus { ALL, UNREAD, READING, FINISHED }
+
 data class ShelfUiState(
     /** 全部分组（扁平，含 parentId），UI 按当前层级自行过滤。 */
     val groups: List<BookShelfGroup> = emptyList(),
     /** 固定「未分组」的 id。 */
     val ungroupedId: Long? = null,
-    /** 当前分组栏所在层级：null 表示顶级（显示一级分组），非 null 表示在该分组的子层。 */
-    val barParentId: Long? = null,
-    /** 当前下方书籍列表展示的是哪个分组直接的书。 */
-    val displayedGroupId: Long? = null,
+    /** 当前进入的分组：null 表示在书架首页（显示顶级分组 + 未分组的书），非 null 表示在该分组内。 */
+    val navigatedGroupId: Long? = null,
+    /** 当前状态栏选中项。 */
+    val selectedStatus: ShelfStatus = ShelfStatus.ALL,
+    /** 当前展示的书籍：全部状态下是当前分组直接的书；其他状态下是全书架按状态过滤后的扁平列表。 */
     val books: List<ShelfBook> = emptyList(),
-    /** 每个分组递归的书籍数（自身 + 所有子孙分组，按路径去重），用于分组胶囊数字。 */
+    /** 全书架去重后的扁平书籍列表，用于状态栏计数和非全部状态过滤。 */
+    val allBooks: List<ShelfBook> = emptyList(),
+    /** 每个状态的书籍数（含 ALL），全书架去重后统计。 */
+    val statusCounts: Map<ShelfStatus, Int> = emptyMap(),
+    /** 每个分组递归的书籍数（自身 + 所有子孙分组，按路径去重），用于文件夹卡片数字。 */
     val groupCounts: Map<Long, Int> = emptyMap(),
+    /** 每个分组递归的书籍总大小（按路径去重），用于文件夹卡片显示大小。 */
+    val groupSizes: Map<Long, Long> = emptyMap(),
     /** 每个分组直接的书籍记录数（不含子孙），用于判断「该分组本身有没有书」。 */
     val directCounts: Map<Long, Int> = emptyMap(),
     /** 书架全部书籍数（跨分组按路径去重），用于空状态判断。 */
@@ -57,6 +67,8 @@ data class ShelfUiState(
 
 sealed interface ShelfEvent {
     data class Added(val count: Int) : ShelfEvent
+    /** 已在书架而被跳过的书：path -> 所在分组 id。一次携带全部，UI 合并成一个对话框展示。 */
+    data class AlreadyInShelf(val pathToGroup: Map<String, Long>) : ShelfEvent
 }
 
 /** 收藏书架：多级分组浏览、移除条目、从「浏览」页批量加入。 */
@@ -79,11 +91,11 @@ class ShelfViewModel(
 
     var output: Output = Output()
 
-    /** 当前分组栏所在层级的父分组 id，null=顶级。 */
-    private val barParentId = MutableStateFlow<Long?>(null)
+    /** 当前进入的分组 id，null=书架首页（顶级分组 + 未分组的书）。 */
+    private val navigatedGroupId = MutableStateFlow<Long?>(null)
 
-    /** 当前下方书籍展示的是哪个分组直接的书，null=用未分组兜底。 */
-    private val displayedGroupId = MutableStateFlow<Long?>(null)
+    /** 当前状态栏选中项。 */
+    private val selectedStatus = MutableStateFlow(ShelfStatus.ALL)
 
     private val refreshing = MutableStateFlow(false)
 
@@ -95,7 +107,7 @@ class ShelfViewModel(
         repository.observeItems(groupId = null),
         bookFileIndex.entries,
         preferencesRepository.applicationPreferences,
-        combine(refreshing, barParentId, displayedGroupId) { r, bp, dp -> Triple(r, bp, dp) },
+        combine(refreshing, navigatedGroupId, selectedStatus) { r, ng, ss -> Triple(r, ng, ss) },
     ) { groups, entries, bookFiles, preferences, nav ->
         toUiState(
             groups = groups,
@@ -103,8 +115,8 @@ class ShelfViewModel(
             bookFiles = bookFiles,
             preferences = preferences,
             refreshing = nav.first,
-            barParentId = nav.second,
-            displayedGroupId = nav.third,
+            navigatedGroupId = nav.second,
+            selectedStatus = nav.third,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -119,63 +131,28 @@ class ShelfViewModel(
         viewModelScope.launch { repository.ensureUngroupedGroup(output.defaultGroupName) }
     }
 
-    /**
-     * 点击分组：有子分组则进入下一层（分组栏变子分组，下方显示该分组直接的书）；
-     * 无子分组则仅在当前层选中它（下方显示它的书，分组栏不变）。
-     */
+    /** 点进某个分组：进入该分组内（子分组文件夹 + 该分组直接的书），固定在「全部」状态下。 */
     fun onGroupClick(groupId: Long) {
-        val groups = state.value.groups
-        val group = groups.firstOrNull { it.id == groupId } ?: return
-        val hasChildren = groups.any { it.parentId == groupId }
-        if (hasChildren) {
-            barParentId.value = groupId
-        }
-        displayedGroupId.value = groupId
-        autoDrillIntoBookedChild(groupId)
+        val group = state.value.groups.firstOrNull { it.id == groupId } ?: return
+        if (group.isUngrouped) return
+        selectedStatus.value = ShelfStatus.ALL
+        navigatedGroupId.value = groupId
     }
 
-    /**
-     * 进入分组后，若该分组本身没有直接书籍、但子孙分组里有书，自动沿「第一个有书的子分组」
-     * 向下钻，直到落在一个有直接书籍的分组上；找不到有书后代时停在原地显示空。
-     */
-    private fun autoDrillIntoBookedChild(startId: Long) {
-        val snapshot = state.value
-        val groups = snapshot.groups
-        val directCounts = snapshot.directCounts
-        val recursiveCounts = snapshot.groupCounts
-        val byParent = groups.groupBy { it.parentId }
-        var current = startId
-        var finalBarParent = barParentId.value
-        val visited = HashSet<Long>()
-        while (visited.add(current)) {
-            if ((directCounts[current] ?: 0) > 0) break
-            val next = byParent[current].orEmpty()
-                .sortedBy { it.sortOrder }
-                .firstOrNull { (recursiveCounts[it.id] ?: 0) > 0 } ?: break
-            if (byParent.containsKey(next.id)) finalBarParent = next.id
-            current = next.id
-        }
-        if (current != startId) {
-            barParentId.value = finalBarParent
-            displayedGroupId.value = current
+    /** 切换状态栏：非全部状态一律回到首页，不保留分组下钻。 */
+    fun onStatusSelected(status: ShelfStatus) {
+        selectedStatus.value = status
+        if (status != ShelfStatus.ALL) {
+            navigatedGroupId.value = null
         }
     }
 
-    /** 返回上一层；已在顶级时若选中了某个分组则退回「未分组」，否则不消费。 */
+    /** 返回上一层：在分组内则回到父分组（或首页）；已在首页不消费。 */
     fun onBack(): Boolean {
-        val groups = state.value.groups
-        val ungroupedId = groups.firstOrNull { it.isUngrouped }?.id
-        if (barParentId.value != null) {
-            val parent = groups.firstOrNull { it.id == barParentId.value }?.parentId
-            barParentId.value = parent
-            displayedGroupId.value = parent ?: ungroupedId
-            return true
-        }
-        if (displayedGroupId.value != null && displayedGroupId.value != ungroupedId) {
-            displayedGroupId.value = ungroupedId
-            return true
-        }
-        return false
+        val current = navigatedGroupId.value ?: return false
+        val parent = state.value.groups.firstOrNull { it.id == current }?.parentId
+        navigatedGroupId.value = parent
+        return true
     }
 
     fun removeFromShelf(entryIds: Collection<Long>) {
@@ -191,12 +168,17 @@ class ShelfViewModel(
                 groupId != null -> groupId
                 newGroupName.isNotBlank() -> repository.createGroup(
                     name = newGroupName,
-                    parentId = barParentId.value,
+                    parentId = navigatedGroupId.value,
                 )
                 else -> repository.ensureDefaultGroup(output.defaultGroupName)
             }
-            val added = repository.addPaths(groupId = targetGroupId, paths = paths)
-            eventsInternal.emit(ShelfEvent.Added(count = added))
+            val result = repository.addPaths(groupId = targetGroupId, paths = paths)
+            if (result.added > 0) {
+                eventsInternal.emit(ShelfEvent.Added(count = result.added))
+            }
+            if (result.alreadyExists.isNotEmpty()) {
+                eventsInternal.emit(ShelfEvent.AlreadyInShelf(pathToGroup = result.alreadyExists))
+            }
         }
     }
 
@@ -207,7 +189,7 @@ class ShelfViewModel(
     /** 分组栏最右的添加按钮：在当前所在层级新建分组。 */
     fun createGroup(name: String) {
         if (name.isBlank()) return
-        viewModelScope.launch { repository.createGroup(name = name, parentId = barParentId.value) }
+        viewModelScope.launch { repository.createGroup(name = name, parentId = navigatedGroupId.value) }
     }
 
     /** 长按分组 → 添加子分组。 */
@@ -225,9 +207,9 @@ class ShelfViewModel(
     fun deleteGroup(groupId: Long) {
         viewModelScope.launch {
             repository.deleteGroupRecursive(groupId)
-            if (barParentId.value == groupId || displayedGroupId.value == groupId) {
-                barParentId.value = null
-                displayedGroupId.value = state.value.groups.firstOrNull { it.isUngrouped }?.id
+            val nav = navigatedGroupId.value
+            if (nav != null && nav in subtreeGroupIds(state.value.groups, rootId = groupId, includeSelf = true)) {
+                navigatedGroupId.value = null
             }
         }
     }
@@ -240,11 +222,6 @@ class ShelfViewModel(
     /** 移动整个分组子树到目标父分组下，targetParentId=null 表示移到顶级。 */
     fun moveGroupSubtreeTo(groupId: Long, targetParentId: Long?) {
         viewModelScope.launch { repository.moveGroupSubtree(groupId = groupId, newParentId = targetParentId) }
-    }
-
-    /** 复制整个分组子树到目标父分组下，targetParentId=null 表示复制到顶级。 */
-    fun copyGroupSubtreeTo(groupId: Long, targetParentId: Long?) {
-        viewModelScope.launch { repository.copyGroupSubtree(groupId = groupId, newParentId = targetParentId) }
     }
 
     /** 删除确认弹窗要用：子树含多少个分组、多少本（去重）书。 */
@@ -290,26 +267,21 @@ class ShelfViewModel(
         }
     }
 
-    fun copyBookToGroup(book: ShelfBook, groupId: Long?, newGroupName: String) {
-        copyBooksToGroup(listOf(book), groupId, newGroupName)
-    }
-
-    fun copyBooksToGroup(books: List<ShelfBook>, groupId: Long?, newGroupName: String) {
-        viewModelScope.launch {
-            repository.copyItems(
-                ids = books.flatMap { it.entryIds },
-                targetGroupId = resolveGroupId(groupId = groupId, newGroupName = newGroupName),
-            )
-        }
-    }
-
     fun removeBooksFromShelf(books: List<ShelfBook>) {
         viewModelScope.launch { repository.removeItems(books.flatMap { it.entryIds }) }
     }
 
+    /** 批量更改书架书籍的已读/未读状态（只改索引里的 finished 标记，不动文件）。 */
+    fun setBooksFinished(paths: List<String>, finished: Boolean) {
+        if (paths.isEmpty()) return
+        viewModelScope.launch {
+            paths.forEach { bookFileIndex.setFinished(path = it, finished = finished) }
+        }
+    }
+
     private suspend fun resolveGroupId(groupId: Long?, newGroupName: String): Long = when {
         groupId != null -> groupId
-        newGroupName.isNotBlank() -> repository.createGroup(name = newGroupName, parentId = barParentId.value)
+        newGroupName.isNotBlank() -> repository.createGroup(name = newGroupName, parentId = navigatedGroupId.value)
         else -> repository.ensureDefaultGroup(output.defaultGroupName)
     }
 
@@ -369,59 +341,65 @@ class ShelfViewModel(
         bookFiles: List<BookFile>?,
         preferences: ApplicationPreferences,
         refreshing: Boolean,
-        barParentId: Long?,
-        displayedGroupId: Long?,
+        navigatedGroupId: Long?,
+        selectedStatus: ShelfStatus,
     ): ShelfUiState {
         val ungroupedId = groups.firstOrNull { it.isUngrouped }?.id
         val directCounts = entries.groupingBy { it.groupId }.eachCount()
-        val effectiveDisplayed = displayedGroupId ?: ungroupedId
-        val visibleEntries = entries.filter { it.groupId == effectiveDisplayed }
         val indexed = bookFiles.orEmpty().associateBy { it.path }
-        val shelfBooks = visibleEntries.groupBy { it.path }.map { (path, pathEntries) ->
-            ShelfBook(
-                book = indexed[path] ?: fallbackBook(path),
-                entryIds = pathEntries.map { it.id },
-            )
-        }
-        val sort = Sort(by = preferences.shelfSortBy, order = preferences.shelfSortOrder)
-        val baseBookComparator = sort.bookComparator()
-        val baseComparator = Comparator<ShelfBook> { a, b -> baseBookComparator.compare(a.book, b.book) }
-        val sorted = when (sort.by) {
-            Sort.By.SHELF_ADDED -> {
-                val entryAddedAt = visibleEntries.groupBy { it.path }
-                    .mapValues { (_, es) -> es.minOf { it.addedAt } }
-                shelfBooks.sortedWith(
-                    compareBy<ShelfBook> { entryAddedAt[it.book.path] ?: 0L }
-                        .then(baseComparator)
-                        .run { if (sort.order == Sort.Order.DESCENDING) reversed() else this },
-                )
-            }
+        val sizeByPath = indexed.mapValues { (_, b) -> b.size }
 
-            Sort.By.LAST_VIEWED -> {
-                val lastViewed = preferences.bookLastViewedAt
-                shelfBooks.sortedWith(
-                    compareBy<ShelfBook> { lastViewed[it.book.path] ?: Long.MIN_VALUE }
-                        .then(baseComparator)
-                        .run { if (sort.order == Sort.Order.DESCENDING) reversed() else this },
-                )
-            }
-
-            else -> shelfBooks.sortedWith(baseComparator)
+        // 全书架去重扁平列表（跨分组），用于状态栏计数和非全部状态过滤。
+        val allBooksRaw = entries.groupBy { it.path }.map { (path, pathEntries) ->
+            ShelfBook(book = indexed[path] ?: fallbackBook(path), entryIds = pathEntries.map { it.id })
         }
+        val allBooks = sortShelfBooks(allBooksRaw, entries, preferences)
+
+        // 当前分组直接的书：首页=未分组的书；进入分组=该分组直接的书。
+        val effectiveDisplayed = navigatedGroupId ?: ungroupedId
+        val visibleEntries = entries.filter { it.groupId == effectiveDisplayed }
+        val displayedBooksRaw = visibleEntries.groupBy { it.path }.map { (path, pathEntries) ->
+            ShelfBook(book = indexed[path] ?: fallbackBook(path), entryIds = pathEntries.map { it.id })
+        }
+        val displayedBooks = sortShelfBooks(displayedBooksRaw, visibleEntries, preferences)
+
+        val books = if (selectedStatus == ShelfStatus.ALL) {
+            displayedBooks
+        } else {
+            allBooks.filter { statusOf(it.book) == selectedStatus }
+        }
+
+        val statusCounts = mapOf(
+            ShelfStatus.ALL to allBooks.size,
+            ShelfStatus.UNREAD to allBooks.count { statusOf(it.book) == ShelfStatus.UNREAD },
+            ShelfStatus.READING to allBooks.count { statusOf(it.book) == ShelfStatus.READING },
+            ShelfStatus.FINISHED to allBooks.count { statusOf(it.book) == ShelfStatus.FINISHED },
+        )
+
         return ShelfUiState(
             groups = groups,
             ungroupedId = ungroupedId,
-            barParentId = barParentId,
-            displayedGroupId = effectiveDisplayed,
-            books = sorted,
+            navigatedGroupId = navigatedGroupId,
+            selectedStatus = selectedStatus,
+            books = books,
+            allBooks = allBooks,
+            statusCounts = statusCounts,
             groupCounts = recursiveGroupCounts(groups = groups, entries = entries),
+            groupSizes = recursiveGroupSizes(groups = groups, entries = entries, sizeByPath = sizeByPath),
             directCounts = directCounts,
-            allCount = entries.map { it.path }.distinct().size,
+            allCount = allBooks.size,
             preferences = preferences.toShelfPreferences(),
             lastViewedBookPath = preferences.lastViewedBookPath,
             isLoading = bookFiles == null,
             refreshing = refreshing,
         )
+    }
+
+    /** 阅读状态判定：读完优先，其次从未打开=未读，其余=阅读中。 */
+    private fun statusOf(book: BookFile): ShelfStatus = when {
+        book.finished -> ShelfStatus.FINISHED
+        book.lastOpenedAt == 0L -> ShelfStatus.UNREAD
+        else -> ShelfStatus.READING
     }
 
     private fun fallbackBook(path: String): BookFile {
@@ -456,6 +434,57 @@ internal fun recursiveGroupCounts(
         set
     }
     return groups.associate { it.id to pathsOf(it.id).size }
+}
+
+/** 每个分组递归的去重书籍总大小（自身 + 所有子孙，按路径去重后累加）。 */
+internal fun recursiveGroupSizes(
+    groups: List<BookShelfGroup>,
+    entries: List<BookShelfEntry>,
+    sizeByPath: Map<String, Long>,
+): Map<Long, Long> {
+    val byParent = groups.groupBy { it.parentId }
+    val pathsByGroup = entries.groupBy { it.groupId }
+        .mapValues { (_, es) -> es.map { it.path }.distinct() }
+    val memo = mutableMapOf<Long, Set<String>>()
+    fun pathsOf(id: Long): Set<String> = memo.getOrPut(id) {
+        val set = pathsByGroup[id].orEmpty().toMutableSet()
+        for (child in byParent[id].orEmpty()) set.addAll(pathsOf(child.id))
+        set
+    }
+    return groups.associate { it.id to pathsOf(it.id).sumOf { sizeByPath[it] ?: 0L } }
+}
+
+/** 按书架偏好排序书籍列表（用于展示列表与全书架扁平列表）。 */
+internal fun sortShelfBooks(
+    books: List<ShelfBook>,
+    entries: List<BookShelfEntry>,
+    preferences: ApplicationPreferences,
+): List<ShelfBook> {
+    val sort = Sort(by = preferences.shelfSortBy, order = preferences.shelfSortOrder)
+    val baseBookComparator = sort.bookComparator()
+    val baseComparator = Comparator<ShelfBook> { a, b -> baseBookComparator.compare(a.book, b.book) }
+    return when (sort.by) {
+        Sort.By.SHELF_ADDED -> {
+            val entryAddedAt = entries.groupBy { it.path }
+                .mapValues { (_, es) -> es.minOf { it.addedAt } }
+            books.sortedWith(
+                compareBy<ShelfBook> { entryAddedAt[it.book.path] ?: 0L }
+                    .then(baseComparator)
+                    .run { if (sort.order == Sort.Order.DESCENDING) reversed() else this },
+            )
+        }
+
+        Sort.By.LAST_VIEWED -> {
+            val lastViewed = preferences.bookLastViewedAt
+            books.sortedWith(
+                compareBy<ShelfBook> { lastViewed[it.book.path] ?: Long.MIN_VALUE }
+                    .then(baseComparator)
+                    .run { if (sort.order == Sort.Order.DESCENDING) reversed() else this },
+            )
+        }
+
+        else -> books.sortedWith(baseComparator)
+    }
 }
 
 /** 某分组及其所有子孙分组的 id 集合。 */

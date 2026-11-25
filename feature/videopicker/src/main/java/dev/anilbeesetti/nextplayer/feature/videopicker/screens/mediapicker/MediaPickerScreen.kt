@@ -1194,6 +1194,12 @@ fun SelectionActionsSheet(
     onAddSubGroupAction: () -> Unit = {},
     onMoveGroupAction: () -> Unit = {},
     onCopyGroupAction: () -> Unit = {},
+    /** 删除动作的标题文案资源，默认「删除」；书架场景改成「清除」避免误解为删文件。 */
+    deleteLabelRes: Int = R.string.delete,
+    /** 标记已读/未读动作，默认不显示。文案由调用方按选中状态传入 toggleFinishedLabelRes。 */
+    showToggleFinishedAction: Boolean = false,
+    toggleFinishedLabelRes: Int = R.string.book_shelf_mark_read,
+    onToggleFinishedAction: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val isTv = remember { context.isTelevision }
@@ -1241,7 +1247,7 @@ fun SelectionActionsSheet(
                         modifier = firstActionModifier,
                         isTv = isTv,
                         imageVector = NextIcons.Delete,
-                        title = stringResource(id = R.string.delete),
+                        title = stringResource(id = deleteLabelRes),
                         onClick = onDeleteAction,
                     )
                 }
@@ -1276,6 +1282,14 @@ fun SelectionActionsSheet(
                         imageVector = NextIcons.Edit,
                         title = stringResource(R.string.rename),
                         onClick = onRenameAction,
+                    )
+                }
+                if (showToggleFinishedAction) {
+                    SelectionAction(
+                        isTv = isTv,
+                        imageVector = NextIcons.CheckBox,
+                        title = stringResource(id = toggleFinishedLabelRes),
+                        onClick = onToggleFinishedAction,
                     )
                 }
                 if (showReorderAction) {

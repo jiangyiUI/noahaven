@@ -291,6 +291,7 @@ private fun ReaderContent(
             paragraphSpacingPx,
             headingSpacingPx,
             settings.firstLineIndent,
+            settings.justifyText,
             content,
             textMeasurer,
         ) {
@@ -305,10 +306,11 @@ private fun ReaderContent(
                 headingSpacingPx = headingSpacingPx,
                 imageAspect = content::imageAspect,
                 firstLineIndent = settings.firstLineIndent,
+                justifyText = settings.justifyText,
             )
             val created = ReaderPager(content = content, paginator = paginator)
             val (chapter, offset) = latestPosition.value
-            if (!created.open(chapterIndex = chapter, charOffset = offset)) {
+            if (!created.openAt(chapterIndex = chapter, charOffset = offset)) {
                 created.open(chapterIndex = 0, charOffset = 0)
             }
             pager = created
@@ -356,7 +358,7 @@ private fun ReaderContent(
 
         fun jumpToBookmark(chapterIndex: Int, charOffset: Int) {
             val current = pager ?: return
-            if (current.open(chapterIndex = chapterIndex, charOffset = charOffset)) {
+            if (current.openAt(chapterIndex = chapterIndex, charOffset = charOffset)) {
                 revision++
                 notifyPosition()
             }
@@ -463,7 +465,8 @@ private fun ReaderContent(
                                 totalDrag += dragAmount
                             },
                             onDragEnd = {
-                                val threshold = 64.dp.toPx()
+                                // 上下滑动翻页触发距离：与左右保持一致手感。
+                                val threshold = 40.dp.toPx()
                                 when {
                                     totalDrag < -threshold -> turnNext()
                                     totalDrag > threshold -> turnPrevious()
@@ -481,7 +484,8 @@ private fun ReaderContent(
                                 totalDrag += dragAmount
                             },
                             onDragEnd = {
-                                val threshold = 64.dp.toPx()
+                                // 左右滑动翻页触发距离：缩短阈值，短划也能响应（另含系统 touch slop 约 8dp）。
+                                val threshold = 40.dp.toPx()
                                 when {
                                     totalDrag < -threshold -> turnNext()
                                     totalDrag > threshold -> turnPrevious()
@@ -557,6 +561,7 @@ private fun ReaderContent(
                     headingSpacing = with(density) { headingSpacingPx.toDp() },
                     horizontalPadding = pageHorizontalPadding,
                     firstLineIndent = settings.firstLineIndent,
+                    justifyText = settings.justifyText,
                     showChapterTitle = settings.showChapterTitle,
                     showTimeBattery = settings.showTimeBattery,
                 )
@@ -821,6 +826,7 @@ private fun ReaderPageLayout(
     headingSpacing: Dp,
     horizontalPadding: Dp,
     firstLineIndent: Boolean,
+    justifyText: Boolean,
     showChapterTitle: Boolean,
     showTimeBattery: Boolean,
 ) {
@@ -847,16 +853,28 @@ private fun ReaderPageLayout(
                     }
 
                     is PageBlock.Text -> {
-                        val annotated = remember(block.text, block.indent, firstLineIndent) {
-                            if (block.indent && firstLineIndent) {
-                                AnnotatedString(
+                        val annotated = remember(block.text, block.indent, firstLineIndent, justifyText) {
+                            val indentEnabled = block.indent && firstLineIndent
+                            when {
+                                indentEnabled && justifyText -> AnnotatedString(
                                     text = block.text,
                                     paragraphStyle = ParagraphStyle(
                                         textIndent = TextIndent(firstLine = 2.em),
+                                        textAlign = TextAlign.Justify,
                                     ),
                                 )
-                            } else {
-                                AnnotatedString(text = block.text)
+
+                                indentEnabled -> AnnotatedString(
+                                    text = block.text,
+                                    paragraphStyle = ParagraphStyle(textIndent = TextIndent(firstLine = 2.em)),
+                                )
+
+                                justifyText -> AnnotatedString(
+                                    text = block.text,
+                                    paragraphStyle = ParagraphStyle(textAlign = TextAlign.Justify),
+                                )
+
+                                else -> AnnotatedString(text = block.text)
                             }
                         }
                         Text(text = annotated, style = bodyStyle)

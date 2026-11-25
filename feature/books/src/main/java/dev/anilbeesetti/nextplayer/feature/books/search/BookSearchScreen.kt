@@ -72,13 +72,19 @@ import dev.anilbeesetti.nextplayer.core.ui.components.tvFocusRing
 import dev.anilbeesetti.nextplayer.core.ui.designsystem.NextIcons
 import dev.anilbeesetti.nextplayer.core.ui.extensions.copy
 import dev.anilbeesetti.nextplayer.core.ui.extensions.plus
+import dev.anilbeesetti.nextplayer.feature.books.data.BookShelfEntry
+import dev.anilbeesetti.nextplayer.feature.books.data.BookShelfGroup
 import dev.anilbeesetti.nextplayer.feature.books.shelf.AddToShelfDialog
+import dev.anilbeesetti.nextplayer.feature.books.shelf.AlreadyInShelfDialog
 import dev.anilbeesetti.nextplayer.feature.books.shelf.BookLibraryView
 import dev.anilbeesetti.nextplayer.feature.videopicker.composables.FolderItem
+import dev.anilbeesetti.nextplayer.feature.videopicker.composables.RenameDialog
+import dev.anilbeesetti.nextplayer.feature.videopicker.screens.mediapicker.DeleteConfirmationDialog
 import dev.anilbeesetti.nextplayer.feature.videopicker.screens.mediapicker.SelectionActionsSheet
 import dev.anilbeesetti.nextplayer.feature.videopicker.state.SelectionItem
 import dev.anilbeesetti.nextplayer.feature.videopicker.state.rememberSelectionManager
 import java.io.File
+import kotlinx.coroutines.flow.SharedFlow
 
 /** 书籍搜索页，结构与漫画搜索页一致。 */
 @Composable
@@ -99,6 +105,10 @@ fun BookSearchScreen(
             onOpenBook(book.path)
         },
         onAddToShelf = viewModel::addToShelf,
+        onClearBooks = viewModel::removeBooksFromShelf,
+        onMoveBooks = viewModel::moveBooksToGroup,
+        onRenameBook = viewModel::renameBook,
+        events = viewModel.events,
     )
 }
 
@@ -108,6 +118,10 @@ internal fun BookSearchScreenContent(
     onAction: (BookSearchUiEvent) -> Unit,
     onBookClick: (BookFile) -> Unit,
     onAddToShelf: (groupId: Long?, newGroupName: String, paths: List<String>) -> Unit,
+    onClearBooks: (paths: List<String>) -> Unit,
+    onMoveBooks: (paths: List<String>, groupId: Long?, newGroupName: String) -> Unit,
+    onRenameBook: (path: String, newName: String) -> Unit,
+    events: SharedFlow<BookSearchEvent>,
 ) {
     val context = LocalContext.current
     val defaultGroupName = stringResource(R.string.book_shelf_ungrouped)
@@ -118,7 +132,71 @@ internal fun BookSearchScreenContent(
     var showAddToShelfDialog by rememberSaveable { mutableStateOf(false) }
     var addToShelfPaths by remember { mutableStateOf<List<String>>(emptyList()) }
 
+    // 书架内搜索：多选底栏的「清除记录 / 移动到分组 / 重命名」弹窗状态。
+    var showDeleteConfirmation by rememberSaveable { mutableStateOf(false) }
+    var booksToClear by remember { mutableStateOf<List<String>>(emptyList()) }
+    var showMoveDialog by rememberSaveable { mutableStateOf(false) }
+    var booksToMove by remember { mutableStateOf<List<String>>(emptyList()) }
+    var showRenameBookDialog by rememberSaveable { mutableStateOf(false) }
+    var renameTargetPath by remember { mutableStateOf<String?>(null) }
+
+    // 分组 id → 层级路径（如「分组1/子分组1」，未分组/找不到用本地化名称）。
+    val groupLabelFor: (Long) -> String = remember(state.shelfGroups, defaultGroupName) {
+        val groupById = state.shelfGroups.associateBy { it.id }
+        fun labelFor(groupId: Long): String {
+            val group = groupById[groupId] ?: return defaultGroupName
+            if (group.isUngrouped) return defaultGroupName
+            val chain = mutableListOf<String>()
+            var cur: BookShelfGroup? = group
+            while (cur != null) {
+                chain.add(cur.name)
+                cur = cur.parentId?.let { groupById[it] }
+            }
+            return chain.asReversed().joinToString("/")
+        }
+        ::labelFor
+    }
+
+    // 书架内搜索：构建 path → 分组层级路径（如「分组1/子分组1」，未分组用本地化名称）。
+    val pathToGroupLabel: Map<String, String> = remember(
+        state.shelfGroups,
+        state.shelfEntries,
+        defaultGroupName,
+    ) {
+        state.shelfEntries.associate { entry -> entry.path to groupLabelFor(entry.groupId) }
+    }
+
+    // 书架内搜索：副信息行用「分组 · 格式 · 大小 · 进度」接管；浏览搜索保持原行为（显示路径）。
+    val shelfSearchSubtitle: (BookFile) -> String? = if (state.shelfOnly) {
+        { book ->
+            val groupLabel = pathToGroupLabel[book.path] ?: defaultGroupName
+            val format = book.format.name
+            val size = book.formattedFileSize
+            val progress = if (book.hasProgress) "${(book.percent * 100).toInt()}%" else null
+            listOfNotNull(groupLabel, format, size, progress).joinToString(" · ")
+        }
+    } else {
+        { null }
+    }
+
     LaunchedEffect(key1 = Unit) { focusRequester.requestFocus() }
+
+    // 已在书架的书（合并展示）：非空时弹出一个对话框列出每本书所在分组。
+    var alreadyInShelf by remember { mutableStateOf<Map<String, Long>?>(null) }
+
+    // 加入书架结果：成功提示「已加入书架」；已存在的书合并成一个对话框展示。
+    LaunchedEffect(state.shelfGroups, defaultGroupName) {
+        events.collect { event ->
+            when (event) {
+                is BookSearchEvent.Added -> Toast.makeText(
+                    context,
+                    context.getString(R.string.book_shelf_added),
+                    Toast.LENGTH_SHORT,
+                ).show()
+                is BookSearchEvent.AlreadyInShelf -> alreadyInShelf = event.pathToGroup
+            }
+        }
+    }
 
     val selectedItemsSize = selectionManager.selectionItems.size
     val totalBooksSize = state.searchResults.books.size
@@ -252,40 +330,84 @@ internal fun BookSearchScreenContent(
             }
         },
         bottomBar = {
-            // 搜索结果只提供「加入书架」这一个批量动作，复用浏览列表的底栏样式。
-            SelectionActionsSheet(
-                show = selectionManager.isInSelectionMode &&
-                    selectionManager.selectionItems.isNotEmpty(),
-                contentFocusRequester = contentFocusRequester,
-                showRenameAction = false,
-                showInfoAction = false,
-                showHideAction = false,
-                showPlayAction = false,
-                showAddToPlaylistAction = false,
-                showAddToShelfAction = true,
-                showShareAction = false,
-                showCopyAction = false,
-                showMoveAction = false,
-                showDeleteAction = false,
-                onPlayAction = {},
-                onAddToPlaylistAction = {},
-                onRenameAction = {},
-                onShareAction = {},
-                onCopyAction = {},
-                onMoveAction = {},
-                onInfoAction = {},
-                onHideAction = {},
-                onDeleteAction = {},
-                onAddToShelfAction = {
-                    val paths = selectionManager.selectionItems
-                        .mapNotNull { (it as? SelectionItem.Video)?.path }
-                        .distinct()
-                    if (paths.isNotEmpty()) {
-                        addToShelfPaths = paths
-                        showAddToShelfDialog = true
-                    }
-                },
-            )
+            val selectedPaths = selectionManager.selectionItems
+                .mapNotNull { (it as? SelectionItem.Video)?.path }
+                .distinct()
+            when {
+                state.shelfOnly -> {
+                    // 书架内搜索：长按进入多选，底栏与书架列表一致——清除记录 / 重命名(仅单选) / 移动到分组。
+                    val singleSelectedBook = selectionManager.selectionItems
+                        .singleOrNull()
+                        ?.let { it as? SelectionItem.Video }
+                        ?.let { item -> state.searchResults.books.firstOrNull { it.path == item.path } }
+                    SelectionActionsSheet(
+                        show = selectionManager.isInSelectionMode && selectedPaths.isNotEmpty(),
+                        contentFocusRequester = contentFocusRequester,
+                        showRenameAction = singleSelectedBook != null,
+                        showDeleteAction = true,
+                        showMoveAction = true,
+                        deleteLabelRes = R.string.book_shelf_clear,
+                        showCopyAction = false,
+                        showShareAction = false,
+                        showAddToShelfAction = false,
+                        showAddToPlaylistAction = false,
+                        showPlayAction = false,
+                        showReorderAction = false,
+                        showInfoAction = false,
+                        showHideAction = false,
+                        onDeleteAction = {
+                            booksToClear = selectedPaths
+                            showDeleteConfirmation = true
+                        },
+                        onRenameAction = {
+                            renameTargetPath = singleSelectedBook?.path
+                            showRenameBookDialog = true
+                        },
+                        onMoveAction = {
+                            booksToMove = selectedPaths
+                            showMoveDialog = true
+                        },
+                        onCopyAction = {},
+                        onShareAction = {},
+                        onPlayAction = {},
+                        onAddToPlaylistAction = {},
+                        onInfoAction = {},
+                        onHideAction = {},
+                    )
+                }
+                else -> {
+                    // 浏览搜索：只提供「加入书架」批量动作，复用浏览列表的底栏样式。
+                    SelectionActionsSheet(
+                        show = selectionManager.isInSelectionMode && selectedPaths.isNotEmpty(),
+                        contentFocusRequester = contentFocusRequester,
+                        showRenameAction = false,
+                        showInfoAction = false,
+                        showHideAction = false,
+                        showPlayAction = false,
+                        showAddToPlaylistAction = false,
+                        showAddToShelfAction = true,
+                        showShareAction = false,
+                        showCopyAction = false,
+                        showMoveAction = false,
+                        showDeleteAction = false,
+                        onPlayAction = {},
+                        onAddToPlaylistAction = {},
+                        onRenameAction = {},
+                        onShareAction = {},
+                        onCopyAction = {},
+                        onMoveAction = {},
+                        onInfoAction = {},
+                        onHideAction = {},
+                        onDeleteAction = {},
+                        onAddToShelfAction = {
+                            if (selectedPaths.isNotEmpty()) {
+                                addToShelfPaths = selectedPaths
+                                showAddToShelfDialog = true
+                            }
+                        },
+                    )
+                }
+            }
         },
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
     ) { scaffoldPadding ->
@@ -340,9 +462,11 @@ internal fun BookSearchScreenContent(
                             }
                         },
                         onBookLongClick = { book ->
+                            // 长按进入多选：浏览搜索显示「加入书架」底栏，书架内搜索显示清除/重命名/移动底栏。
                             selectionManager.toggleSelection(book.toSearchSelectionItem())
                         },
-                        showBookPath = true,
+                        showBookPath = !state.shelfOnly,
+                        subtitleOverride = shelfSearchSubtitle,
                     )
                 }
             }
@@ -351,6 +475,69 @@ internal fun BookSearchScreenContent(
 
     BackHandler(enabled = selectionManager.isInSelectionMode) {
         selectionManager.exitSelectionMode()
+    }
+
+    // 书架内搜索：清除选中书籍的书架记录（不删磁盘文件）
+    if (showDeleteConfirmation) {
+        DeleteConfirmationDialog(
+            selectionItems = selectionManager.selectionItems,
+            removalFromShelf = true,
+            onConfirm = {
+                onClearBooks(booksToClear)
+                selectionManager.exitSelectionMode()
+                showDeleteConfirmation = false
+                booksToClear = emptyList()
+            },
+            onCancel = {
+                showDeleteConfirmation = false
+                booksToClear = emptyList()
+            },
+        )
+    }
+
+    // 书架内搜索：移动选中书籍到别的分组
+    if (showMoveDialog) {
+        AddToShelfDialog(
+            groups = state.shelfGroups,
+            ungroupedId = state.shelfGroups.firstOrNull { it.isUngrouped }?.id,
+            ungroupedLabel = stringResource(R.string.book_shelf_root_directory),
+            defaultGroupName = defaultGroupName,
+            title = stringResource(R.string.book_shelf_move_to_group),
+            onDismiss = {
+                showMoveDialog = false
+                booksToMove = emptyList()
+            },
+            onConfirm = { groupId, newGroupName ->
+                onMoveBooks(booksToMove, groupId, newGroupName)
+                showMoveDialog = false
+                booksToMove = emptyList()
+                selectionManager.exitSelectionMode()
+            },
+        )
+    }
+
+    // 书架内搜索：单选重命名（与书架列表一致，仅单选时点底栏「重命名」弹出）
+    if (showRenameBookDialog) {
+        renameTargetPath?.let { path ->
+            val book = state.searchResults.books.firstOrNull { it.path == path }
+            val initialName = book?.displayName
+                ?.substringBeforeLast(delimiter = '.', missingDelimiterValue = book.displayName)
+                ?: ""
+            RenameDialog(
+                name = initialName,
+                onDismiss = {
+                    showRenameBookDialog = false
+                    renameTargetPath = null
+                    selectionManager.exitSelectionMode()
+                },
+                onDone = { name ->
+                    onRenameBook(path, name)
+                    showRenameBookDialog = false
+                    renameTargetPath = null
+                    selectionManager.exitSelectionMode()
+                },
+            )
+        }
     }
 
     if (showAddToShelfDialog) {
@@ -365,15 +552,18 @@ internal fun BookSearchScreenContent(
             },
             onConfirm = { groupId, newGroupName ->
                 onAddToShelf(groupId, newGroupName, addToShelfPaths)
-                Toast.makeText(
-                    context,
-                    context.getString(R.string.book_shelf_added),
-                    Toast.LENGTH_SHORT,
-                ).show()
                 showAddToShelfDialog = false
                 addToShelfPaths = emptyList()
                 selectionManager.exitSelectionMode()
             },
+        )
+    }
+
+    alreadyInShelf?.let { mapping ->
+        AlreadyInShelfDialog(
+            pathToGroup = mapping,
+            groupLabelFor = groupLabelFor,
+            onDismiss = { alreadyInShelf = null },
         )
     }
 }
@@ -535,6 +725,7 @@ private fun SearchResultsContent(
     onBookClick: (BookFile) -> Unit,
     onBookLongClick: (BookFile) -> Unit = {},
     showBookPath: Boolean = false,
+    subtitleOverride: (BookFile) -> String? = { null },
 ) {
     AnimatedVisibility(
         visible = isSearching,
@@ -585,6 +776,7 @@ private fun SearchResultsContent(
                 onBookClick = onBookClick,
                 onBookLongClick = onBookLongClick,
                 showBookPath = showBookPath,
+                subtitleOverride = subtitleOverride,
             )
         }
     }

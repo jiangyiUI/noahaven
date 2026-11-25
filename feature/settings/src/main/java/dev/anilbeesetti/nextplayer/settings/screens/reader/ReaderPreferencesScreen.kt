@@ -316,6 +316,11 @@ private fun ReaderPreferencesScreenContent(
                 title = stringResource(R.string.reader_show_time_battery),
                 isChecked = settings.showTimeBattery,
                 onClick = { onAction(ReaderPreferencesUiEvent.ToggleShowTimeBattery) },
+            )
+            PreferenceSwitch(
+                title = stringResource(R.string.reader_justify_text),
+                isChecked = settings.justifyText,
+                onClick = { onAction(ReaderPreferencesUiEvent.ToggleJustifyText) },
                 isLastItem = true,
             )
         }

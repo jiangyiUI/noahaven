@@ -771,6 +771,14 @@ fun ReaderSettingsSheet(
                     onSettingsChange { current -> current.copy(showTimeBattery = checked) }
                 },
             )
+            SwitchRow(
+                label = stringResource(R.string.reader_justify_text),
+                checked = settings.justifyText,
+                theme = theme,
+                onCheckedChange = { checked ->
+                    onSettingsChange { current -> current.copy(justifyText = checked) }
+                },
+            )
         }
     }
 

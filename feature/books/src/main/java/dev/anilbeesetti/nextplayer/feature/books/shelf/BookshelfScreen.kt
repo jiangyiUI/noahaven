@@ -505,8 +505,8 @@ internal fun BookshelfScreenContent(
         AddToShelfDialog(
             groups = shelfGroups,
             ungroupedId = shelfGroups.firstOrNull { it.isUngrouped }?.id,
-            ungroupedLabel = defaultGroupName,
-            defaultGroupName = defaultGroupName,
+            ungroupedLabel = stringResource(R.string.book_shelf_no_group),
+            defaultGroupName = stringResource(R.string.book_shelf_no_group),
             onDismiss = {
                 showAddToShelfDialog = false
                 addToShelfPaths = emptyList()

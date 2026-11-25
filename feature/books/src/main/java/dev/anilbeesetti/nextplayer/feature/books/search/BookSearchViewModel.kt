@@ -7,11 +7,15 @@ import dev.anilbeesetti.nextplayer.core.common.extensions.prettyName
 import dev.anilbeesetti.nextplayer.core.data.repository.PreferencesRepository
 import dev.anilbeesetti.nextplayer.core.data.repository.SearchHistoryRepository
 import dev.anilbeesetti.nextplayer.core.domain.SearchMatcher
+import android.net.Uri
 import dev.anilbeesetti.nextplayer.core.media.index.BookFileIndex
+import dev.anilbeesetti.nextplayer.core.media.services.MediaOperationsService
+import dev.anilbeesetti.nextplayer.core.media.services.withPreservedExtension
 import dev.anilbeesetti.nextplayer.core.model.ApplicationPreferences
 import dev.anilbeesetti.nextplayer.core.model.BookFile
 import dev.anilbeesetti.nextplayer.core.model.Folder
 import dev.anilbeesetti.nextplayer.core.ui.base.MviViewModel
+import dev.anilbeesetti.nextplayer.feature.books.data.BookShelfEntry
 import dev.anilbeesetti.nextplayer.feature.books.data.BookShelfGroup
 import dev.anilbeesetti.nextplayer.feature.books.data.BookShelfRepository
 import java.io.File
@@ -19,7 +23,9 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
@@ -35,12 +41,21 @@ import org.koin.core.annotation.InjectedParam
 import org.koin.core.annotation.KoinViewModel
 import org.koin.core.annotation.Named
 
+/** 搜索页一次性事件：加入书架的结果反馈。 */
+sealed interface BookSearchEvent {
+    /** 成功加入书架的本数。 */
+    data class Added(val count: Int) : BookSearchEvent
+    /** 已在书架而被跳过的书：path -> 所在分组 id。一次携带全部，UI 合并成一个对话框展示。 */
+    data class AlreadyInShelf(val pathToGroup: Map<String, Long>) : BookSearchEvent
+}
+
 /** 书籍搜索页：与漫画搜索共用搜索历史、常用文件夹和搜索算法。 */
 @KoinViewModel
 class BookSearchViewModel(
     private val bookFileIndex: BookFileIndex,
     private val searchHistoryRepository: SearchHistoryRepository,
     private val preferencesRepository: PreferencesRepository,
+    private val mediaOperationsService: MediaOperationsService,
     @Named(DiQualifiers.DEFAULT_DISPATCHER) private val defaultDispatcher: CoroutineDispatcher,
     @InjectedParam internal var output: Output,
     @InjectedParam private val shelfOnly: Boolean = false,
@@ -56,6 +71,9 @@ class BookSearchViewModel(
     private val stateInternal = MutableStateFlow(value = BookSearchUiState(shelfOnly = shelfOnly))
     override val state: StateFlow<BookSearchUiState> = stateInternal.asStateFlow()
 
+    private val eventsInternal = MutableSharedFlow<BookSearchEvent>(extraBufferCapacity = 8)
+    val events: SharedFlow<BookSearchEvent> = eventsInternal
+
     private val searchQuery = MutableStateFlow(value = "")
 
     init {
@@ -64,6 +82,7 @@ class BookSearchViewModel(
         collectPreferences()
         collectSearchResults()
         collectShelfGroups()
+        if (shelfOnly) collectShelfEntries()
     }
 
     private fun collectShelfGroups() {
@@ -71,6 +90,16 @@ class BookSearchViewModel(
         viewModelScope.launch {
             repo.groups.collect { groups ->
                 stateInternal.update { it.copy(shelfGroups = groups) }
+            }
+        }
+    }
+
+    /** 书架内搜索：收集全部条目（path → groupId），用于在结果行展示所属分组。 */
+    private fun collectShelfEntries() {
+        val repo = shelfRepository ?: return
+        viewModelScope.launch {
+            repo.observeItems(groupId = null).collect { entries ->
+                stateInternal.update { it.copy(shelfEntries = entries) }
             }
         }
     }
@@ -227,7 +256,65 @@ class BookSearchViewModel(
                 newGroupName.isNotBlank() -> repo.createGroup(name = newGroupName, parentId = null)
                 else -> repo.ensureDefaultGroup(output.defaultGroupName)
             }
-            repo.addPaths(groupId = targetGroupId, paths = paths)
+            val result = repo.addPaths(groupId = targetGroupId, paths = paths)
+            if (result.added > 0) {
+                eventsInternal.emit(BookSearchEvent.Added(count = result.added))
+            }
+            if (result.alreadyExists.isNotEmpty()) {
+                eventsInternal.emit(BookSearchEvent.AlreadyInShelf(pathToGroup = result.alreadyExists))
+            }
+        }
+    }
+
+    /** 书架内搜索：清除选中书籍的书架记录（只移除记录，不动磁盘文件）。 */
+    fun removeBooksFromShelf(paths: List<String>) {
+        val repo = shelfRepository ?: return
+        if (paths.isEmpty()) return
+        viewModelScope.launch {
+            val entryIds = state.value.shelfEntries.filter { it.path in paths }.map { it.id }
+            repo.removeItems(entryIds)
+        }
+    }
+
+    /** 书架内搜索：把选中书籍的书架记录移动到目标分组，新建分组时挂在顶级。 */
+    fun moveBooksToGroup(paths: List<String>, groupId: Long?, newGroupName: String) {
+        val repo = shelfRepository ?: return
+        if (paths.isEmpty()) return
+        viewModelScope.launch {
+            val targetGroupId = when {
+                groupId != null -> groupId
+                newGroupName.isNotBlank() -> repo.createGroup(name = newGroupName, parentId = null)
+                else -> repo.ensureDefaultGroup(output.defaultGroupName)
+            }
+            val entryIds = state.value.shelfEntries.filter { it.path in paths }.map { it.id }
+            repo.moveItems(ids = entryIds, targetGroupId = targetGroupId)
+        }
+    }
+
+    /** 书架内搜索：重命名选中书籍的磁盘文件，同步书架记录路径、阅读进度与最近阅读。 */
+    fun renameBook(path: String, newName: String) {
+        if (newName.isBlank()) return
+        viewModelScope.launch {
+            val name = newName.withPreservedExtension(File(path).name)
+            val renamed = mediaOperationsService.renameMedia(
+                uri = Uri.fromFile(File(path)),
+                to = name,
+            )
+            if (renamed) {
+                val newPath = File(File(path).parentFile, name).path
+                bookFileIndex.moveProgress(fromPath = path, toPath = newPath)
+                shelfRepository?.renamePath(oldPath = path, newPath = newPath)
+                if (preferencesRepository.applicationPreferences.value.lastViewedBookPath == path) {
+                    preferencesRepository.updateApplicationPreferences {
+                        it.copy(lastViewedBookPath = newPath)
+                    }
+                }
+            }
+            bookFileIndex.requestRefresh(
+                whitelistRoots = preferencesRepository.applicationPreferences.value.bookFolders,
+                folderPath = null,
+                force = true,
+            )
         }
     }
 
@@ -303,6 +390,8 @@ data class BookSearchUiState(
     val preferences: ApplicationPreferences = ApplicationPreferences(),
     /** 加入书架弹窗用的分组列表（含未分组），从书架仓库实时收集。 */
     val shelfGroups: List<BookShelfGroup> = emptyList(),
+    /** 全部书架条目（path → groupId），仅 shelfOnly 时收集，用于展示所属分组。 */
+    val shelfEntries: List<BookShelfEntry> = emptyList(),
     /** true = 书架专用搜索，不搜文件夹。 */
     val shelfOnly: Boolean = false,
 )

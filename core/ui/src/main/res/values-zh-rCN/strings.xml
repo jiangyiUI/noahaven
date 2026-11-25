@@ -659,6 +659,7 @@
     <string name="book_shelf_group_name">分组名称</string>
     <string name="book_shelf_default_group">默认分组</string>
     <string name="book_shelf_added">已加入书架</string>
+    <string name="book_shelf_already_in_shelf_title">已在书架</string>
     <string name="book_shelf_remove">从书架移除</string>
     <string name="book_shelf_remove_message">只会从书架移除记录，不会删除文件</string>
     <string name="book_shelf_empty">书架还是空的，到「浏览」长按书籍或文件夹添加</string>
@@ -676,7 +677,20 @@
     <string name="book_shelf_move_group">移动分组</string>
     <string name="book_shelf_copy_group">复制分组</string>
     <string name="book_shelf_back">返回</string>
-    <string name="book_shelf_top_level">顶级</string>
+    <string name="book_shelf_top_level">根目录</string>
+    <string name="book_shelf_status_all">全部</string>
+    <string name="book_shelf_status_unread">未读</string>
+    <string name="book_shelf_status_reading">阅读中</string>
+    <string name="book_shelf_status_finished">读完</string>
+    <string name="book_shelf_no_group">不分组</string>
+    <string name="book_shelf_root_directory">根目录</string>
+    <string name="book_shelf_clear">清除</string>
+    <string name="book_shelf_mark_read">标记为已读</string>
+    <string name="book_shelf_mark_unread">标记为未读</string>
+    <string name="book_shelf_empty_unread">没有未读的书</string>
+    <string name="book_shelf_empty_reading">没有正在阅读的书</string>
+    <string name="book_shelf_empty_finished">没有已读完的书</string>
+    <string name="book_shelf_empty_group">该分组为空</string>
     <string name="book_shelf_move_group_to">移动分组到</string>
     <string name="book_shelf_copy_group_to">复制分组到</string>
     <string name="book_shelf_delete_group_recursive_message">将一并删除 %1$d 个分组（含子分组）和 %2$d 条书籍记录，不会删除磁盘文件。</string>
@@ -742,6 +756,7 @@
     <string name="reader_first_line_indent">首行缩进</string>
     <string name="reader_show_chapter_title">显示顶部章节名</string>
     <string name="reader_show_time_battery">显示时间电量</string>
+    <string name="reader_justify_text">两端对齐</string>
     <string name="reader_untitled_chapter">未命名章节</string>
     <string name="reader_chapter_delete">从目录移除</string>
 </resources>

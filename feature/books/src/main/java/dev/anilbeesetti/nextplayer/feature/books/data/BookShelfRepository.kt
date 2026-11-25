@@ -1,10 +1,15 @@
 package dev.anilbeesetti.nextplayer.feature.books.data
 
+import dev.anilbeesetti.nextplayer.core.common.di.DiQualifiers
 import dev.anilbeesetti.nextplayer.core.database.dao.BookShelfDao
 import dev.anilbeesetti.nextplayer.core.database.entities.BookShelfGroupEntity
 import dev.anilbeesetti.nextplayer.core.database.entities.BookShelfItemEntity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import org.koin.core.annotation.Named
 import org.koin.core.annotation.Single
 
 /** 书架分组：支持多级嵌套（parentId=null 为一级），isUngrouped 标记固定的「未分组」。 */
@@ -24,11 +29,25 @@ data class BookShelfEntry(
     val addedAt: Long,
 )
 
+/** [BookShelfRepository.addPaths] 的结果：全书架范围同 path 只允许存在一条。 */
+data class AddPathsResult(
+    /** 真正新增的数量。 */
+    val added: Int,
+    /** 已存在于书架（任意分组）而被跳过的书：path -> 所在分组 id。 */
+    val alreadyExists: Map<String, Long>,
+)
+
 /** 收藏书架的数据访问：分组、条目以及去重写入。 */
 @Single(binds = [BookShelfBackupDataSource::class])
 class BookShelfRepository(
     private val bookShelfDao: BookShelfDao,
+    @Named(DiQualifiers.APPLICATION_SCOPE) private val applicationScope: CoroutineScope,
 ) : BookShelfBackupDataSource {
+
+    init {
+        // 同本书在书架只保留一条：启动时清理历史重复数据（保留 addedAt 最新的一条）。
+        applicationScope.launch(Dispatchers.IO) { dedupItemsByPath() }
+    }
 
     val groups: Flow<List<BookShelfGroup>> = bookShelfDao.observeGroups()
         .map { list -> list.map { it.toDomain() } }
@@ -107,17 +126,46 @@ class BookShelfRepository(
     suspend fun getGroup(groupId: Long): BookShelfGroup? =
         bookShelfDao.getGroups().firstOrNull { it.id == groupId }?.toDomain()
 
-    /** 批量加入分组，同组同路径的重复项由数据库唯一索引忽略；返回真正新增的数量。 */
-    suspend fun addPaths(groupId: Long, paths: Collection<String>): Int {
+    /**
+     * 批量加入分组：同一本书（同 path）在整个书架只允许存在一条，
+     * 已存在的书会被跳过并在 [AddPathsResult.alreadyExists] 中返回其所在分组。
+     */
+    suspend fun addPaths(groupId: Long, paths: Collection<String>): AddPathsResult {
         val distinctPaths = paths.filter { it.isNotBlank() }.distinct()
-        if (distinctPaths.isEmpty()) return 0
+        if (distinctPaths.isEmpty()) {
+            return AddPathsResult(added = 0, alreadyExists = emptyMap())
+        }
+        // getAllItems 按 added_at, id 升序，associate 保留最后一条（最新加入的）。
+        val pathToGroup = bookShelfDao.getAllItems().associate { it.path to it.groupId }
+        val newPaths = distinctPaths.filter { it !in pathToGroup }
+        val alreadyExists = distinctPaths.mapNotNull { path ->
+            pathToGroup[path]?.let { path to it }
+        }.toMap()
+        if (newPaths.isEmpty()) {
+            return AddPathsResult(added = 0, alreadyExists = alreadyExists)
+        }
         val now = System.currentTimeMillis()
         val inserted = bookShelfDao.insertItems(
-            distinctPaths.map { path ->
+            newPaths.map { path ->
                 BookShelfItemEntity(groupId = groupId, path = path, addedAt = now)
             },
         )
-        return inserted.count { it != -1L }
+        return AddPathsResult(
+            added = inserted.count { it != -1L },
+            alreadyExists = alreadyExists,
+        )
+    }
+
+    /** 同本书（同 path）只保留 addedAt 最新的一条（并列时保留 id 最大），清理历史重复记录。 */
+    private suspend fun dedupItemsByPath() {
+        val all = bookShelfDao.getAllItems()
+        val toDelete = all.groupBy { it.path }.flatMap { (_, items) ->
+            if (items.size <= 1) return@flatMap emptyList()
+            val keepId = items.maxWithOrNull(compareBy({ it.addedAt }, { it.id }))?.id
+                ?: return@flatMap emptyList()
+            items.filter { it.id != keepId }.map { it.id }
+        }
+        if (toDelete.isNotEmpty()) bookShelfDao.deleteItems(toDelete)
     }
 
     suspend fun removeItems(ids: Collection<Long>) {
@@ -189,57 +237,6 @@ class BookShelfRepository(
     }
 
     /**
-     * 复制整个分组子树到 [newParentId] 下（null=顶级）：新建同名分组结构，
-     * 并把每个分组里的书籍记录复制过去（磁盘文件不动）。返回新根分组 id。
-     */
-    suspend fun copyGroupSubtree(groupId: Long, newParentId: Long?): Long? {
-        val all = bookShelfDao.getGroups()
-        if (all.none { it.id == groupId }) return null
-        // 不能复制到自身或自身子孙下，也不能复制进「未分组」（它不允许有子分组）
-        if (newParentId != null) {
-            if (newParentId in descendantIds(all, rootId = groupId, includeSelf = true)) {
-                return null
-            }
-            if (all.firstOrNull { it.id == newParentId }?.isUngrouped == true) {
-                return null
-            }
-        }
-        val items = bookShelfDao.getAllItems()
-        val byParent = all.groupBy { it.parentId }
-        // 自顶向下遍历整棵子树，保证父分组先于子分组创建
-        val subtree = mutableListOf<BookShelfGroupEntity>()
-        val queue = ArrayDeque<Long>().apply { add(groupId) }
-        while (queue.isNotEmpty()) {
-            val current = queue.removeFirst()
-            val entity = all.firstOrNull { it.id == current } ?: continue
-            subtree += entity
-            for (child in byParent[current].orEmpty()) queue.add(child.id)
-        }
-        val oldToNew = mutableMapOf<Long, Long>()
-        for (entity in subtree) {
-            val mappedParent = if (entity.id == groupId) {
-                newParentId
-            } else {
-                oldToNew[entity.parentId]
-            }
-            val newId = bookShelfDao.insertGroup(
-                BookShelfGroupEntity(
-                    name = entity.name,
-                    parentId = mappedParent,
-                    isUngrouped = false,
-                    sortOrder = entity.sortOrder,
-                    createdAt = entity.createdAt,
-                ),
-            )
-            oldToNew[entity.id] = newId
-            // 复制该分组直接的书籍记录
-            val paths = items.filter { it.groupId == entity.id }.map { it.path }
-            if (paths.isNotEmpty()) addPaths(groupId = newId, paths = paths)
-        }
-        return oldToNew[groupId]
-    }
-
-    /**
      * 文件改名后同步书架：所有分组里同一路径的记录都换成新路径，
      * 保证每本书在各分组下显示的书名一致。
      */
@@ -262,13 +259,6 @@ class BookShelfRepository(
             },
         )
         bookShelfDao.deleteItems(ids = items.map { it.id })
-    }
-
-    /** 复制条目到其他分组：只复制书架记录，磁盘文件不动。 */
-    suspend fun copyItems(ids: Collection<Long>, targetGroupId: Long) {
-        if (ids.isEmpty()) return
-        val paths = bookShelfDao.getItems(ids.toList()).map { it.path }
-        addPaths(groupId = targetGroupId, paths = paths)
     }
 
     override suspend fun exportBookShelf(): BookShelfBackupData {

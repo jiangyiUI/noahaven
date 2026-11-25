@@ -105,6 +105,9 @@ class ReaderPreferencesViewModel(
             ReaderPreferencesUiEvent.ToggleShowTimeBattery ->
                 updateSettings { it.copy(showTimeBattery = !it.showTimeBattery) }
 
+            ReaderPreferencesUiEvent.ToggleJustifyText ->
+                updateSettings { it.copy(justifyText = !it.justifyText) }
+
             ReaderPreferencesUiEvent.ToggleOneHandMode ->
                 updateSettings { it.copy(oneHandMode = !it.oneHandMode) }
 
@@ -190,6 +193,7 @@ sealed interface ReaderPreferencesUiEvent {
     data object ToggleFirstLineIndent : ReaderPreferencesUiEvent
     data object ToggleShowChapterTitle : ReaderPreferencesUiEvent
     data object ToggleShowTimeBattery : ReaderPreferencesUiEvent
+    data object ToggleJustifyText : ReaderPreferencesUiEvent
     data object ToggleOneHandMode : ReaderPreferencesUiEvent
     data class ImportFont(val uri: Uri) : ReaderPreferencesUiEvent
     data class DeleteFont(val path: String) : ReaderPreferencesUiEvent
