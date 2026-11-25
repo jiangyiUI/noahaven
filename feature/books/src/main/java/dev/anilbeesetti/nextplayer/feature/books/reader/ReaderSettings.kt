@@ -290,8 +290,8 @@ data class ReaderSettings(
     val lineSpacingMax: Float get() = 2.2f
     val lineSpacingSteps: Int get() = 9
     val paragraphSpacingMin: Float get() = 0f
-    val paragraphSpacingMax: Float get() = 1f
-    val paragraphSpacingSteps: Int get() = 9
+    val paragraphSpacingMax: Float get() = 2f
+    val paragraphSpacingSteps: Int get() = 19
     val brightnessSteps: Int get() = 19
     val horizontalPaddingMin: Float get() = 10f
     val horizontalPaddingMax: Float get() = 40f

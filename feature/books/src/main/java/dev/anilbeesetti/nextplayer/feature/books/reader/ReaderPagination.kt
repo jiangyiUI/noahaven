@@ -18,7 +18,6 @@ sealed interface PageBlock {
     data class Text(val text: String, val indent: Boolean) : PageBlock
     data class Heading(val text: String) : PageBlock
     data class Image(val path: String, val heightPx: Int) : PageBlock
-    data object Divider : PageBlock
 }
 
 data class ReaderPage(
@@ -27,9 +26,6 @@ data class ReaderPage(
     val endOffset: Int,
     val blocks: List<PageBlock>,
     val usedHeight: Float = 0f,
-    /** 当前页底部接上的下一章（跨章接缝），null 表示没有接。 */
-    val tailChapterIndex: Int? = null,
-    val tailConsumed: Int = 0,
 )
 
 /**
@@ -37,8 +33,7 @@ data class ReaderPage(
  * - 只按整行切分，页尾最后一个 block 的内容永远完整，渲染时再 clip 到内容区下边界；
  * - 图片作为独立块，不参与行切分，避免「图片被分页从中间截断」；
  * - 单段超过 1500 字先按句读切块，避免一次 measure 一个几万字的段落；
- * - 最后一页若还有两行以上空间，自动接上下一章开头（跨章接缝），并记录 consumed 偏移，
- *   用户翻到下一章时从该偏移继续，不会重复也不会跳字。
+ * - 每章独立分页，章节标题另起一页、以标题样式渲染，不与上一章拼接。
  */
 class ChapterPaginator(
     private val textMeasurer: TextMeasurer,
@@ -75,8 +70,6 @@ class ChapterPaginator(
         chapterIndex: Int,
         chapter: ReaderChapter,
         startOffset: Int,
-        nextChapterIndex: Int?,
-        nextChapter: ReaderChapter?,
     ): List<ReaderPage> {
         val text = chapter.text
         if (text.isBlank()) return emptyList()
@@ -119,44 +112,7 @@ class ChapterPaginator(
             )
         }
 
-        appendSeamTail(
-            pages = pages,
-            nextChapterIndex = nextChapterIndex,
-            nextChapter = nextChapter,
-        )
         return pages
-    }
-
-    private fun appendSeamTail(
-        pages: MutableList<ReaderPage>,
-        nextChapterIndex: Int?,
-        nextChapter: ReaderChapter?,
-    ) {
-        if (nextChapterIndex == null || nextChapter == null) return
-        if (nextChapter.text.isBlank()) return
-        val last = pages.lastOrNull() ?: return
-        val remaining = heightPx.toFloat() - last.usedHeight
-        if (remaining < lineHeightPx * 2.4f) return
-
-        // 留出「· · ·」分隔行的位置，否则接缝内容会让整页超出一行行距。
-        val dividerHeight = lineHeightPx + paragraphSpacingPx
-        val tailBudget = remaining - dividerHeight
-        if (tailBudget <= 0f) return
-
-        val tail = fillPage(
-            text = nextChapter.text,
-            start = 0,
-            budget = tailBudget,
-            title = nextChapter.title,
-        )
-        if (tail.consumed <= 0) return
-        // 下一章太短，接缝页已经把它整章排完：不接缝，让下一章完整出现在自己的页面里。
-        if (tail.consumed >= nextChapter.text.length) return
-        pages[pages.lastIndex] = last.copy(
-            blocks = last.blocks + PageBlock.Divider + tail.blocks,
-            tailChapterIndex = nextChapterIndex,
-            tailConsumed = tail.consumed,
-        )
     }
 
     private fun fillPage(
@@ -204,17 +160,45 @@ class ChapterPaginator(
                 continue
             }
 
-            val remaining = budget - used - paragraphSpacingPx
             val layout = measure(text = paragraph.text, style = bodyStyle, indent = paragraph.startsParagraph)
-            val fitLines = linesThatFit(layout = layout, available = remaining)
+            val totalLines = layout.lineCount
+            // 整段（连同其后的段间距）能放进本页时，才为它预留段间距；否则这一段会在页内
+            // 断开、成为本页最后一块，后面不会再有内容，就不该预留段间距——否则会白白空出
+            // 接近一个段间距的高度（段间距越大越明显），表现为「这段还没结束，页底却空了一节」。
+            val fullHeight = if (totalLines > 0) pieceMeasuredHeight(layout, paragraph, totalLines) else 0f
+            val fitsWhole = totalLines > 0 && used + fullHeight + paragraphSpacingPx <= budget
+            val remaining = if (fitsWhole) budget - used - paragraphSpacingPx else budget - used
+            // 用「实际要渲染的文本片段」的测量高度来决定能放几行，而不是用行数 × 推算行高估算。
+            // 对每种行数候选测一次 piece，取最高不超过 remaining 的。这样 used 的累计与渲染端
+            // Text 的真实高度逐块一致，无论 lineHeightStyle / includeFontPadding 让单行测量值与
+            // 渲染值有多大偏差，都不会再逐段高估、提前断页，页底留白被压到不足一行且各页一致。
+            var fitLines = 0
+            var fitHeight = 0f
+            if (totalLines > 0 && remaining > 0f) {
+                var lo = 1
+                var hi = totalLines
+                while (lo <= hi) {
+                    val mid = (lo + hi) ushr 1
+                    val h = pieceMeasuredHeight(layout, paragraph, mid)
+                    if (h <= remaining) {
+                        fitLines = mid
+                        fitHeight = h
+                        lo = mid + 1
+                    } else {
+                        hi = mid - 1
+                    }
+                }
+            }
             if (fitLines <= 0) {
                 if (blocks.isEmpty()) {
                     // 连一行都放不下时至少放一行，避免死循环（极小的分页区域）。
                     val lineEnd = layout.getLineEnd(0)
                     val piece = paragraph.text.substring(0, lineEnd).trimEnd()
-                    blocks += PageBlock.Text(text = piece, indent = paragraph.startsParagraph)
-                    cursor = paragraph.start + lineEnd
-                    used += layout.getLineBottom(0) + paragraphSpacingPx
+                    if (piece.isNotEmpty()) {
+                        blocks += PageBlock.Text(text = piece, indent = paragraph.startsParagraph)
+                        cursor = paragraph.start + lineEnd
+                        used += pieceMeasuredHeight(layout, paragraph, 1) + paragraphSpacingPx
+                    }
                 }
                 break
             }
@@ -223,10 +207,10 @@ class ChapterPaginator(
             val piece = paragraph.text.substring(0, endChar).trimEnd()
             if (piece.isNotEmpty()) {
                 blocks += PageBlock.Text(text = piece, indent = paragraph.startsParagraph)
+                used += fitHeight + paragraphSpacingPx
             }
-            used += layout.getLineBottom(fitLines - 1) + paragraphSpacingPx
             cursor = paragraph.start + endChar
-            if (fitLines < layout.lineCount) break
+            if (fitLines < totalLines) break
         }
 
         // 页内最后一段后面没有内容，不再预留其尾部间距，把这部分高度还给正文，减少页底留白。
@@ -240,14 +224,23 @@ class ChapterPaginator(
         return FillResult(blocks = blocks, consumed = cursor.coerceAtLeast(start), used = used)
     }
 
-    private fun linesThatFit(layout: TextLayoutResult, available: Float): Int {
-        if (available <= 0f) return 0
-        var count = 0
-        while (count < layout.lineCount) {
-            if (layout.getLineBottom(count) > available) break
-            count++
-        }
-        return count
+    // 测量某段前 lines 行拼成的文本片段的真实渲染高度。fullLayout 是整段的测量结果，
+    // 复用它的换行位置（getLineEnd）来切出片段，再单独测量片段——这个高度与渲染端 Text
+    // 对同一段文本的实际高度完全一致（同 style、同宽度、同 density），所以分页累计
+    // 不再依赖推算行高，从根源上消除测量值与渲染值的偏差。
+    private fun pieceMeasuredHeight(
+        fullLayout: TextLayoutResult,
+        paragraph: Paragraph,
+        lines: Int,
+    ): Float {
+        if (lines <= 0) return 0f
+        val endChar = fullLayout.getLineEnd(lines - 1)
+        val piece = paragraph.text.substring(0, endChar).trimEnd()
+        if (piece.isEmpty()) return 0f
+        return measure(text = piece, style = bodyStyle, indent = paragraph.startsParagraph)
+            .size
+            .height
+            .toFloat()
     }
 
     private fun nextParagraph(text: String, from: Int): Paragraph? {

@@ -85,16 +85,11 @@ class ReaderPager(
             pageIndex++
             return true
         }
-        val page = currentPage
-        val tailIndex = page?.tailChapterIndex
-        var target = tailIndex ?: (chapterIndex + 1).takeIf { it < content.chapters.size }
-            ?: return false
-        var offset = if (tailIndex != null) page.tailConsumed else 0
-        // 下一章可能为空章，或接缝页已把它排完，继续找后面能打开的一章。
+        // 每章独立分页、另起一页：翻到本章末尾后，从下一章开头(offset 0)继续。
+        var target = chapterIndex + 1
         while (target < content.chapters.size) {
-            if (open(chapterIndex = target, charOffset = offset)) return true
+            if (open(chapterIndex = target, charOffset = 0)) return true
             target++
-            offset = 0
         }
         return false
     }
@@ -150,13 +145,10 @@ class ReaderPager(
         synchronized(pageCache) { pageCache[key] }?.let { return it }
 
         val chapter = content.chapters[target]
-        val nextChapter = content.chapters.getOrNull(target + 1)
         val list = paginator.paginate(
             chapterIndex = target,
             chapter = chapter,
             startOffset = anchor,
-            nextChapterIndex = if (nextChapter != null) target + 1 else null,
-            nextChapter = nextChapter,
         )
         synchronized(pageCache) { pageCache[key] = list }
         return list

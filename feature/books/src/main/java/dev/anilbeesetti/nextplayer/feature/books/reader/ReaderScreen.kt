@@ -199,10 +199,13 @@ private fun ReaderContent(
             fontWeight = settings.fontWeightValue,
             // 参考排版关闭了字体额外内边距，行高由我们给的值决定，避免每行再被垫高
             platformStyle = PlatformTextStyle(includeFontPadding = false),
-            // 多出来的行距全部留在行底，和 StaticLayout 加行距的方向一致
+            // 多出来的行距全部留在行底，和 StaticLayout 加行距的方向一致；
+            // 裁掉最后一行底部多出来的行高空间——末行下面没有下一行，那段空白是多余的，
+            // 否则最后一行正文到页脚之间会凭空留一截行间距。段间距由 paragraphSpacing
+            // 这个 Spacer 单独控制，和 trim 无关，所以这里全局裁底即可。
             lineHeightStyle = LineHeightStyle(
                 alignment = LineHeightStyle.Alignment.Top,
-                trim = LineHeightStyle.Trim.None,
+                trim = LineHeightStyle.Trim.LastLineBottom,
             ),
         )
     }
@@ -220,7 +223,7 @@ private fun ReaderContent(
             platformStyle = PlatformTextStyle(includeFontPadding = false),
             lineHeightStyle = LineHeightStyle(
                 alignment = LineHeightStyle.Alignment.Top,
-                trim = LineHeightStyle.Trim.None,
+                trim = LineHeightStyle.Trim.LastLineBottom,
             ),
         )
     }
@@ -290,7 +293,8 @@ private fun ReaderContent(
             outerHeightPx -
                 with(density) { PageTopPadding.toPx() } -
                 with(density) { PageBottomPadding.toPx() } -
-                with(density) { PageFooterHeight.toPx() }
+                with(density) { PageFooterHeight.toPx() } -
+                with(density) { (PageContentVerticalGap * 2).toPx() }
             ).toInt()
 
         LaunchedEffect(
@@ -403,8 +407,6 @@ private fun ReaderContent(
                                     chapterIndex = index,
                                     chapter = chapter,
                                     startOffset = 0,
-                                    nextChapterIndex = null,
-                                    nextChapter = null,
                                 )
                             }
                         } else {
@@ -968,8 +970,8 @@ private fun ReaderPageLayout(
                 .padding(
                     start = horizontalPadding,
                     end = horizontalPadding,
-                    top = PageTopPadding,
-                    bottom = PageBottomPadding + PageFooterHeight,
+                    top = PageTopPadding + PageContentVerticalGap,
+                    bottom = PageBottomPadding + PageFooterHeight + PageContentVerticalGap,
                 )
                 .clipToBounds(),
         ) {
@@ -1018,21 +1020,6 @@ private fun ReaderPageLayout(
 
                     is PageBlock.Image -> {
                         BookImageBlock(path = block.path, heightPx = block.heightPx, content = content)
-                        if (!isLast) {
-                            Spacer(modifier = Modifier.height(paragraphSpacing))
-                        }
-                    }
-
-                    PageBlock.Divider -> {
-                        Text(
-                            text = "· · ·",
-                            style = bodyStyle.copy(
-                                color = theme.secondaryText,
-                                fontSize = (bodyStyle.fontSize.value * 0.8f).sp,
-                            ),
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
                         if (!isLast) {
                             Spacer(modifier = Modifier.height(paragraphSpacing))
                         }
@@ -1362,3 +1349,5 @@ private fun BoxScope.ReaderBottomBar(
 private val PageTopPadding = 36.dp
 private val PageBottomPadding = 14.dp
 private val PageFooterHeight = 22.dp
+// 正文与页头 / 页脚之间的呼吸间距（正文渲染区域上下各内缩这么多）。
+private val PageContentVerticalGap = 8.dp
