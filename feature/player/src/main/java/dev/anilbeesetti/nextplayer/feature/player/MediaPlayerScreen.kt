@@ -182,8 +182,25 @@ internal fun MediaPlayerContent(
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (pictureInPictureState != null) {
+            val subtitleConfiguration = SubtitleConfiguration(
+                useSystemCaptionStyle = playerPreferences.useSystemCaptionStyle,
+                showBackground = playerPreferences.subtitleBackground,
+                font = playerPreferences.subtitleFont,
+                textSize = playerPreferences.subtitleTextSize,
+                textBold = playerPreferences.subtitleTextBold,
+                applyEmbeddedStyles = playerPreferences.applyEmbeddedStyles,
+                useMaterialYouControls = playerPreferences.useMaterialYouControls,
+                controlsVisible = controlsVisibilityState.controlsVisible &&
+                    !controlsVisibilityState.controlsLocked,
+            )
             if (audioOnly) {
-                AudioArtworkView(player = player)
+                AudioArtworkView(
+                    player = player,
+                    cuesState = cuesState,
+                    subtitlePositionState = subtitlePositionState,
+                    isInPictureInPictureMode = pictureInPictureState.isInPictureInPictureMode,
+                    subtitleConfiguration = subtitleConfiguration,
+                )
             } else {
                 PlayerContentFrame(
                     player = player,
@@ -193,17 +210,7 @@ internal fun MediaPlayerContent(
                     displayAspectRatio = api?.displayAspectRatio,
                     cuesState = cuesState,
                     subtitlePositionState = subtitlePositionState,
-                    subtitleConfiguration = SubtitleConfiguration(
-                        useSystemCaptionStyle = playerPreferences.useSystemCaptionStyle,
-                        showBackground = playerPreferences.subtitleBackground,
-                        font = playerPreferences.subtitleFont,
-                        textSize = playerPreferences.subtitleTextSize,
-                        textBold = playerPreferences.subtitleTextBold,
-                        applyEmbeddedStyles = playerPreferences.applyEmbeddedStyles,
-                        useMaterialYouControls = playerPreferences.useMaterialYouControls,
-                        controlsVisible = controlsVisibilityState.controlsVisible &&
-                            !controlsVisibilityState.controlsLocked,
-                    ),
+                    subtitleConfiguration = subtitleConfiguration,
                 )
             }
             if (volumeAndBrightnessGestureState != null) {

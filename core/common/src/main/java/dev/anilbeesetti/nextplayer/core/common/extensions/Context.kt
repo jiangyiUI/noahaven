@@ -212,7 +212,9 @@ fun Context.getFilenameFromUri(uri: Uri): String = if (ContentResolver.SCHEME_FI
         ignoreCase = true,
     )
 ) {
-    File(uri.toString()).name
+    // 用 lastPathSegment 取解码后的真实文件名；uri.toString() 会把非 ASCII 字符
+    // percent-encode，返回 %E3... 形式的乱码名字，导致显示异常及拼接文件名超长。
+    uri.lastPathSegment ?: ""
 } else {
     getFilenameFromContentUri(uri = uri) ?: uri.lastPathSegment ?: ""
 }

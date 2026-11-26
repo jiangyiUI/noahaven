@@ -122,12 +122,13 @@ fun ControlsTopView(
                         contentDescription = null,
                     )
                 }
-                PlayerButton(onClick = onSubtitleClick) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_subtitle_track),
-                        contentDescription = null,
-                    )
-                }
+            }
+            // 字幕（含 LRC 歌词）在音频模式下也可用，不随 audioOnly 隐藏
+            PlayerButton(onClick = onSubtitleClick) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_subtitle_track),
+                    contentDescription = null,
+                )
             }
         }
     }

@@ -1176,7 +1176,11 @@ class PlayerService : MediaSessionService() {
                     }
                 }
                 val localSubs = if (!isNetwork) {
-                    (videoState?.path ?: getPath(uri = uri))?.let {
+                    // videoState.path 存的是 mediaId（常为 content:// uri），不能直接当文件路径；
+                    // 优先用 getPath 解析真实磁盘路径，失败时仅当 videoState.path 本身是有效文件才兜底。
+                    val mediaPath = getPath(uri = uri)
+                        ?: videoState?.path?.takeIf { path -> File(path).exists() }
+                    mediaPath?.let {
                         File(it).getLocalSubtitles(
                             context = this@PlayerService,
                             excludeSubsList = externalSubs,
@@ -1188,7 +1192,15 @@ class PlayerService : MediaSessionService() {
 
                 val existingSubConfigurations =
                     mediaItem.localConfiguration?.subtitleConfigurations ?: emptyList()
-                val subConfigurations = (localSubs + externalSubs).map { subtitleUri ->
+                val subConfigurations = localSubs.map { subtitleUri ->
+                    // 自动发现的本地同名字幕默认选中（带 SELECTION_FLAG_DEFAULT）；
+                    // 若用户曾手动切换过，会由持久化的 subtitleTrackIndex 覆盖此默认值。
+                    uriToSubtitleConfiguration(
+                        uri = subtitleUri,
+                        subtitleEncoding = playerPreferences.subtitleTextEncoding,
+                        isSelected = true,
+                    )
+                } + externalSubs.map { subtitleUri ->
                     uriToSubtitleConfiguration(
                         uri = subtitleUri,
                         subtitleEncoding = playerPreferences.subtitleTextEncoding,

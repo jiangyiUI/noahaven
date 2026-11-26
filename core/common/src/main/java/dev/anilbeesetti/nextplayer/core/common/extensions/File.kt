@@ -16,6 +16,7 @@ suspend fun File.getSubtitles(): List<File> = withContext(Dispatchers.IO) {
         "ass",
         "vtt",
         "ttml",
+        "lrc",
     )
 
     subtitleExtensions.mapNotNull { extension ->
@@ -63,6 +64,7 @@ fun File.isSubtitle(): Boolean {
         "ass",
         "vtt",
         "ttml",
+        "lrc",
     )
     return extension.lowercase() in subtitleExtensions
 }

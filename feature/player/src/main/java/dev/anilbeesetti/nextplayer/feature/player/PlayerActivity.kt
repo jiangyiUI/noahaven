@@ -323,6 +323,8 @@ class PlayerActivity : ComponentActivity() {
                         MimeTypes.TEXT_SSA,
                         MimeTypes.BASE_TYPE_APPLICATION + "/octet-stream",
                         MimeTypes.BASE_TYPE_TEXT + "/*",
+                        // 兜底：.lrc 等无标准 MIME 的字幕文件不会被上面的类型匹配到，允许显示全部文件
+                        "*/*",
                     ),
                     initialUri = currentMediaDirectory(),
                 ),

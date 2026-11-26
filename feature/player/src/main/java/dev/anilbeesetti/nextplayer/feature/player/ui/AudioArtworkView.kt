@@ -27,12 +27,21 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import dev.anilbeesetti.nextplayer.core.media.services.AudioArtwork
 import dev.anilbeesetti.nextplayer.core.ui.designsystem.NextIcons
+import dev.anilbeesetti.nextplayer.feature.player.state.CuesState
+import dev.anilbeesetti.nextplayer.feature.player.state.SubtitlePositionState
 
 /**
  * 音频播放画面：显示音频文件内嵌封面，没有封面时显示缺省图。
  */
 @Composable
-internal fun AudioArtworkView(player: Player, modifier: Modifier = Modifier) {
+internal fun AudioArtworkView(
+    player: Player,
+    modifier: Modifier = Modifier,
+    cuesState: CuesState,
+    subtitlePositionState: SubtitlePositionState,
+    isInPictureInPictureMode: Boolean,
+    subtitleConfiguration: SubtitleConfiguration,
+) {
     var path by remember {
         mutableStateOf(value = player.currentMediaItem?.artworkPath())
     }
@@ -88,6 +97,12 @@ internal fun AudioArtworkView(player: Player, modifier: Modifier = Modifier) {
                 )
             }
         }
+        SubtitleView(
+            cuesState = cuesState,
+            positionState = subtitlePositionState,
+            isInPictureInPictureMode = isInPictureInPictureMode,
+            configuration = subtitleConfiguration,
+        )
     }
 }
 
