@@ -4,12 +4,16 @@ import androidx.compose.runtime.Stable
 import androidx.lifecycle.viewModelScope
 import dev.anilbeesetti.nextplayer.core.common.di.DiQualifiers
 import dev.anilbeesetti.nextplayer.core.common.extensions.prettyName
+import dev.anilbeesetti.nextplayer.core.common.service.system.SystemService
 import dev.anilbeesetti.nextplayer.core.data.repository.PreferencesRepository
 import dev.anilbeesetti.nextplayer.core.data.repository.SearchHistoryRepository
 import dev.anilbeesetti.nextplayer.core.domain.SearchMatcher
 import android.net.Uri
 import dev.anilbeesetti.nextplayer.core.media.index.BookFileIndex
 import dev.anilbeesetti.nextplayer.core.media.services.MediaOperationsService
+import dev.anilbeesetti.nextplayer.core.media.services.TransferEvent
+import dev.anilbeesetti.nextplayer.core.media.services.TransferMode
+import dev.anilbeesetti.nextplayer.core.media.services.TransferProgress
 import dev.anilbeesetti.nextplayer.core.media.services.withPreservedExtension
 import dev.anilbeesetti.nextplayer.core.model.ApplicationPreferences
 import dev.anilbeesetti.nextplayer.core.model.BookFile
@@ -18,16 +22,19 @@ import dev.anilbeesetti.nextplayer.core.ui.base.MviViewModel
 import dev.anilbeesetti.nextplayer.feature.books.data.BookShelfEntry
 import dev.anilbeesetti.nextplayer.feature.books.data.BookShelfGroup
 import dev.anilbeesetti.nextplayer.feature.books.data.BookShelfRepository
+import dev.anilbeesetti.nextplayer.feature.videopicker.screens.mediapicker.TransferFlowState
 import java.io.File
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
@@ -56,6 +63,7 @@ class BookSearchViewModel(
     private val searchHistoryRepository: SearchHistoryRepository,
     private val preferencesRepository: PreferencesRepository,
     private val mediaOperationsService: MediaOperationsService,
+    private val systemService: SystemService,
     @Named(DiQualifiers.DEFAULT_DISPATCHER) private val defaultDispatcher: CoroutineDispatcher,
     @InjectedParam internal var output: Output,
     @InjectedParam private val shelfOnly: Boolean = false,
@@ -74,6 +82,10 @@ class BookSearchViewModel(
     private val eventsInternal = MutableSharedFlow<BookSearchEvent>(extraBufferCapacity = 8)
     val events: SharedFlow<BookSearchEvent> = eventsInternal
 
+    /** 复制/移动进度，与书架/漫画库共用同一套 TransferFlowState。 */
+    private val transferFlowState = MutableStateFlow<TransferFlowState>(TransferFlowState.Idle)
+    private var transferJob: Job? = null
+
     private val searchQuery = MutableStateFlow(value = "")
 
     init {
@@ -83,6 +95,15 @@ class BookSearchViewModel(
         collectSearchResults()
         collectShelfGroups()
         if (shelfOnly) collectShelfEntries()
+        collectTransferFlow()
+    }
+
+    private fun collectTransferFlow() {
+        viewModelScope.launch {
+            transferFlowState.collect { flow ->
+                stateInternal.update { it.copy(transferFlow = flow) }
+            }
+        }
     }
 
     private fun collectShelfGroups() {
@@ -318,6 +339,101 @@ class BookSearchViewModel(
         }
     }
 
+    /** 删除选中书籍的磁盘文件；只删传入的书，不动目录本身。 */
+    fun deleteMedia(paths: List<String>) {
+        if (paths.isEmpty()) return
+        viewModelScope.launch {
+            mediaOperationsService.deleteMedia(
+                uris = paths.map { Uri.fromFile(File(it)) },
+                permanently = true,
+            )
+            paths.forEach { path -> bookFileIndex.deleteProgress(path) }
+            refreshIndex()
+        }
+    }
+
+    /** 分享选中书籍：全 txt 用 text/plain，全 epub 用对应类型，否则用通配。 */
+    fun shareMedia(paths: List<String>) {
+        if (paths.isEmpty()) return
+        val uris = paths.map { Uri.fromFile(File(it)) }
+        val mimeType = when {
+            paths.all { it.endsWith(".txt", ignoreCase = true) } -> TEXT_MIME_TYPE
+            paths.all { it.endsWith(".epub", ignoreCase = true) } -> EPUB_MIME_TYPE
+            else -> "*/*"
+        }
+        viewModelScope.launch {
+            mediaOperationsService.shareMedia(uris = uris, mimeType = mimeType)
+        }
+    }
+
+    /** 复制/移动：先选目标目录，再收集转移进度，结束后刷新索引；移动时同步阅读进度与书架记录。 */
+    fun transferMedia(paths: List<String>, mode: TransferMode) {
+        if (paths.isEmpty()) return
+        val uris = paths.map { Uri.fromFile(File(it)) }
+        viewModelScope.launch {
+            val targetFolder = systemService.pickFolder() ?: return@launch
+            transferJob?.cancel()
+            transferFlowState.value = TransferFlowState.Processing(
+                mode = mode,
+                progress = TransferProgress(totalFiles = uris.size),
+            )
+            transferJob = viewModelScope.launch {
+                mediaOperationsService.transferMedia(
+                    uris = uris,
+                    folderUri = targetFolder,
+                    mode = mode,
+                )
+                    .catch { transferFlowState.value = TransferFlowState.Idle }
+                    .collect { event ->
+                        when (event) {
+                            is TransferEvent.Progress -> {
+                                transferFlowState.value = TransferFlowState.Processing(
+                                    mode = mode,
+                                    progress = event.progress,
+                                )
+                            }
+
+                            is TransferEvent.Completed -> {
+                                event.movedFiles.forEach { moved ->
+                                    val fromPath = moved.sourceUri.path ?: return@forEach
+                                    bookFileIndex.moveProgress(
+                                        fromPath = fromPath,
+                                        toPath = moved.destinationPath,
+                                    )
+                                    shelfRepository?.renamePath(
+                                        oldPath = fromPath,
+                                        newPath = moved.destinationPath,
+                                    )
+                                    if (preferencesRepository.applicationPreferences.value.lastViewedBookPath == fromPath) {
+                                        preferencesRepository.updateApplicationPreferences {
+                                            it.copy(lastViewedBookPath = moved.destinationPath)
+                                        }
+                                    }
+                                }
+                                transferFlowState.value = TransferFlowState.Idle
+                                transferJob = null
+                                refreshIndex()
+                            }
+                        }
+                    }
+            }
+        }
+    }
+
+    fun cancelTransfer() {
+        transferJob?.cancel()
+        transferJob = null
+        transferFlowState.value = TransferFlowState.Idle
+    }
+
+    private fun refreshIndex() {
+        bookFileIndex.requestRefresh(
+            whitelistRoots = preferencesRepository.applicationPreferences.value.bookFolders,
+            folderPath = null,
+            force = true,
+        )
+    }
+
     private fun List<BookFile>.filterBooks(preferences: ApplicationPreferences): List<BookFile> {
         val roots = preferences.bookFolders.map(::normalizePath).toSet()
         return filter {
@@ -369,6 +485,8 @@ class BookSearchViewModel(
         const val PATH_SEPARATOR = "/"
         const val SEARCH_DEBOUNCE_MS = 300L
         const val POPULAR_FOLDERS_LIMIT = 5
+        const val TEXT_MIME_TYPE = "text/plain"
+        const val EPUB_MIME_TYPE = "application/epub+zip"
     }
 }
 
@@ -394,6 +512,8 @@ data class BookSearchUiState(
     val shelfEntries: List<BookShelfEntry> = emptyList(),
     /** true = 书架专用搜索，不搜文件夹。 */
     val shelfOnly: Boolean = false,
+    /** 复制/移动进度，浏览搜索底栏的复制/移动动作使用。 */
+    val transferFlow: TransferFlowState = TransferFlowState.Idle,
 )
 
 sealed interface BookSearchUiEvent {

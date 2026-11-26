@@ -63,6 +63,7 @@ import dev.anilbeesetti.nextplayer.core.model.BookFile
 import dev.anilbeesetti.nextplayer.core.model.Folder
 import dev.anilbeesetti.nextplayer.core.model.MediaLayoutMode
 import dev.anilbeesetti.nextplayer.core.model.MediaViewMode
+import dev.anilbeesetti.nextplayer.core.media.services.TransferMode
 import dev.anilbeesetti.nextplayer.core.ui.R
 import dev.anilbeesetti.nextplayer.core.ui.components.ListSectionTitle
 import dev.anilbeesetti.nextplayer.core.ui.components.NextOutlinedTextField
@@ -81,6 +82,8 @@ import dev.anilbeesetti.nextplayer.feature.videopicker.composables.FolderItem
 import dev.anilbeesetti.nextplayer.feature.videopicker.composables.RenameDialog
 import dev.anilbeesetti.nextplayer.feature.videopicker.screens.mediapicker.DeleteConfirmationDialog
 import dev.anilbeesetti.nextplayer.feature.videopicker.screens.mediapicker.SelectionActionsSheet
+import dev.anilbeesetti.nextplayer.feature.videopicker.screens.mediapicker.TransferFlowState
+import dev.anilbeesetti.nextplayer.feature.videopicker.screens.mediapicker.TransferProgressDialog
 import dev.anilbeesetti.nextplayer.feature.videopicker.state.SelectionItem
 import dev.anilbeesetti.nextplayer.feature.videopicker.state.rememberSelectionManager
 import java.io.File
@@ -108,6 +111,10 @@ fun BookSearchScreen(
         onClearBooks = viewModel::removeBooksFromShelf,
         onMoveBooks = viewModel::moveBooksToGroup,
         onRenameBook = viewModel::renameBook,
+        onDeleteMedia = viewModel::deleteMedia,
+        onShareMedia = viewModel::shareMedia,
+        onTransferMedia = viewModel::transferMedia,
+        onCancelTransfer = viewModel::cancelTransfer,
         events = viewModel.events,
     )
 }
@@ -121,6 +128,10 @@ internal fun BookSearchScreenContent(
     onClearBooks: (paths: List<String>) -> Unit,
     onMoveBooks: (paths: List<String>, groupId: Long?, newGroupName: String) -> Unit,
     onRenameBook: (path: String, newName: String) -> Unit,
+    onDeleteMedia: (paths: List<String>) -> Unit,
+    onShareMedia: (paths: List<String>) -> Unit,
+    onTransferMedia: (paths: List<String>, mode: TransferMode) -> Unit,
+    onCancelTransfer: () -> Unit,
     events: SharedFlow<BookSearchEvent>,
 ) {
     val context = LocalContext.current
@@ -376,29 +387,45 @@ internal fun BookSearchScreenContent(
                     )
                 }
                 else -> {
-                    // 浏览搜索：只提供「加入书架」批量动作，复用浏览列表的底栏样式。
+                    // 浏览搜索：底栏与书架列表一致——重命名(仅单选) / 分享 / 复制 / 移动 / 删除 / 加入书架。
+                    val singleSelectedBook = selectionManager.selectionItems
+                        .singleOrNull()
+                        ?.let { it as? SelectionItem.Video }
+                        ?.let { item -> state.searchResults.books.firstOrNull { it.path == item.path } }
                     SelectionActionsSheet(
                         show = selectionManager.isInSelectionMode && selectedPaths.isNotEmpty(),
                         contentFocusRequester = contentFocusRequester,
-                        showRenameAction = false,
+                        showRenameAction = singleSelectedBook != null,
                         showInfoAction = false,
                         showHideAction = false,
                         showPlayAction = false,
                         showAddToPlaylistAction = false,
                         showAddToShelfAction = true,
-                        showShareAction = false,
-                        showCopyAction = false,
-                        showMoveAction = false,
-                        showDeleteAction = false,
+                        showShareAction = true,
+                        showCopyAction = true,
+                        showMoveAction = true,
+                        showDeleteAction = true,
                         onPlayAction = {},
                         onAddToPlaylistAction = {},
-                        onRenameAction = {},
-                        onShareAction = {},
-                        onCopyAction = {},
-                        onMoveAction = {},
                         onInfoAction = {},
                         onHideAction = {},
-                        onDeleteAction = {},
+                        onRenameAction = {
+                            renameTargetPath = singleSelectedBook?.path
+                            showRenameBookDialog = true
+                        },
+                        onShareAction = { onShareMedia(selectedPaths) },
+                        onCopyAction = {
+                            onTransferMedia(selectedPaths, TransferMode.COPY)
+                            selectionManager.exitSelectionMode()
+                        },
+                        onMoveAction = {
+                            onTransferMedia(selectedPaths, TransferMode.MOVE)
+                            selectionManager.exitSelectionMode()
+                        },
+                        onDeleteAction = {
+                            booksToClear = selectedPaths
+                            showDeleteConfirmation = true
+                        },
                         onAddToShelfAction = {
                             if (selectedPaths.isNotEmpty()) {
                                 addToShelfPaths = selectedPaths
@@ -477,13 +504,17 @@ internal fun BookSearchScreenContent(
         selectionManager.exitSelectionMode()
     }
 
-    // 书架内搜索：清除选中书籍的书架记录（不删磁盘文件）
+    // 删除确认：书架内搜索=清除书架记录(不删磁盘)，浏览搜索=删除磁盘文件。
     if (showDeleteConfirmation) {
         DeleteConfirmationDialog(
             selectionItems = selectionManager.selectionItems,
-            removalFromShelf = true,
+            removalFromShelf = state.shelfOnly,
             onConfirm = {
-                onClearBooks(booksToClear)
+                if (state.shelfOnly) {
+                    onClearBooks(booksToClear)
+                } else {
+                    onDeleteMedia(booksToClear)
+                }
                 selectionManager.exitSelectionMode()
                 showDeleteConfirmation = false
                 booksToClear = emptyList()
@@ -564,6 +595,14 @@ internal fun BookSearchScreenContent(
             pathToGroup = mapping,
             groupLabelFor = groupLabelFor,
             onDismiss = { alreadyInShelf = null },
+        )
+    }
+
+    (state.transferFlow as? TransferFlowState.Processing)?.let { transfer ->
+        TransferProgressDialog(
+            mode = transfer.mode,
+            progress = transfer.progress,
+            onCancel = { onCancelTransfer() },
         )
     }
 }
