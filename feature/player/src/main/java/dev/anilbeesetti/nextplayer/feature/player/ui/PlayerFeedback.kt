@@ -93,6 +93,7 @@ internal fun BoxScope.PlayerVerticalGestureIndicators(
     volumePercentage: Int,
     maxVolumePercentage: Int,
     brightnessPercentage: Int,
+    useMaterialYouControls: Boolean,
 ) {
     val systemBarsPadding = WindowInsets.systemBars.asPaddingValues()
     Box(
@@ -114,6 +115,7 @@ internal fun BoxScope.PlayerVerticalGestureIndicators(
             exit = fadeOut(),
         ) {
             VerticalProgressView(
+                useMaterialYouControls = useMaterialYouControls,
                 value = volumePercentage,
                 maxValue = maxVolumePercentage,
                 icon = painterResource(coreUiR.drawable.ic_volume),
@@ -127,6 +129,7 @@ internal fun BoxScope.PlayerVerticalGestureIndicators(
             exit = fadeOut(),
         ) {
             VerticalProgressView(
+                useMaterialYouControls = useMaterialYouControls,
                 value = brightnessPercentage,
                 icon = painterResource(coreUiR.drawable.ic_brightness),
             )

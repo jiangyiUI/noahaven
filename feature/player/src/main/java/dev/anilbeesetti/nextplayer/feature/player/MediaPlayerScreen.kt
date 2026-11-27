@@ -261,6 +261,7 @@ internal fun MediaPlayerContent(
                 volumePercentage = volumeState.volumePercentage,
                 maxVolumePercentage = volumeState.maxVolumePercentage,
                 brightnessPercentage = brightnessState.brightnessPercentage,
+                useMaterialYouControls = playerPreferences.useMaterialYouControls,
             )
         }
     }
