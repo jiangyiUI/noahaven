@@ -94,6 +94,7 @@ import kotlinx.coroutines.flow.SharedFlow
 fun BookSearchScreen(
     viewModel: BookSearchViewModel,
     onOpenBook: (String) -> Unit,
+    onLocateBook: (String) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle(
         minActiveState = Lifecycle.State.RESUMED,
@@ -105,7 +106,13 @@ fun BookSearchScreen(
         onBookClick = { book ->
             // 打开阅读器时把当前查询写入搜索历史
             viewModel.onAction(BookSearchUiEvent.OnSearch(state.query))
-            onOpenBook(book.path)
+            if (state.shelfOnly) {
+                // 书架内搜索：直接打开阅读器
+                onOpenBook(book.path)
+            } else {
+                // 浏览 tab 搜索：返回浏览页，进入该书所在文件夹并定位到该书
+                onLocateBook(book.path)
+            }
         },
         onAddToShelf = viewModel::addToShelf,
         onClearBooks = viewModel::removeBooksFromShelf,

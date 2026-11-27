@@ -58,6 +58,7 @@ import dev.anilbeesetti.nextplayer.core.ui.composables.AllFilesAccessView
 import dev.anilbeesetti.nextplayer.core.ui.designsystem.NextIcons
 import dev.anilbeesetti.nextplayer.feature.books.data.BookShelfGroup
 import dev.anilbeesetti.nextplayer.feature.books.navigation.PendingBookFolder
+import dev.anilbeesetti.nextplayer.feature.books.navigation.PendingBookLocate
 import dev.anilbeesetti.nextplayer.feature.videopicker.composables.CenterCircularProgressBar
 import dev.anilbeesetti.nextplayer.feature.videopicker.composables.QuickSettingsDialog
 import dev.anilbeesetti.nextplayer.feature.videopicker.composables.RenameDialog
@@ -97,9 +98,17 @@ fun BookshelfScreen(
         onPauseOrDispose {}
     }
 
-    // 从搜索页点击文件夹返回时，直接进入该文件夹
+    // 从搜索页点击文件夹/书籍返回时：进入对应文件夹；点击书籍还需滚动定位到它
+    var locateBookPath by remember { mutableStateOf<String?>(null) }
     LifecycleResumeEffect(Unit) {
-        PendingBookFolder.consume()?.let(viewModel::openFolder)
+        PendingBookFolder.consume()?.let(viewModel::locateFolder)
+        PendingBookLocate.consume()?.let { bookPath ->
+            // 进入该书所在文件夹，待书籍列表加载后由 BookLibraryView 滚动定位到该书
+            File(bookPath).parentFile?.path?.let { parent ->
+                viewModel.locateFolder(parent)
+                locateBookPath = bookPath
+            }
+        }
         onPauseOrDispose {}
     }
 
@@ -115,6 +124,8 @@ fun BookshelfScreen(
         hasStorageAccess = hasStorageAccess,
         shelfGroups = shelfGroups,
         defaultGroupName = defaultGroupName,
+        locateBookPath = locateBookPath,
+        onLocated = { locateBookPath = null },
         onAddToShelf = onAddToShelf,
         onAllFilesAccessGranted = {
             hasStorageAccess = true
@@ -133,6 +144,8 @@ internal fun BookshelfScreenContent(
     hasStorageAccess: Boolean = true,
     shelfGroups: List<BookShelfGroup> = emptyList(),
     defaultGroupName: String = "",
+    locateBookPath: String? = null,
+    onLocated: () -> Unit = {},
     onAddToShelf: (groupId: Long?, newGroupName: String, paths: List<String>) -> Unit =
         { _, _, _ -> },
     onAllFilesAccessGranted: () -> Unit = {},
@@ -403,6 +416,8 @@ internal fun BookshelfScreenContent(
                                 lastViewedPath = state.preferences.lastViewedBookPath,
                                 contentPadding = contentPadding,
                                 lazyGridState = lazyGridState,
+                                scrollToBookPath = locateBookPath,
+                                onLocated = onLocated,
                                 selectedIds = selectionManager.selectionItems
                                     .map { it.id }
                                     .toSet(),

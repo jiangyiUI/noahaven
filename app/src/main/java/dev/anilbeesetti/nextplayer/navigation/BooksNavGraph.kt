@@ -4,6 +4,7 @@ import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import dev.anilbeesetti.nextplayer.feature.books.navigation.PendingBookFolder
+import dev.anilbeesetti.nextplayer.feature.books.navigation.PendingBookLocate
 import dev.anilbeesetti.nextplayer.feature.books.navigation.bookReaderEntry
 import dev.anilbeesetti.nextplayer.feature.books.navigation.bookSearchEntry
 import dev.anilbeesetti.nextplayer.feature.books.navigation.bookshelfEntry
@@ -31,6 +32,11 @@ fun EntryProviderScope<NavKey>.booksNavGraph(backStack: NavBackStack<NavKey>) {
             backStack.removeLastIfNotRoot()
         },
         onOpenBook = { path -> backStack.navigateToBookReader(path = path) },
+        onLocateBook = { path ->
+            // 浏览 tab 搜索点击书籍：写入待定位，pop 回浏览页后由其消费并定位
+            PendingBookLocate.request(bookPath = path)
+            backStack.removeLastIfNotRoot()
+        },
     )
 
     bookReaderEntry(

@@ -149,6 +149,34 @@ class BookshelfViewModel(
         refresh()
     }
 
+    /**
+     * 从搜索页跨页跳转过来时调用：直接定位到 [path]，但把「浏览根 → 白名单根 → … → path 父目录」
+     * 整条链路补进 folderHistory，这样按返回键能一级一级回退，而不是直接跳回浏览根。
+     * 正常逐级点文件夹仍走 [openFolder]，不受影响。
+     */
+    fun locateFolder(path: String) {
+        val roots = preferencesRepository.applicationPreferences.value.bookFolders.map(::normalizePath)
+        val root = roots.firstOrNull { path.isWithin(it) }
+        if (root == null) {
+            // 找不到所属白名单根，退化为普通打开
+            openFolder(path)
+            return
+        }
+        // 收集 path 的所有祖先目录（不含 path 本身），限定在 root 范围内
+        val ancestors = mutableListOf<String>()
+        var current = File(path).parentFile
+        while (current != null && current.path.isWithin(root)) {
+            ancestors.add(current.path)
+            current = current.parentFile
+        }
+        ancestors.reverse() // 从浅到深：root, root/child, …, path 的父目录
+        folderHistory.clear()
+        folderHistory.add(null) // 浏览页根
+        folderHistory.addAll(ancestors)
+        folderPath.value = path
+        refresh()
+    }
+
     fun goBack() {
         if (folderPath.value == null) return
         folderPath.value = folderHistory.removeLastOrNull()

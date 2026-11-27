@@ -83,6 +83,7 @@ fun EntryProviderScope<NavKey>.bookSearchEntry(
     onNavigateUp: () -> Unit,
     onOpenFolder: (String) -> Unit,
     onOpenBook: (String) -> Unit,
+    onLocateBook: (String) -> Unit = {},
 ) {
     entry<BookSearchRoute> { route ->
         val context = LocalContext.current
@@ -98,7 +99,7 @@ fun EntryProviderScope<NavKey>.bookSearchEntry(
             parameters = { parametersOf(output, route.shelfOnly, shelfRepo) },
         )
         SideEffect { viewModel.output = output }
-        BookSearchScreen(viewModel = viewModel, onOpenBook = onOpenBook)
+        BookSearchScreen(viewModel = viewModel, onOpenBook = onOpenBook, onLocateBook = onLocateBook)
     }
 }
 
@@ -124,6 +125,21 @@ object PendingBookFolder {
 
     fun request(folderPath: String) {
         path = folderPath
+    }
+
+    fun consume(): String? = path.also { path = null }
+}
+
+/**
+ * 搜索页（浏览 tab）点击书籍后写入，书架重新可见时消费：
+ * 进入该书所在文件夹并把滚动位置定位到该书，避免用户从文件夹顶部翻找。
+ * 与 PendingBookFolder 同一套做法。
+ */
+object PendingBookLocate {
+    private var path: String? = null
+
+    fun request(bookPath: String) {
+        path = bookPath
     }
 
     fun consume(): String? = path.also { path = null }

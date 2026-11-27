@@ -40,6 +40,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -101,6 +102,10 @@ fun BookLibraryView(
     showFolderSectionHeader: Boolean? = null,
     /** 非 null 时强制是否显示「书籍 (N)」标题；null 时跟随 preferences.mediaViewMode。 */
     showBookSectionHeader: Boolean? = null,
+    /** 非 null 时：该书籍加载到列表后，把网格滚动定位到它（来自搜索页点击书籍）。 */
+    scrollToBookPath: String? = null,
+    /** 定位完成后回调，用于清除外部的待定位标记。 */
+    onLocated: (() -> Unit)? = null,
 ) {
     val isTv = LocalContext.current.isTelevision
     val layoutDirection = LocalLayoutDirection.current
@@ -110,6 +115,23 @@ fun BookLibraryView(
     val showFolderHeader = showFolderSectionHeader ?: derivedHeaders
     val showBookHeader = showBookSectionHeader ?: derivedHeaders
     val booksLabel = stringResource(R.string.books)
+
+    // 外部请求滚动定位到某本书：待该书籍出现在列表中后，计算其网格位置并滚动到位。
+    LaunchedEffect(scrollToBookPath, folders, books, showFolderHeader, showBookHeader) {
+        val target = scrollToBookPath ?: return@LaunchedEffect
+        val gridIndex = bookGridItemIndex(
+            folders = folders,
+            books = books,
+            showFolderHeader = showFolderHeader,
+            showBookHeader = showBookHeader,
+            targetBookPath = target,
+        )
+        if (gridIndex < 0) return@LaunchedEffect
+        // 等一帧，让 rememberPersistentLazyGridState 的「恢复上次位置」先执行，再被本次定位覆盖
+        withFrameNanos { }
+        lazyGridState.animateScrollToItem(gridIndex)
+        onLocated?.invoke()
+    }
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val horizontalPadding = 8.dp
@@ -199,6 +221,33 @@ fun BookLibraryView(
             }
         }
     }
+}
+
+/**
+ * 计算 [targetBookPath] 在 [BookLibraryView] 网格中的绝对 item 序号。
+ * 必须与 [BookLibraryView] 内部 LazyVerticalGrid 的 item 排列顺序严格一致，
+ * 否则 [LazyGridState.animateScrollToItem] 会滚到错误位置。找不到返回 -1。
+ */
+private fun bookGridItemIndex(
+    folders: List<Folder>,
+    books: List<BookFile>,
+    showFolderHeader: Boolean,
+    showBookHeader: Boolean,
+    targetBookPath: String,
+): Int {
+    val bookIndex = books.indexOfFirst { it.path == targetBookPath }
+    if (bookIndex < 0) return -1
+    var index = 0
+    // 1. 文件夹段标题
+    if (showFolderHeader && folders.isNotEmpty()) index++
+    // 2. 文件夹项
+    index += folders.size
+    // 3. 文件夹与书籍段之间的间隔
+    if (folders.isNotEmpty() && books.isNotEmpty() && (showFolderHeader || showBookHeader)) index++
+    // 4. 书籍段标题
+    if (showBookHeader && books.isNotEmpty()) index++
+    // 5. 目标书籍在书籍段内的偏移
+    return index + bookIndex
 }
 
 /** 搜索结果用：单列自适应网格，不显示文件夹。 */
