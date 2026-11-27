@@ -53,6 +53,7 @@ import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -190,8 +191,16 @@ internal fun List<TopLevelDestination>.moveDestination(
 @Composable
 fun rememberTopLevelNavState(
     destinationOrder: List<String> = emptyList(),
+    hiddenDestinations: List<String> = emptyList(),
 ): TopLevelNavState {
-    val destinations = sanitizeTopLevelDestinationOrder(destinationOrder)
+    val ordered = sanitizeTopLevelDestinationOrder(destinationOrder)
+    // 按设置里的开关隐藏底栏按钮（「更多」始终可见且固定在最后）。兜底：若全部被关掉导致
+    // 没有内容按钮，则忽略隐藏设置全部显示。被隐藏按钮的深层返回栈会在下方 LaunchedEffect 清回根。
+    val destinations = ordered.filter {
+        it == TopLevelDestination.MORE || it.name !in hiddenDestinations
+    }.let { visible ->
+        if (visible.any { it != TopLevelDestination.MORE }) visible else ordered
+    }
     // Each tab keeps its own back stack; rememberNavBackStack persists it across config change and
     // process death. Composition order stays fixed even when the visible destinations are reordered.
     val backStacks = TopLevelDestination.entries.associate { dest ->
@@ -201,6 +210,20 @@ fun rememberTopLevelNavState(
     }
     // Null follows the first destination, so a persisted custom order also controls the start page.
     val selectedDestinationName = rememberSaveable { mutableStateOf<String?>(value = null) }
+    // 底栏按钮显隐变化时：把被隐藏 tab 的返回栈清回根，避免重新打开时残留的设置页等深层页面
+    // 冒出来；并把选中态收敛到仍可见的 tab，避免重新打开时跳回之前选中、现已不可见的 tab。
+    LaunchedEffect(destinations) {
+        val visibleRoutes = destinations.map { it.route }.toSet()
+        backStacks.forEach { (route, stack) ->
+            if (route !in visibleRoutes) {
+                while (stack.size > 1) stack.removeLastOrNull()
+            }
+        }
+        val current = selectedDestinationName.value
+        if (current != null && destinations.none { it.name == current }) {
+            selectedDestinationName.value = destinations.first().name
+        }
+    }
     return remember(
         destinations,
         backStacks,
@@ -607,7 +630,11 @@ fun NavigationView(
 
     Box(
         modifier = modifier
-            .fillMaxWidth()
+            // 宽度按「可见按钮数 ÷ 总按钮数」占满对应比例：5 个按钮时恰为全宽，减少时成比例
+            // 收窄，使单个按钮宽度恒定、选中底胶囊不被挤压变形。
+            .fillMaxWidth(
+                fraction = destinations.size / TopLevelDestination.entries.size.toFloat(),
+            )
             .height(height = NavigationBarHeight)
             .graphicsLayer(
                 shadowElevation = with(LocalDensity.current) { 6.dp.toPx() },
@@ -637,6 +664,7 @@ fun NavigationView(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 destinations.forEach { destination ->

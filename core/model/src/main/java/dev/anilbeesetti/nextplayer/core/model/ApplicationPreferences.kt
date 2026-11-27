@@ -11,6 +11,8 @@ data class ApplicationPreferences(
     val useDynamicColors: Boolean = true,
     /** 首页底栏按钮顺序，保存目标枚举名称；旧数据的空列表回退到默认顺序。 */
     val topLevelDestinationOrder: List<String> = emptyList(),
+    /** 首页底栏中被隐藏的按钮（存目标枚举名称，不含「更多」）；默认空 = 全部显示。 */
+    val hiddenTopLevelDestinations: List<String> = emptyList(),
     val markLastPlayedMedia: Boolean = true,
     val isHistoryPaused: Boolean = false,
     val includeNetworkWatchHistory: Boolean = true,

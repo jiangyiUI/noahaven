@@ -502,6 +502,7 @@
 
     <!-- Network -->
     <string name="home">Home</string>
+    <string name="nav_bar_buttons">Navigation bar buttons</string>
     <string name="nav_videos">Video</string>
     <string name="network">Network</string>
     <string name="add_connection">Add connection</string>

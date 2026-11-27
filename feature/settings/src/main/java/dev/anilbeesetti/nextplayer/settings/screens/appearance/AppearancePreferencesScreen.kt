@@ -1,5 +1,6 @@
 package dev.anilbeesetti.nextplayer.settings.screens.appearance
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +18,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
@@ -126,6 +128,33 @@ private fun AppearancePreferencesScreenContent(
                     )
                 }
             }
+
+            ListSectionTitle(text = stringResource(id = R.string.nav_bar_buttons))
+            Column(
+                verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+            ) {
+                navBarToggles.forEachIndexed { index, toggle ->
+                    val isVisible = toggle.name !in state.preferences.hiddenTopLevelDestinations
+                    // 底栏至少保留一个内容按钮：当前可见且已是最后一个可见按钮时，禁止再关闭
+                    val isLastVisible = isVisible &&
+                        state.preferences.hiddenTopLevelDestinations.size >= navBarToggles.size - 1
+                    PreferenceSwitch(
+                        title = stringResource(id = toggle.labelRes),
+                        icon = toggle.icon,
+                        isChecked = isVisible,
+                        enabled = !isLastVisible,
+                        onClick = {
+                            onAction(
+                                AppearancePreferencesEvent.ToggleTopLevelDestination(
+                                    name = toggle.name,
+                                ),
+                            )
+                        },
+                        isFirstItem = index == 0,
+                        isLastItem = index == navBarToggles.lastIndex,
+                    )
+                }
+            }
         }
 
         state.showDialog?.let { showDialog ->
@@ -157,6 +186,20 @@ private fun AppearancePreferencesScreenContent(
         }
     }
 }
+
+/** 底栏可隐藏的 4 个按钮；name 对应 app 模块 TopLevelDestination 的枚举名，「更多」固定不隐藏。 */
+private data class NavBarToggle(
+    val name: String,
+    @StringRes val labelRes: Int,
+    val icon: ImageVector,
+)
+
+private val navBarToggles = listOf(
+    NavBarToggle(name = "MEDIA", labelRes = R.string.nav_videos, icon = NextIcons.Video),
+    NavBarToggle(name = "MUSIC", labelRes = R.string.music, icon = NextIcons.Audio),
+    NavBarToggle(name = "IMAGES", labelRes = R.string.images, icon = NextIcons.Image),
+    NavBarToggle(name = "BOOKS", labelRes = R.string.books, icon = NextIcons.Books),
+)
 
 @PreviewLightDark
 @Composable

@@ -170,12 +170,30 @@ class MainActivity : FragmentActivity() {
                     val updateState by updateViewModel.state.collectAsStateWithLifecycle()
 
                     Box(modifier = Modifier.fillMaxSize()) {
+                        val appPreferences = (state as? MainActivityUiState.Success)?.preferences
+                        // 底栏显隐「延迟应用」：在设置等深层页面操作开关时先冻结，回到某个 tab 的根页面
+                        // （即离开设置）时再同步最新值，避免操作开关时重组导航把用户踢出设置页。
+                        val frozenHiddenDestinations = remember {
+                            mutableStateOf(
+                                value = appPreferences?.hiddenTopLevelDestinations.orEmpty(),
+                            )
+                        }
                         val navState = rememberTopLevelNavState(
-                            destinationOrder = (state as? MainActivityUiState.Success)
-                                ?.preferences
-                                ?.topLevelDestinationOrder
-                                .orEmpty(),
+                            destinationOrder = appPreferences?.topLevelDestinationOrder.orEmpty(),
+                            hiddenDestinations = frozenHiddenDestinations.value,
                         )
+                        // 只有回到 tab 根页面（离开设置等深层页面）时，才把最新的底栏显隐应用到底栏。
+                        LaunchedEffect(
+                            navState.currentStack.size,
+                            appPreferences?.hiddenTopLevelDestinations,
+                        ) {
+                            val latest = appPreferences?.hiddenTopLevelDestinations.orEmpty()
+                            if (navState.currentStack.size <= 1 &&
+                                frozenHiddenDestinations.value != latest
+                            ) {
+                                frozenHiddenDestinations.value = latest
+                            }
+                        }
 
                     LaunchedEffect(key1 = pendingPlaylistId) {
                         pendingPlaylistId?.let { playlistId ->

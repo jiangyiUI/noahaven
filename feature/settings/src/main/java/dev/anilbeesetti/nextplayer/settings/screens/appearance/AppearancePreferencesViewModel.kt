@@ -14,6 +14,9 @@ import kotlinx.coroutines.launch
 import org.koin.core.annotation.InjectedParam
 import org.koin.core.annotation.KoinViewModel
 
+/** 底栏可隐藏的按钮数量（视频/音乐/图片/书籍），「更多」固定不隐藏。 */
+private const val TOGGLABLE_DESTINATION_COUNT = 4
+
 @KoinViewModel
 class AppearancePreferencesViewModel(
     private val preferencesRepository: PreferencesRepository,
@@ -51,6 +54,9 @@ class AppearancePreferencesViewModel(
 
             is AppearancePreferencesEvent.ToggleUseHighContrastDarkTheme ->
                 toggleUseHighContrastDarkTheme()
+
+            is AppearancePreferencesEvent.ToggleTopLevelDestination ->
+                toggleTopLevelDestination(action.name)
         }
     }
 
@@ -95,6 +101,25 @@ class AppearancePreferencesViewModel(
             }
         }
     }
+
+    private fun toggleTopLevelDestination(name: String) {
+        viewModelScope.launch {
+            preferencesRepository.updateApplicationPreferences { preferences ->
+                val hidden = preferences.hiddenTopLevelDestinations
+                when {
+                    // 已隐藏 -> 重新显示该按钮
+                    name in hidden -> preferences.copy(
+                        hiddenTopLevelDestinations = hidden - name,
+                    )
+                    // 底栏至少保留一个内容按钮：只剩最后一个可见时拒绝再隐藏
+                    hidden.size >= TOGGLABLE_DESTINATION_COUNT - 1 -> preferences
+                    else -> preferences.copy(
+                        hiddenTopLevelDestinations = hidden + name,
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Stable
@@ -111,6 +136,7 @@ sealed interface AppearancePreferencesEvent {
     data class UpdateThemeConfig(val themeConfig: ThemeConfig) : AppearancePreferencesEvent
     data object ToggleUseDynamicColors : AppearancePreferencesEvent
     data object ToggleUseHighContrastDarkTheme : AppearancePreferencesEvent
+    data class ToggleTopLevelDestination(val name: String) : AppearancePreferencesEvent
 }
 
 sealed interface AppearancePreferenceDialog {
