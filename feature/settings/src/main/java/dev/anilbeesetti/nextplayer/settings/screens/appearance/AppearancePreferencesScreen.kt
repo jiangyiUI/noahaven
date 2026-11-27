@@ -129,15 +129,24 @@ private fun AppearancePreferencesScreenContent(
                 }
             }
 
+            // 跟随用户在底栏拖好的顺序：遍历已保存的 topLevelDestinationOrder，取出匹配的可切换
+            // 按钮（跳过「更多」）；顺序里缺失的兜底补到末尾（sanitize 后理论上不会缺）。
+            val navBarToggleByName = navBarToggles.associateBy { it.name }
+            val orderedNavBarToggles = buildList {
+                state.preferences.topLevelDestinationOrder.forEach { name ->
+                    navBarToggleByName[name]?.let { add(it) }
+                }
+                navBarToggles.forEach { if (it !in this) add(it) }
+            }
             ListSectionTitle(text = stringResource(id = R.string.nav_bar_buttons))
             Column(
                 verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
             ) {
-                navBarToggles.forEachIndexed { index, toggle ->
+                orderedNavBarToggles.forEachIndexed { index, toggle ->
                     val isVisible = toggle.name !in state.preferences.hiddenTopLevelDestinations
                     // 底栏至少保留一个内容按钮：当前可见且已是最后一个可见按钮时，禁止再关闭
                     val isLastVisible = isVisible &&
-                        state.preferences.hiddenTopLevelDestinations.size >= navBarToggles.size - 1
+                        state.preferences.hiddenTopLevelDestinations.size >= orderedNavBarToggles.size - 1
                     PreferenceSwitch(
                         title = stringResource(id = toggle.labelRes),
                         icon = toggle.icon,
@@ -151,7 +160,7 @@ private fun AppearancePreferencesScreenContent(
                             )
                         },
                         isFirstItem = index == 0,
-                        isLastItem = index == navBarToggles.lastIndex,
+                        isLastItem = index == orderedNavBarToggles.lastIndex,
                     )
                 }
             }
