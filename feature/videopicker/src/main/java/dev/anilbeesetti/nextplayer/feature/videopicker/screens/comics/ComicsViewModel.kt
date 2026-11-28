@@ -118,7 +118,7 @@ class ComicsViewModel(
         }
     }
 
-    fun refresh(force: Boolean = false) {
+    fun refresh(force: Boolean = false, silent: Boolean = false) {
         if (!force) {
             val preferences = preferencesRepository.applicationPreferences.value
             comicFileIndex.requestRefresh(
@@ -128,7 +128,8 @@ class ComicsViewModel(
             return
         }
         viewModelScope.launch {
-            refreshing.value = true
+            // silent：后台恢复 / 进文件夹等自动刷新，不显示下拉刷新指示器
+            if (!silent) refreshing.value = true
             val startedAt = System.currentTimeMillis()
             try {
                 comicFileIndex.refreshNow(
@@ -136,25 +137,32 @@ class ComicsViewModel(
                     folderPath = folderPath.value,
                 )
             } finally {
-                val elapsed = System.currentTimeMillis() - startedAt
-                if (elapsed < MIN_REFRESH_INDICATOR_MS) {
-                    delay(MIN_REFRESH_INDICATOR_MS - elapsed)
+                if (!silent) {
+                    val elapsed = System.currentTimeMillis() - startedAt
+                    if (elapsed < MIN_REFRESH_INDICATOR_MS) {
+                        delay(MIN_REFRESH_INDICATOR_MS - elapsed)
+                    }
+                    refreshing.value = false
                 }
-                refreshing.value = false
             }
         }
+    }
+
+    /** 页面从后台恢复时强制刷新当前文件夹，清掉第三方改名/删除后已不存在的文件。权限由 Screen 层判断后调用。 */
+    fun refreshOnResume() {
+        refresh(force = true, silent = true)
     }
 
     fun openFolder(path: String) {
         if (path != folderPath.value) folderHistory.add(folderPath.value)
         folderPath.value = path
-        refresh()
+        refresh(force = true, silent = true)
     }
 
     fun goBack() {
         if (folderPath.value == null) return
         folderPath.value = folderHistory.removeLastOrNull()
-        refresh()
+        refresh(force = true, silent = true)
     }
 
     fun openSettings() = output.openSettings()
@@ -168,6 +176,7 @@ class ComicsViewModel(
         when (action) {
             is ComicsAction.DeleteSelected -> deleteSelected(items = action.items)
             is ComicsAction.RenameSelected -> renameComic(item = action.item, to = action.to)
+            is ComicsAction.RenameFolder -> renameFolder(oldPath = action.oldPath, to = action.to)
             is ComicsAction.ShareSelected -> shareSelected(items = action.items)
             is ComicsAction.CopySelected -> transferSelected(
                 items = action.items,
@@ -229,6 +238,17 @@ class ComicsViewModel(
                 }
             }
             refreshIndex()
+        }
+    }
+
+    /** 重命名文件夹：磁盘 renameTo 后强制重扫，子漫画索引切到新路径。 */
+    private fun renameFolder(oldPath: String, to: String) {
+        viewModelScope.launch {
+            val renamed = mediaOperationsService.renameMedia(
+                uri = Uri.fromFile(File(oldPath)),
+                to = to,
+            )
+            if (renamed) refreshIndex()
         }
     }
 
@@ -563,6 +583,7 @@ data class ComicsUiState(
 sealed interface ComicsAction {
     data class DeleteSelected(val items: Set<SelectionItem>) : ComicsAction
     data class RenameSelected(val item: SelectionItem.Video, val to: String) : ComicsAction
+    data class RenameFolder(val oldPath: String, val to: String) : ComicsAction
     data class ShareSelected(val items: Set<SelectionItem>) : ComicsAction
     data class CopySelected(val items: Set<SelectionItem>) : ComicsAction
     data class MoveSelected(val items: Set<SelectionItem>) : ComicsAction

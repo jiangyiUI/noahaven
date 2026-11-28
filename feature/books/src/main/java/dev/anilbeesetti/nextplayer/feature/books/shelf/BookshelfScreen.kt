@@ -93,7 +93,8 @@ fun BookshelfScreen(
 
     LifecycleResumeEffect(Unit) {
         val granted = context.hasAllFilesAccess()
-        if (granted && !hasStorageAccess) viewModel.refresh()
+        // 从后台恢复（含在第三方改完文件后回来）时强制刷新当前文件夹，去掉已不存在的文件
+        if (granted) viewModel.refreshOnResume()
         hasStorageAccess = granted
         onPauseOrDispose {}
     }
@@ -161,6 +162,7 @@ internal fun BookshelfScreenContent(
     var showQuickSettingsDialog by rememberSaveable { mutableStateOf(false) }
     var showDeleteConfirmation by rememberSaveable { mutableStateOf(false) }
     var renameBookPath by rememberSaveable { mutableStateOf<String?>(null) }
+    var renameFolderPath by rememberSaveable { mutableStateOf<String?>(null) }
     var showAddToShelfDialog by rememberSaveable { mutableStateOf(false) }
     var addToShelfPaths by remember { mutableStateOf<List<String>>(emptyList()) }
 
@@ -306,7 +308,8 @@ internal fun BookshelfScreenContent(
                 show = selectionManager.isInSelectionMode &&
                     selectionManager.selectionItems.isNotEmpty(),
                 contentFocusRequester = contentFocusRequester,
-                showRenameAction = singleSelectedBook != null,
+                showRenameAction = singleSelectedBook != null ||
+                    selectionManager.isSingleFolderSelected,
                 showInfoAction = false,
                 showHideAction = false,
                 showPlayAction = false,
@@ -324,7 +327,14 @@ internal fun BookshelfScreenContent(
                         showAddToShelfDialog = true
                     }
                 },
-                onRenameAction = { renameBookPath = singleSelectedBook?.path },
+                onRenameAction = {
+                    val folder = selectionManager.singleSelectedFolder
+                    if (folder != null) {
+                        renameFolderPath = folder.path
+                    } else {
+                        renameBookPath = singleSelectedBook?.path
+                    }
+                },
                 onShareAction = {
                     viewModel.onAction(
                         BookshelfAction.ShareSelected(selectionManager.selectionItems),
@@ -514,6 +524,18 @@ internal fun BookshelfScreenContent(
                 },
             )
         }
+    }
+
+    renameFolderPath?.let { path ->
+        RenameDialog(
+            name = File(path).name,
+            onDismiss = { renameFolderPath = null },
+            onDone = {
+                viewModel.onAction(BookshelfAction.RenameFolder(oldPath = path, to = it))
+                selectionManager.exitSelectionMode()
+                renameFolderPath = null
+            },
+        )
     }
 
     if (showAddToShelfDialog) {

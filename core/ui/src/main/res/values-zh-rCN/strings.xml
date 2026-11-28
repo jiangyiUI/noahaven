@@ -15,8 +15,11 @@
     <string name="settings_import_success">已导入设置</string>
     <string name="settings_import_failed">无法完成设置导入。请重试。</string>
     <string name="settings_import_invalid">无法读取此文件，或其不包含支持的 JSON 设置</string>
+    <string name="settings_reading_progress_import_success">阅读进度同步完成</string>
+    <string name="settings_reading_progress_import_failed">无法识别备份文件，阅读进度同步失败</string>
+    <string name="settings_reading_progress_import_empty">备份里没有可同步的阅读进度</string>
     <string name="about_name">关于</string>
-    <string name="about_legacy_import_enabled">已在常规设置中显示导入书架入口</string>
+    <string name="about_legacy_import_enabled">已开启书架导入入口（常规设置）</string>
     <string name="menu">菜单</string>
     <string name="player_name">播放器</string>
     <string name="settings">设置</string>

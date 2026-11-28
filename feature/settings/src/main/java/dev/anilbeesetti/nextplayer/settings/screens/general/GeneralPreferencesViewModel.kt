@@ -10,6 +10,8 @@ import dev.anilbeesetti.nextplayer.core.ui.R
 import dev.anilbeesetti.nextplayer.core.ui.base.MviViewModel
 import dev.anilbeesetti.nextplayer.settings.backup.LegacyShelfImportService.LegacyShelfImportPreview
 import dev.anilbeesetti.nextplayer.settings.backup.LegacyShelfImportService
+import dev.anilbeesetti.nextplayer.settings.backup.ReadingProgressImportService
+import dev.anilbeesetti.nextplayer.settings.backup.ReadingProgressImportService.ReadingProgressPreview
 import dev.anilbeesetti.nextplayer.settings.backup.SettingsBackupService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +29,7 @@ class GeneralPreferencesViewModel(
     private val imageLoader: ImageLoader,
     private val settingsBackupService: SettingsBackupService,
     private val legacyShelfImportService: LegacyShelfImportService,
+    private val readingProgressImportService: ReadingProgressImportService,
     @InjectedParam internal var output: Output,
 ) : MviViewModel<GeneralPreferencesUiState, GeneralPreferencesUiEvent>() {
 
@@ -73,6 +76,13 @@ class GeneralPreferencesViewModel(
                 stateInternal.update { it.copy(legacyPreview = null) }
 
             is GeneralPreferencesUiEvent.ExportNotFound -> exportNotFound(action.uri)
+
+            is GeneralPreferencesUiEvent.PickProgressBackup -> pickProgressBackup(action.uri)
+
+            is GeneralPreferencesUiEvent.ConfirmProgressImport -> confirmProgressImport()
+
+            is GeneralPreferencesUiEvent.DismissProgressPreview ->
+                stateInternal.update { it.copy(progressPreview = null) }
         }
     }
 
@@ -150,6 +160,35 @@ class GeneralPreferencesViewModel(
         }
     }
 
+    private fun pickProgressBackup(uri: Uri) {
+        backupOperation(R.string.settings_reading_progress_import_failed) {
+            val preview = readingProgressImportService.readAndPreview(uri)
+            if (preview == null) {
+                output.showMessage(R.string.settings_reading_progress_import_failed)
+                return@backupOperation
+            }
+            if (preview.totalWithProgress == 0) {
+                output.showMessage(R.string.settings_reading_progress_import_empty)
+                return@backupOperation
+            }
+            stateInternal.update { it.copy(progressPreview = preview) }
+        }
+    }
+
+    private fun confirmProgressImport() {
+        val preview = stateInternal.value.progressPreview ?: return
+        backupOperation(R.string.settings_reading_progress_import_failed) {
+            val written = readingProgressImportService.applyImport(preview)
+            stateInternal.update { it.copy(progressPreview = null) }
+            val message = if (written > 0) {
+                R.string.settings_reading_progress_import_success
+            } else {
+                R.string.settings_reading_progress_import_empty
+            }
+            output.showMessage(message)
+        }
+    }
+
     private fun backupOperation(failureMessage: Int, operation: suspend () -> Unit) {
         if (stateInternal.value.isBusy) return
         stateInternal.update { it.copy(isBusy = true) }
@@ -175,7 +214,8 @@ data class GeneralPreferencesUiState(
     val showDialog: GeneralPreferencesDialog? = null,
     val isBusy: Boolean = false,
     val legacyPreview: LegacyShelfImportPreview? = null,
-    /** 是否显示「导入书架（临时）」入口（关于页连点应用名 5 下后开启）。 */
+    val progressPreview: ReadingProgressPreview? = null,
+    /** 是否显示彩蛋导入入口（关于页连点应用名 5 下后开启）。 */
     val showLegacyShelfImport: Boolean = false,
 )
 
@@ -200,4 +240,7 @@ sealed interface GeneralPreferencesUiEvent {
     data object ConfirmLegacyImport : GeneralPreferencesUiEvent
     data object DismissLegacyPreview : GeneralPreferencesUiEvent
     data class ExportNotFound(val uri: Uri) : GeneralPreferencesUiEvent
+    data class PickProgressBackup(val uri: Uri) : GeneralPreferencesUiEvent
+    data object ConfirmProgressImport : GeneralPreferencesUiEvent
+    data object DismissProgressPreview : GeneralPreferencesUiEvent
 }

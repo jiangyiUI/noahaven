@@ -168,8 +168,14 @@ class LocalMediaOperationsService(
     }
 
     override suspend fun renameMedia(uri: Uri, to: String): Boolean = withContext(Dispatchers.IO) {
-        // 各库的输入框只显示不带后缀的名字，用户删掉后缀时统一补回原后缀
-        val targetName = originalDisplayName(uri = uri)?.let { to.withPreservedExtension(it) } ?: to
+        // 各库的输入框只显示不带后缀的名字，用户删掉后缀时统一补回原后缀；
+        // 目录重命名不补后缀——文件夹名允许含点（如「My.Comics」），不能被当成扩展名补回去
+        val isDirectory = uri.scheme == "file" && uri.path?.let { File(it).isDirectory } == true
+        val targetName = if (isDirectory) {
+            to
+        } else {
+            originalDisplayName(uri = uri)?.let { to.withPreservedExtension(it) } ?: to
+        }
         return@withContext when {
             uri.scheme == "file" -> renameFileMedia(
                 uri = uri,

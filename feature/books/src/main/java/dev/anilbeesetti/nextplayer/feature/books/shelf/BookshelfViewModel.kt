@@ -116,7 +116,7 @@ class BookshelfViewModel(
         }
     }
 
-    fun refresh(force: Boolean = false) {
+    fun refresh(force: Boolean = false, silent: Boolean = false) {
         if (!force) {
             val preferences = preferencesRepository.applicationPreferences.value
             bookFileIndex.requestRefresh(
@@ -126,7 +126,8 @@ class BookshelfViewModel(
             return
         }
         viewModelScope.launch {
-            refreshing.value = true
+            // silent：后台恢复 / 进文件夹等自动刷新，不显示下拉刷新指示器
+            if (!silent) refreshing.value = true
             val startedAt = System.currentTimeMillis()
             try {
                 bookFileIndex.refreshNow(
@@ -134,19 +135,26 @@ class BookshelfViewModel(
                     folderPath = folderPath.value,
                 )
             } finally {
-                val elapsed = System.currentTimeMillis() - startedAt
-                if (elapsed < MIN_REFRESH_INDICATOR_MS) {
-                    delay(MIN_REFRESH_INDICATOR_MS - elapsed)
+                if (!silent) {
+                    val elapsed = System.currentTimeMillis() - startedAt
+                    if (elapsed < MIN_REFRESH_INDICATOR_MS) {
+                        delay(MIN_REFRESH_INDICATOR_MS - elapsed)
+                    }
+                    refreshing.value = false
                 }
-                refreshing.value = false
             }
         }
+    }
+
+    /** 页面从后台恢复时强制刷新当前文件夹，清掉第三方改名/删除后已不存在的文件。权限由 Screen 层判断后调用。 */
+    fun refreshOnResume() {
+        refresh(force = true, silent = true)
     }
 
     fun openFolder(path: String) {
         if (path != folderPath.value) folderHistory.add(folderPath.value)
         folderPath.value = path
-        refresh()
+        refresh(force = true, silent = true)
     }
 
     /**
@@ -174,13 +182,13 @@ class BookshelfViewModel(
         folderHistory.add(null) // 浏览页根
         folderHistory.addAll(ancestors)
         folderPath.value = path
-        refresh()
+        refresh(force = true, silent = true)
     }
 
     fun goBack() {
         if (folderPath.value == null) return
         folderPath.value = folderHistory.removeLastOrNull()
-        refresh()
+        refresh(force = true, silent = true)
     }
 
     fun openSettings() = output.openSettings()
@@ -193,6 +201,7 @@ class BookshelfViewModel(
         when (action) {
             is BookshelfAction.DeleteSelected -> deleteSelected(items = action.items)
             is BookshelfAction.RenameSelected -> renameBook(item = action.item, to = action.to)
+            is BookshelfAction.RenameFolder -> renameFolder(oldPath = action.oldPath, to = action.to)
             is BookshelfAction.ShareSelected -> shareSelected(items = action.items)
             is BookshelfAction.CopySelected -> transferSelected(
                 items = action.items,
@@ -249,6 +258,34 @@ class BookshelfViewModel(
                 }
             }
             refreshIndex()
+        }
+    }
+
+    /** 重命名文件夹：磁盘 renameTo 后，把其下所有已索引书的阅读进度和书架记录迁到新路径。 */
+    private fun renameFolder(oldPath: String, to: String) {
+        viewModelScope.launch {
+            val renamed = mediaOperationsService.renameMedia(
+                uri = Uri.fromFile(File(oldPath)),
+                to = to,
+            )
+            if (renamed) {
+                val oldPrefix = oldPath.trimEnd('/') + PATH_SEPARATOR
+                val newPrefix = File(File(oldPath).parentFile, to).path.trimEnd('/') + PATH_SEPARATOR
+                // moveProgress / renamePath 都是 suspend，必须在协程里用 for 循环，不能用 forEach
+                val booksToMove = bookFileIndex.entries.value.orEmpty()
+                    .filter { it.path.startsWith(oldPrefix) }
+                for (book in booksToMove) {
+                    val newPath = newPrefix + book.path.removePrefix(oldPrefix)
+                    bookFileIndex.moveProgress(fromPath = book.path, toPath = newPath)
+                    bookShelfRepository.renamePath(oldPath = book.path, newPath = newPath)
+                    if (preferencesRepository.applicationPreferences.value.lastViewedBookPath == book.path) {
+                        preferencesRepository.updateApplicationPreferences {
+                            it.copy(lastViewedBookPath = newPath)
+                        }
+                    }
+                }
+                refreshIndex()
+            }
         }
     }
 
@@ -494,6 +531,7 @@ data class BookshelfUiState(
 sealed interface BookshelfAction {
     data class DeleteSelected(val items: Set<SelectionItem>) : BookshelfAction
     data class RenameSelected(val item: SelectionItem.Video, val to: String) : BookshelfAction
+    data class RenameFolder(val oldPath: String, val to: String) : BookshelfAction
     data class ShareSelected(val items: Set<SelectionItem>) : BookshelfAction
     data class CopySelected(val items: Set<SelectionItem>) : BookshelfAction
     data class MoveSelected(val items: Set<SelectionItem>) : BookshelfAction

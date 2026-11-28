@@ -122,13 +122,13 @@ class ImagesViewModel(
                     folderHistory.add(folderPath.value)
                 }
                 folderPath.value = action.folderPath
-                refresh()
+                refresh(force = true, silent = true)
             }
 
             ImagesAction.OnNavigateUpClick -> {
                 if (folderPath.value == null) return
                 folderPath.value = folderHistory.removeLastOrNull()
-                refresh()
+                refresh(force = true, silent = true)
             }
 
             ImagesAction.OnSearchClick -> output.openSearch()
@@ -152,6 +152,11 @@ class ImagesViewModel(
                 action.to,
             )
 
+            is ImagesAction.RenameFolder -> renameFolder(
+                oldPath = action.oldPath,
+                to = action.to,
+            )
+
             is ImagesAction.DeleteSelected -> deleteSelected(action.items)
 
             is ImagesAction.CopySelected -> transferSelected(
@@ -172,7 +177,7 @@ class ImagesViewModel(
         }
     }
 
-    private fun refresh(force: Boolean = false) {
+    fun refresh(force: Boolean = false, silent: Boolean = false) {
         if (!context.hasAllFilesAccess()) {
             imagesInternal.value = emptyList()
             return
@@ -186,7 +191,8 @@ class ImagesViewModel(
             return
         }
         viewModelScope.launch {
-            refreshing.value = true
+            // silent：后台恢复 / 进文件夹等自动刷新，不显示下拉刷新指示器
+            if (!silent) refreshing.value = true
             val startedAt = System.currentTimeMillis()
             try {
                 imageFileIndex.refreshNow(
@@ -194,13 +200,20 @@ class ImagesViewModel(
                     folderPath = folderPath.value,
                 )
             } finally {
-                val elapsed = System.currentTimeMillis() - startedAt
-                if (elapsed < MIN_REFRESH_INDICATOR_MS) {
-                    delay(MIN_REFRESH_INDICATOR_MS - elapsed)
+                if (!silent) {
+                    val elapsed = System.currentTimeMillis() - startedAt
+                    if (elapsed < MIN_REFRESH_INDICATOR_MS) {
+                        delay(MIN_REFRESH_INDICATOR_MS - elapsed)
+                    }
+                    refreshing.value = false
                 }
-                refreshing.value = false
             }
         }
+    }
+
+    /** 页面从后台恢复时强制刷新当前文件夹，清掉第三方改名/删除后已不存在的文件。 */
+    fun refreshOnResume() {
+        if (context.hasAllFilesAccess()) refresh(force = true, silent = true)
     }
 
     private fun markImageViewed(path: String) {
@@ -258,6 +271,17 @@ class ImagesViewModel(
                 folderPath = File(oldPath).parent,
                 force = true,
             )
+        }
+    }
+
+    /** 重命名文件夹：磁盘 renameTo 后强制重扫，子图片索引切到新路径。 */
+    private fun renameFolder(oldPath: String, to: String) {
+        viewModelScope.launch {
+            val renamed = mediaOperationsService.renameMedia(
+                uri = Uri.fromFile(File(oldPath)),
+                to = to,
+            )
+            if (renamed) refresh(force = true)
         }
     }
 
@@ -525,6 +549,7 @@ sealed interface ImagesAction {
     data object OnAddFoldersClick : ImagesAction
     data class ShareSelected(val items: Set<SelectionItem>) : ImagesAction
     data class RenameSelected(val uri: Uri, val to: String) : ImagesAction
+    data class RenameFolder(val oldPath: String, val to: String) : ImagesAction
     data class DeleteSelected(val items: Set<SelectionItem>) : ImagesAction
     data class CopySelected(val items: Set<SelectionItem>) : ImagesAction
     data class MoveSelected(val items: Set<SelectionItem>) : ImagesAction

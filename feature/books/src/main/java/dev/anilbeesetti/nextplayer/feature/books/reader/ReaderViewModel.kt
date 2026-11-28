@@ -145,12 +145,30 @@ class ReaderViewModel(
                 )
             }
             val content = contentLoader.load(bookPath)
-            val chapterIndex = content?.let {
-                book.chapterIndex.coerceIn(0, it.chapters.lastIndex)
-            } ?: book.chapterIndex
-            val charOffset = content?.chapters?.getOrNull(chapterIndex)
-                ?.let { book.charOffset.coerceIn(0, it.text.length) }
-                ?: book.charOffset
+            // 外部备份同步的进度：忽略旧 app 的章节坐标，按全书百分比换算落点，定位后移除标记。
+            val pendingPercent = preferencesRepository.applicationPreferences.value
+                .bookPendingPercent[bookPath]
+            val chapterIndex: Int
+            val charOffset: Int
+            if (pendingPercent != null && content != null && content.totalChars > 0) {
+                val targetChar = (pendingPercent.coerceIn(0f, 1f) * content.totalChars)
+                    .toInt()
+                    .coerceIn(0, content.totalChars)
+                val targetChapter = content.chapterIndexAt(targetChar)
+                val chapter = content.chapters[targetChapter]
+                chapterIndex = targetChapter
+                charOffset = (targetChar - chapter.startChar).coerceIn(0, chapter.text.length)
+                preferencesRepository.updateApplicationPreferences { prefs ->
+                    prefs.copy(bookPendingPercent = prefs.bookPendingPercent - bookPath)
+                }
+            } else {
+                chapterIndex = content?.let {
+                    book.chapterIndex.coerceIn(0, it.chapters.lastIndex)
+                } ?: book.chapterIndex
+                charOffset = content?.chapters?.getOrNull(chapterIndex)
+                    ?.let { book.charOffset.coerceIn(0, it.text.length) }
+                    ?: book.charOffset
+            }
             stateInternal.update {
                 it.copy(
                     loading = false,

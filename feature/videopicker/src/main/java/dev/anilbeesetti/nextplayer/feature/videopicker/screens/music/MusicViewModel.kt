@@ -172,13 +172,13 @@ class MusicViewModel(
                     folderHistory.add(folderPath.value)
                 }
                 folderPath.value = action.folderPath
-                refresh()
+                refresh(force = true)
             }
 
             is MusicAction.OnNavigateUpClick -> {
                 if (folderPath.value == null) return
                 folderPath.value = folderHistory.removeLastOrNull()
-                refresh()
+                refresh(force = true)
             }
 
             MusicAction.OnSearchClick -> output.openSearch()
@@ -253,6 +253,11 @@ class MusicViewModel(
                 to = action.to,
             )
 
+            is MusicAction.RenameFolder -> renameFolder(
+                oldPath = action.oldPath,
+                to = action.to,
+            )
+
             is MusicAction.DeleteSelected -> deleteSelected(items = action.items)
 
             is MusicAction.ShowAddToPlaylist -> {
@@ -283,18 +288,23 @@ class MusicViewModel(
         }
     }
 
-    private fun refresh() {
+    private fun refresh(force: Boolean = false) {
         if (!context.hasAllFilesAccess()) {
             audiosInternal.value = Result.success(emptyList())
             return
         }
-        // 在后台增量刷新当前文件夹的磁盘索引，新增/删除的文件会通过 entries 流自动更新界面
-        audioMediaService.requestRefresh(folderPath = folderPath.value)
+        // force 绕过节流，确保第三方改名/删除后能扫到并清理已不存在的文件；非 force 走节流避免频繁扫描
+        audioMediaService.requestRefresh(folderPath = folderPath.value, force = force)
         viewModelScope.launch {
             audiosInternal.value = Result.success(
                 audioMediaService.fetchAudios(folderPath = folderPath.value),
             )
         }
+    }
+
+    /** 页面从后台恢复时强制刷新当前文件夹，清掉第三方改名/删除后已不存在的文件。 */
+    fun refreshOnResume() {
+        if (context.hasAllFilesAccess()) refresh(force = true)
     }
 
     // 下拉刷新：做一次整卷系统扫描，视频和音频的 MediaStore 记录都会一起更新
@@ -405,6 +415,17 @@ class MusicViewModel(
                 force = true,
             )
             refresh()
+        }
+    }
+
+    /** 重命名文件夹：磁盘 renameTo 后做一次整卷扫描 + 强制重扫当前目录，子文件索引切到新路径。 */
+    private fun renameFolder(oldPath: String, to: String) {
+        viewModelScope.launch {
+            val renamed = mediaOperationsService.renameMedia(
+                uri = Uri.fromFile(File(oldPath)),
+                to = to,
+            )
+            if (renamed) refreshWithMediaScan()
         }
     }
 
@@ -714,6 +735,7 @@ sealed interface MusicAction {
     data class CopySelected(val items: Set<SelectionItem>) : MusicAction
     data class MoveSelected(val items: Set<SelectionItem>) : MusicAction
     data class RenameSelected(val uri: Uri, val to: String) : MusicAction
+    data class RenameFolder(val oldPath: String, val to: String) : MusicAction
     data class DeleteSelected(val items: Set<SelectionItem>) : MusicAction
     data class ShowAddToPlaylist(val items: Set<SelectionItem>) : MusicAction
     data object DismissAddToPlaylist : MusicAction

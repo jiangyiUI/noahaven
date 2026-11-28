@@ -143,7 +143,10 @@
     <string name="video_orientation">影片方向</string>
     <string name="best_fit">最適合</string>
     <string name="about_name">關於</string>
-    <string name="about_legacy_import_enabled">已在常規設定中顯示導入書架入口</string>
+    <string name="about_legacy_import_enabled">已開啟書架匯入入口（常規設定）</string>
+    <string name="settings_reading_progress_import_success">閱讀進度同步完成</string>
+    <string name="settings_reading_progress_import_failed">無法識別備份檔案，閱讀進度同步失敗</string>
+    <string name="settings_reading_progress_import_empty">備份裡沒有可同步的閱讀進度</string>
     <string name="subtitle">字幕</string>
     <string name="title_activity_player">Next Player 活動</string>
     <string name="serif">襯線字型</string>

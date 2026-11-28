@@ -75,6 +75,7 @@ import dev.anilbeesetti.nextplayer.feature.videopicker.screens.mediapicker.Trans
 import dev.anilbeesetti.nextplayer.feature.videopicker.screens.mediapicker.TransferProgressDialog
 import dev.anilbeesetti.nextplayer.feature.videopicker.state.SelectionItem
 import dev.anilbeesetti.nextplayer.feature.videopicker.state.rememberSelectionManager
+import java.io.File
 import java.text.DateFormat
 import java.util.Date
 
@@ -94,8 +95,12 @@ fun ImagesScreen(
     LifecycleResumeEffect(Unit) {
         val granted = context.hasAllFilesAccess()
         hasStorageAccess = granted
-        if (granted && !wasStorageAccessGranted) {
-            viewModel.onAction(ImagesAction.OnPermissionAccepted)
+        if (granted) {
+            // 从后台恢复（含在第三方改完文件后回来）时强制刷新当前文件夹，去掉已不存在的文件
+            viewModel.refreshOnResume()
+            if (!wasStorageAccessGranted) {
+                viewModel.onAction(ImagesAction.OnPermissionAccepted)
+            }
         }
         wasStorageAccessGranted = granted
         onPauseOrDispose {}
@@ -146,6 +151,7 @@ internal fun ImagesScreenContent(
     val contentFocusRequester = remember { FocusRequester() }
     var showQuickSettingsDialog by rememberSaveable { mutableStateOf(false) }
     var renameImageUri by rememberSaveable { mutableStateOf<String?>(null) }
+    var renameFolderPath by rememberSaveable { mutableStateOf<String?>(null) }
     var infoImagePath by rememberSaveable { mutableStateOf<String?>(null) }
     var viewerImagePath by rememberSaveable { mutableStateOf<String?>(null) }
     var viewerImages by remember { mutableStateOf<List<ImageFile>>(emptyList()) }
@@ -302,7 +308,8 @@ internal fun ImagesScreenContent(
                 show = selectionManager.isInSelectionMode &&
                     selectionManager.selectionItems.isNotEmpty(),
                 contentFocusRequester = contentFocusRequester,
-                showRenameAction = singleSelectedImage != null,
+                showRenameAction = singleSelectedImage != null ||
+                    selectionManager.isSingleFolderSelected,
                 showInfoAction = singleSelectedImage != null,
                 showHideAction = false,
                 showMoveAction = true,
@@ -313,7 +320,14 @@ internal fun ImagesScreenContent(
                 showCopyAction = true,
                 onPlayAction = {},
                 onAddToPlaylistAction = {},
-                onRenameAction = { renameImageUri = singleSelectedImage?.uriString },
+                onRenameAction = {
+                    val folder = selectionManager.singleSelectedFolder
+                    if (folder != null) {
+                        renameFolderPath = folder.path
+                    } else {
+                        renameImageUri = singleSelectedImage?.uriString
+                    }
+                },
                 onShareAction = {
                     onAction(ImagesAction.ShareSelected(selectionManager.selectionItems))
                 },
@@ -462,6 +476,18 @@ internal fun ImagesScreenContent(
                 },
             )
         }
+    }
+
+    renameFolderPath?.let { path ->
+        RenameDialog(
+            name = File(path).name,
+            onDismiss = { renameFolderPath = null },
+            onDone = {
+                onAction(ImagesAction.RenameFolder(oldPath = path, to = it))
+                selectionManager.exitSelectionMode()
+                renameFolderPath = null
+            },
+        )
     }
 
     infoImagePath?.let { path ->

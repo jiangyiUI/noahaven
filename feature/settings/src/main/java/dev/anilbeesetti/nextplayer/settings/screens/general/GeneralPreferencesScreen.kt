@@ -40,6 +40,7 @@ import dev.anilbeesetti.nextplayer.core.ui.components.tvFocusDown
 import dev.anilbeesetti.nextplayer.core.ui.components.tvListFocus
 import dev.anilbeesetti.nextplayer.core.ui.designsystem.NextIcons
 import dev.anilbeesetti.nextplayer.settings.backup.LegacyShelfImportService.LegacyShelfImportPreview
+import dev.anilbeesetti.nextplayer.settings.backup.ReadingProgressImportService.ReadingProgressPreview
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -91,6 +92,11 @@ private fun GeneralPreferencesScreenContent(
         ActivityResultContracts.CreateDocument("text/plain"),
     ) { uri ->
         uri?.let { onAction(GeneralPreferencesUiEvent.ExportNotFound(it)) }
+    }
+    val progressBackupDocument = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        uri?.let { onAction(GeneralPreferencesUiEvent.PickProgressBackup(it)) }
     }
     val listFocusRequester = rememberTvListFocusRequester()
     Scaffold(
@@ -195,6 +201,22 @@ private fun GeneralPreferencesScreenContent(
                                 arrayOf(
                                     "application/json",
                                     "text/plain",
+                                    "application/octet-stream",
+                                    "*/*",
+                                ),
+                            )
+                        },
+                    )
+                    ClickablePreferenceItem(
+                        title = "同步阅读进度（临时）",
+                        description = "从 reeden 完整备份 zip 迁移阅读中 / 已读完的进度到本机同名书",
+                        icon = NextIcons.ArrowDownward,
+                        enabled = !state.isBusy,
+                        onClick = {
+                            progressBackupDocument.launch(
+                                arrayOf(
+                                    "application/zip",
+                                    "application/json",
                                     "application/octet-stream",
                                     "*/*",
                                 ),
@@ -307,6 +329,14 @@ private fun GeneralPreferencesScreenContent(
                 onDismiss = { onAction(GeneralPreferencesUiEvent.DismissLegacyPreview) },
             )
         }
+
+        state.progressPreview?.let { preview ->
+            ProgressImportPreviewDialog(
+                preview = preview,
+                onConfirm = { onAction(GeneralPreferencesUiEvent.ConfirmProgressImport) },
+                onDismiss = { onAction(GeneralPreferencesUiEvent.DismissProgressPreview) },
+            )
+        }
     }
 }
 
@@ -368,6 +398,64 @@ private fun LegacyImportPreviewDialog(
                     }
                     TextButton(onClick = onExportNotFound) {
                         Text("导出未匹配清单（$notFoundTotal 本）到 txt")
+                    }
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun ProgressImportPreviewDialog(
+    preview: ReadingProgressPreview,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    NextDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("同步阅读进度预览", modifier = Modifier.fillMaxWidth()) },
+        confirmButton = {
+            TextButton(onClick = onConfirm, enabled = preview.writableCount > 0) {
+                Text("确认同步（${preview.writableCount} 本）")
+            }
+        },
+        dismissButton = { CancelButton(onClick = onDismiss) },
+        content = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 380.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    "备份中有进度的书 ${preview.totalWithProgress} 本" +
+                        "（读完 ${preview.finishedCount} 本，阅读中 ${preview.totalWithProgress - preview.finishedCount} 本）",
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Text(
+                    "匹配命中 ${preview.matchedCount} 本，实际写入 ${preview.writableCount} 本" +
+                        "，本机已有进度跳过 ${preview.skippedCount} 本",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (preview.writableCount == 0) {
+                    Text(
+                        "没有可写入的书：全部未匹配，或匹配到的书本机都已有进度。",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                if (preview.notFoundTitles.isNotEmpty()) {
+                    Text(
+                        "未匹配 ${preview.notFoundTitles.size} 本（不同步）：",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    preview.notFoundTitles.take(8).forEach {
+                        Text("  · $it", style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (preview.notFoundTitles.size > 8) {
+                        Text(
+                            "  ……还有 ${preview.notFoundTitles.size - 8} 本",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
                     }
                 }
             }

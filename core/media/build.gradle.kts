@@ -59,6 +59,8 @@ dependencies {
         )
     }
     implementation(libs.androidx.media3.datasource)
+    // 音频/视频内嵌封面提取（基于 FFmpeg，兼容 wav 等 MediaMetadataRetriever 读不到封面的格式）
+    implementation(libs.github.anilbeesetti.nextlib.mediainfo)
 
     // ZIP/CBZ 漫画压缩包读写
     implementation(libs.zip4j) {

@@ -32,6 +32,16 @@ class SelectionManager(
             selectionItems.first() is SelectionItem.Video
     }
 
+    val isSingleFolderSelected: Boolean by derivedStateOf {
+        selectionItems.size == 1 &&
+            selectionItems.first() is SelectionItem.Folder
+    }
+
+    /** 单选时取出那一个文件夹，用于重命名等只对单个文件夹生效的操作。 */
+    val singleSelectedFolder: SelectionItem.Folder? by derivedStateOf {
+        selectionItems.singleOrNull() as? SelectionItem.Folder
+    }
+
     fun toggleFolderSelection(folder: Folder) {
         val selectedFolder = selectionItems.find { it.id == folder.path }
         selectionItems = if (selectedFolder != null) {

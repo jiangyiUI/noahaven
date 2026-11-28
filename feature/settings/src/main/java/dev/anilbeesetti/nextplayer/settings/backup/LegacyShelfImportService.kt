@@ -22,7 +22,6 @@ class LegacyShelfImportService(
     private val bookShelfRepository: BookShelfRepository,
     private val preferencesRepository: PreferencesRepository,
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
 
     data class LegacyShelfImportPreview(
         val totalActive: Int,
@@ -50,24 +49,25 @@ class LegacyShelfImportService(
         val title: String,
         @SerialName("category_id") val categoryId: String? = null,
         @SerialName("deleted_at") val deletedAt: String? = null,
-    )
+        /**
+         * 旧 app（noahaven）实际使用的删除标记：0=正常，1=已删除。
+         * 早期导出可能没有这个字段，缺失时按正常处理；另保留 deleted_at 兼容其他导出格式。
+         */
+        @SerialName("is_deleted") val isDeleted: Int? = null,
+    ) {
+        /** 未被删除的书：is_deleted 不为 1，且 deleted_at 为空。 */
+        val isActive: Boolean
+            get() = deletedAt.isNullOrBlank() && (isDeleted == null || isDeleted == 0)
+    }
 
     suspend fun parseAndPreview(
         categoryUri: Uri,
         bookUri: Uri,
     ): LegacyShelfImportPreview = withContext(Dispatchers.IO) {
-        val categories = runCatching {
-            readText(categoryUri)?.let {
-                json.decodeFromString<List<LegacyCategory>>(it)
-            }
-        }.getOrNull().orEmpty()
-        val books = runCatching {
-            readText(bookUri)?.let {
-                json.decodeFromString<List<LegacyBook>>(it)
-            }
-        }.getOrNull().orEmpty()
-
-        val activeBooks = books.filter { it.deletedAt.isNullOrBlank() }
+        val (categories, activeBooks) = parseLegacyExport(
+            categoriesJson = readText(categoryUri),
+            booksJson = readText(bookUri),
+        )
 
         val localBases = preferencesRepository.applicationPreferences.value.bookFolders
         val fileNameToPath = buildFileNameToPathMap(localBases)
@@ -214,5 +214,25 @@ class LegacyShelfImportService(
 
     companion object {
         private const val UNCATEGORIZED_GROUP = "未分组"
+
+        private val json = Json { ignoreUnknownKeys = true }
+
+        /**
+         * 纯 JVM 解析：解码旧 app 的 category/book 两个 json，并剔除已删除的书。
+         * 损坏/为空的输入按空列表处理，与原 runCatching 行为一致。
+         * 返回 (全部分类, 未删除的书)。公开以便单元测试直接覆盖解析与删除过滤。
+         */
+        fun parseLegacyExport(
+            categoriesJson: String?,
+            booksJson: String?,
+        ): Pair<List<LegacyCategory>, List<LegacyBook>> {
+            val categories = runCatching {
+                categoriesJson?.let { json.decodeFromString<List<LegacyCategory>>(it) }
+            }.getOrNull().orEmpty()
+            val books = runCatching {
+                booksJson?.let { json.decodeFromString<List<LegacyBook>>(it) }
+            }.getOrNull().orEmpty()
+            return categories to books.filter { it.isActive }
+        }
     }
 }

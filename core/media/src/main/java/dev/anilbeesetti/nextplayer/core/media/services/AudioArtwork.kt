@@ -3,8 +3,8 @@ package dev.anilbeesetti.nextplayer.core.media.services
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.media.MediaMetadataRetriever
 import android.util.LruCache
+import io.github.anilbeesetti.nextlib.mediainfo.MediaThumbnailRetriever
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -43,7 +43,8 @@ object AudioArtwork {
 
     private fun readEmbeddedPicture(context: Context, pathOrUri: String): ByteArray? {
         val uri = pathOrUri.toUri()
-        val retriever = MediaMetadataRetriever()
+        // 用基于 FFmpeg 的 MediaThumbnailRetriever：兼容 wav 等 MediaMetadataRetriever 读不到内嵌封面的格式
+        val retriever = MediaThumbnailRetriever()
         return try {
             if (uri.scheme == "content") {
                 retriever.setDataSource(
@@ -56,7 +57,7 @@ object AudioArtwork {
                 if (!file.isFile) return null
                 retriever.setDataSource(file.absolutePath)
             }
-            retriever.embeddedPicture
+            retriever.getEmbeddedPicture()
         } catch (_: Exception) {
             null
         } finally {

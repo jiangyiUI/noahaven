@@ -71,6 +71,7 @@ import dev.anilbeesetti.nextplayer.feature.videopicker.screens.mediapicker.Trans
 import dev.anilbeesetti.nextplayer.feature.videopicker.state.SelectionItem
 import dev.anilbeesetti.nextplayer.feature.videopicker.state.isFileSystemItem
 import dev.anilbeesetti.nextplayer.feature.videopicker.state.rememberSelectionManager
+import java.io.File
 
 @Composable
 fun MusicScreen(viewModel: MusicViewModel) {
@@ -87,8 +88,12 @@ fun MusicScreen(viewModel: MusicViewModel) {
     LifecycleResumeEffect(key1 = Unit) {
         val granted = context.hasAllFilesAccess()
         hasStorageAccess = granted
-        if (granted && !wasStorageAccessGranted) {
-            viewModel.onAction(MusicAction.OnPermissionAccepted)
+        if (granted) {
+            // 从后台恢复（含在第三方改完文件后回来）时强制刷新当前文件夹，去掉已不存在的文件
+            viewModel.refreshOnResume()
+            if (!wasStorageAccessGranted) {
+                viewModel.onAction(MusicAction.OnPermissionAccepted)
+            }
         }
         wasStorageAccessGranted = granted
         onPauseOrDispose {}
@@ -141,6 +146,7 @@ internal fun MusicScreenContent(
     val contentFocusRequester = remember { FocusRequester() }
     var showQuickSettingsDialog by rememberSaveable { mutableStateOf(value = false) }
     var renameAudioUri by rememberSaveable { mutableStateOf<String?>(value = null) }
+    var renameFolderPath by rememberSaveable { mutableStateOf<String?>(value = null) }
     var showDeleteConfirmation by rememberSaveable { mutableStateOf(value = false) }
 
     BindTopLevelBottomBarVisible(
@@ -283,7 +289,8 @@ internal fun MusicScreenContent(
                 show = selectionManager.isInSelectionMode &&
                     selectionManager.selectionItems.isNotEmpty(),
                 contentFocusRequester = contentFocusRequester,
-                showRenameAction = singleSelectedAudio != null,
+                showRenameAction = singleSelectedAudio != null ||
+                    selectionManager.isSingleFolderSelected,
                 showInfoAction = false,
                 showHideAction = false,
                 showMoveAction = true,
@@ -296,7 +303,12 @@ internal fun MusicScreenContent(
                     onAction(MusicAction.ShowAddToPlaylist(selectionManager.selectionItems))
                 },
                 onRenameAction = {
-                    renameAudioUri = singleSelectedAudio?.uriString
+                    val folder = selectionManager.singleSelectedFolder
+                    if (folder != null) {
+                        renameFolderPath = folder.path
+                    } else {
+                        renameAudioUri = singleSelectedAudio?.uriString
+                    }
                 },
                 onShareAction = {
                     onAction(MusicAction.ShareSelected(selectionManager.selectionItems))
@@ -467,6 +479,18 @@ internal fun MusicScreenContent(
                 },
             )
         }
+    }
+
+    renameFolderPath?.let { path ->
+        RenameDialog(
+            name = File(path).name,
+            onDismiss = { renameFolderPath = null },
+            onDone = {
+                onAction(MusicAction.RenameFolder(oldPath = path, to = it))
+                selectionManager.exitSelectionMode()
+                renameFolderPath = null
+            },
+        )
     }
 
     if (showDeleteConfirmation) {

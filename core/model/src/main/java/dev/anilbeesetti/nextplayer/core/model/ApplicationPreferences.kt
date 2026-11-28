@@ -98,6 +98,11 @@ data class ApplicationPreferences(
     val bookBookmarks: Map<String, List<Bookmark>> = emptyMap(),
     /** 每本书的阅读器全文搜索历史，key = 书籍绝对路径，列表按最近使用排序（最新在前）。 */
     val bookSearchHistory: Map<String, List<String>> = emptyMap(),
+    /**
+     * 外部备份同步来的待定位进度，key = 书籍绝对路径，value = 0..1 百分比。
+     * 首次打开对应书时按百分比换算位置并移除该条目；定位失败（内容缺失）则保留待下次重试。
+     */
+    val bookPendingPercent: Map<String, Float> = emptyMap(),
     /** 书籍页顶部 tab（书架/浏览）的顺序，可在 tab 上长按拖动调整。 */
     val bookLibraryTabOrder: List<BookLibraryTab> = BookLibraryTab.defaultOrder,
     /**
@@ -110,7 +115,10 @@ data class ApplicationPreferences(
     val bookDefaultChapterRuleId: String? = null,
     /** 是否已播种过初始自建规则（避免用户删除后又被自动加回）。 */
     val bookChapterRulesSeeded: Boolean = false,
-    /** 是否显示「导入书架（临时）」入口：默认隐藏，关于页连点应用名 5 下后永久开启。 */
+    /**
+     * 是否显示书架导入相关入口：默认隐藏，关于页连点应用名 5 下后永久开启。
+     * 同时控制常规设置里的「导入书架（临时）」和书架顶栏的 txt 清单导入按钮。
+     */
     val showLegacyShelfImport: Boolean = false,
 
     // Update

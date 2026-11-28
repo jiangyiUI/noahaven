@@ -145,8 +145,12 @@ fun MediaPickerScreen(viewModel: MediaPickerViewModel) {
     LifecycleResumeEffect(key1 = Unit) {
         val granted = context.hasAllFilesAccess()
         hasStorageAccess = granted
-        if (granted && !wasStorageAccessGranted) {
-            viewModel.onAction(MediaPickerAction.OnPermissionAccepted)
+        if (granted) {
+            // 从后台恢复（含在第三方改完文件后回来）时触发扫描，去掉已不存在的视频
+            viewModel.refreshOnResume()
+            if (!wasStorageAccessGranted) {
+                viewModel.onAction(MediaPickerAction.OnPermissionAccepted)
+            }
         }
         wasStorageAccessGranted = granted
         onPauseOrDispose {}
@@ -202,6 +206,7 @@ internal fun MediaPickerScreenContent(
 
     var showQuickSettingsDialog by rememberSaveable { mutableStateOf(value = false) }
     var showRenameActionFor: Video? by rememberSaveable { mutableStateOf(value = null) }
+    var renameFolderPath: String? by rememberSaveable { mutableStateOf(value = null) }
     var showDeleteVideosConfirmation by rememberSaveable { mutableStateOf(value = false) }
 
     val mediaHolder = (state.mediaDataState as? DataState.Success)?.value
@@ -371,7 +376,8 @@ internal fun MediaPickerScreenContent(
                     selectionManager.isInSelectionMode &&
                         selectionManager.selectionItems.isNotEmpty(),
                 contentFocusRequester = focusState.requester,
-                showRenameAction = selectionManager.isSingleVideoSelected,
+                showRenameAction = selectionManager.isSingleVideoSelected ||
+                    selectionManager.isSingleFolderSelected,
                 showInfoAction = selectionManager.isSingleVideoSelected,
                 showHideAction = selectionManager.selectionItems.isNotEmpty(),
                 onPlayAction = {
@@ -382,6 +388,11 @@ internal fun MediaPickerScreenContent(
                     onAction(MediaPickerAction.ShowAddToPlaylist(selectionManager.selectionItems))
                 },
                 onRenameAction = {
+                    val selectedFolder = selectionManager.singleSelectedFolder
+                    if (selectedFolder != null) {
+                        renameFolderPath = selectedFolder.path
+                        return@SelectionActionsSheet
+                    }
                     val selectedVideo =
                         selectionManager.selectionItems.firstOrNull()
                             ?: return@SelectionActionsSheet
@@ -530,6 +541,18 @@ internal fun MediaPickerScreenContent(
                 )
                 selectionManager.exitSelectionMode()
                 showRenameActionFor = null
+            },
+        )
+    }
+
+    renameFolderPath?.let { path ->
+        RenameDialog(
+            name = File(path).name,
+            onDismiss = { renameFolderPath = null },
+            onDone = {
+                onAction(MediaPickerAction.RenameFolder(oldPath = path, to = it))
+                selectionManager.exitSelectionMode()
+                renameFolderPath = null
             },
         )
     }

@@ -18,7 +18,10 @@
     <string name="app_name" translatable="false">Noa Haven</string>
     <string name="about_description">Version, support, credits</string>
     <string name="about_name">About</string>
-    <string name="about_legacy_import_enabled">Legacy shelf import is now visible in General settings</string>
+    <string name="about_legacy_import_enabled">Shelf import entries are now visible in General settings</string>
+    <string name="settings_reading_progress_import_success">Reading progress synced</string>
+    <string name="settings_reading_progress_import_failed">Could not read the backup file; reading progress sync failed</string>
+    <string name="settings_reading_progress_import_empty">No reading progress found in the backup</string>
     <string name="check_update_name">Check for updates</string>
     <string name="check_update_description">Check for a new version</string>
     <string name="update_checking">Checking for updates…</string>

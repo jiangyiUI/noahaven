@@ -91,7 +91,8 @@ fun ComicsScreen(
 
     LifecycleResumeEffect(Unit) {
         val granted = context.hasAllFilesAccess()
-        if (granted && !hasStorageAccess) viewModel.refresh()
+        // 从后台恢复（含在第三方改完文件后回来）时强制刷新当前文件夹，去掉已不存在的文件
+        if (granted) viewModel.refreshOnResume()
         hasStorageAccess = granted
         onPauseOrDispose {}
     }
@@ -140,6 +141,7 @@ internal fun ComicsScreenContent(
     var showQuickSettingsDialog by rememberSaveable { mutableStateOf(false) }
     var showDeleteConfirmation by rememberSaveable { mutableStateOf(false) }
     var renameComicPath by rememberSaveable { mutableStateOf<String?>(null) }
+    var renameFolderPath by rememberSaveable { mutableStateOf<String?>(null) }
     var viewerSession by remember { mutableStateOf<ViewerSession?>(null) }
     var viewerPage by remember { mutableIntStateOf(0) }
     var passwordPrompt by remember { mutableStateOf<ComicPasswordPrompt?>(null) }
@@ -330,7 +332,8 @@ internal fun ComicsScreenContent(
                 show = selectionManager.isInSelectionMode &&
                     selectionManager.selectionItems.isNotEmpty(),
                 contentFocusRequester = contentFocusRequester,
-                showRenameAction = singleSelectedComic != null,
+                showRenameAction = singleSelectedComic != null ||
+                    selectionManager.isSingleFolderSelected,
                 showInfoAction = false,
                 showHideAction = false,
                 showPlayAction = false,
@@ -340,7 +343,14 @@ internal fun ComicsScreenContent(
                 showMoveAction = true,
                 onPlayAction = {},
                 onAddToPlaylistAction = {},
-                onRenameAction = { renameComicPath = singleSelectedComic?.path },
+                onRenameAction = {
+                    val folder = selectionManager.singleSelectedFolder
+                    if (folder != null) {
+                        renameFolderPath = folder.path
+                    } else {
+                        renameComicPath = singleSelectedComic?.path
+                    }
+                },
                 onShareAction = {
                     viewModel.onAction(
                         ComicsAction.ShareSelected(selectionManager.selectionItems),
@@ -532,6 +542,18 @@ internal fun ComicsScreenContent(
                 },
             )
         }
+    }
+
+    renameFolderPath?.let { path ->
+        RenameDialog(
+            name = File(path).name,
+            onDismiss = { renameFolderPath = null },
+            onDone = {
+                viewModel.onAction(ComicsAction.RenameFolder(oldPath = path, to = it))
+                selectionManager.exitSelectionMode()
+                renameFolderPath = null
+            },
+        )
     }
 
     (state.transferFlow as? TransferFlowState.Processing)?.let { transfer ->

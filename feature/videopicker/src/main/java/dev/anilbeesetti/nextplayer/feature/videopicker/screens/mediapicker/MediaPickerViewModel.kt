@@ -138,6 +138,11 @@ class MediaPickerViewModel(
                 action.to,
             )
 
+            is MediaPickerAction.RenameFolder -> renameFolder(
+                oldPath = action.oldPath,
+                to = action.to,
+            )
+
             is MediaPickerAction.UpdateMenu -> updateMenu(action.preferences)
 
             is MediaPickerAction.OnPermissionAccepted -> startMediaCollection()
@@ -536,12 +541,29 @@ class MediaPickerViewModel(
         }
     }
 
-    private fun refresh() {
+    /** 重命名文件夹：磁盘 renameTo 后强制重扫，让子文件索引切到新路径。 */
+    private fun renameFolder(oldPath: String, to: String) {
         viewModelScope.launch {
-            stateInternal.update { it.copy(refreshing = true) }
-            mediaSynchronizer.refresh()
-            stateInternal.update { it.copy(refreshing = false) }
+            val renamed = mediaOperationsService.renameMedia(
+                uri = Uri.fromFile(File(oldPath)),
+                to = to,
+            )
+            if (renamed) refresh()
         }
+    }
+
+    private fun refresh(silent: Boolean = false) {
+        viewModelScope.launch {
+            // silent：后台恢复等自动刷新，不显示下拉刷新指示器
+            if (!silent) stateInternal.update { it.copy(refreshing = true) }
+            mediaSynchronizer.refresh()
+            if (!silent) stateInternal.update { it.copy(refreshing = false) }
+        }
+    }
+
+    /** 页面从后台恢复时触发系统媒体扫描，清掉第三方改名/删除后已不存在的视频。 */
+    fun refreshOnResume() {
+        if (context.hasAllFilesAccess()) refresh(silent = true)
     }
 
     private fun updateMenu(preferences: ApplicationPreferences) {
@@ -684,6 +706,7 @@ sealed interface MediaPickerAction {
     data object OnVaultClick : MediaPickerAction
     data object Refresh : MediaPickerAction
     data class RenameVideo(val uri: Uri, val to: String) : MediaPickerAction
+    data class RenameFolder(val oldPath: String, val to: String) : MediaPickerAction
     data class UpdateMenu(val preferences: ApplicationPreferences) : MediaPickerAction
     data object OnPermissionAccepted : MediaPickerAction
     data class PlaySelectedItems(val selectionItems: Set<SelectionItem>) : MediaPickerAction
